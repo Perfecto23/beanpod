@@ -6,6 +6,8 @@ struct WelcomeView: View {
     @Environment(Navigator.self) private var nav
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
+    @Environment(Connector.self) private var connector
 
     private var connected: Bool { store.link == .ready }
     private var ready: Bool { connected && store.asrAvailable }
@@ -43,7 +45,14 @@ struct WelcomeView: View {
                         Button("打开设置") { openSettings() }
                     }
                 }
+                step(4, "连上你常用的 AI 助手（可选）",
+                     connector.connectedCount > 0 ? "已经连上 \(connector.connectedCount) 个。在它们那边就能直接问豆仓里的内容。"
+                        : "Claude、Codex、OpenClaw、Grok Bot 都可以。连上之后，在它们那边就能直接问豆仓里的录音和待办。",
+                     done: connector.connectedCount > 0) {
+                    Button("去连接") { openWindow(id: "connect") }
+                }
             }
+            .task { await connector.refresh() }
 
             HStack {
                 Text("以后想再看这一页：菜单栏「帮助」→「上手引导」。").font(.callout).foregroundStyle(.tertiary)

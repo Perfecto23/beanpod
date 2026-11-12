@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(\.openWindow) private var openWindow
     @Environment(BeanStore.self) private var store
     @Environment(Dictation.self) private var dictation
     @State private var trusted = AXIsProcessTrusted()
@@ -165,6 +166,9 @@ struct SettingsView: View {
             }
 
             Section {
+                LabeledContent("Claude、Codex、OpenClaw、Grok Bot") {
+                    Button("打开连接页面…") { openWindow(id: "connect") }
+                }
                 LabeledContent("MCP 地址") {
                     HStack {
                         Text(BeanStore.mcpAddress).textSelection(.enabled).font(.callout.monospaced())
@@ -172,7 +176,7 @@ struct SettingsView: View {
                     }
                 }
                 LabeledContent("命令行") { Text("beanpod").font(.callout.monospaced()).textSelection(.enabled) }
-            } header: { Text("给其他 AI 工具用") } footer: {
+            } header: { Text("连接 AI 助手") } footer: {
                 Text("豆仓开着时，Claude、Grok、OpenClaw 等工具可以通过这个地址或命令行查你的录音、纪要和待办，也能把文字和音频存进来。地址只在这台电脑上能访问。")
             }
         }

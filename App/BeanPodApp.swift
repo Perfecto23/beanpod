@@ -5,11 +5,13 @@ struct BeanPodApp: App {
     @State private var store = BeanStore()
     @State private var nav = Navigator()
     @State private var dictation = Dictation()
+    @State private var connector = Connector()
+    @Environment(\.openWindow) private var openWindow
 
     var body: some SwiftUI.Scene {
         Window("豆仓", id: "main") {
             RootView()
-                .environment(store).environment(nav).environment(dictation)
+                .environment(store).environment(nav).environment(dictation).environment(connector)
                 .task { dictation.attach(store) }
                 .frame(minWidth: 980, minHeight: 600)
                 .containerBackground(.clear, for: .window)
@@ -18,6 +20,7 @@ struct BeanPodApp: App {
         .commands {
             CommandGroup(replacing: .help) {
                 Button("上手引导") { nav.welcomeOpen = true }
+                Button("连接 AI 助手…") { openWindow(id: "connect") }
             }
             CommandMenu("录音") {
                 // 好按的键只做能反悔的事：开始、暂停、继续。结束要按另一个键，免得手滑把录音断掉。
@@ -105,6 +108,12 @@ struct BeanPodApp: App {
             }
         }
 
+        Window("连接 AI 助手", id: "connect") {
+            ConnectView().environment(store).environment(connector)
+                .frame(minWidth: 620, minHeight: 520)
+        }
+        .defaultSize(width: 720, height: 760)
+
         Window("诊断日志", id: "log") {
             LogView().environment(store)
         }
@@ -118,7 +127,7 @@ struct BeanPodApp: App {
         }
 
         Settings {
-            SettingsView().environment(store).environment(dictation)
+            SettingsView().environment(store).environment(dictation).environment(connector)
         }
     }
 }
