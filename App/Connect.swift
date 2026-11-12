@@ -41,7 +41,7 @@ enum Assistant: String, CaseIterable, Identifiable {
     var touches: String {
         switch self {
         case .claudeCode: "用 claude 命令添加，写在 ~/.claude.json"
-        case .claudeDesktop: "改 ~/Library/Application Support/Claude/claude_desktop_config.json，改之前会留一份备份；连上后要重开 Claude"
+        case .claudeDesktop: "改 ~/Library/Application Support/Claude/claude_desktop_config.json，改之前会留一份备份。要在 Claude 完全退出的时候连"
         case .codex: "用 codex 命令添加，写在 ~/.codex/config.toml"
         case .openclaw: "用 openclaw 命令添加，写在 ~/.openclaw/openclaw.json"
         case .grok: "Grok Bot 只认网址：拷贝豆仓的地址，到它的设置里粘贴。豆仓要开着才连得上"
@@ -150,8 +150,14 @@ final class Connector {
             let r = await Self.shell("openclaw mcp add beanpod --command \(cli) --arg mcp")
             notes[a] = r.ok ? (true, "接上了。") : (false, "没接上：" + Self.tail(r.output))
         case .claudeDesktop:
+            // Claude 开着的时候会用自己内存里的设置把文件写回去，这条改动会被冲掉：要先退出它
+            let running = !NSRunningApplication.runningApplications(withBundleIdentifier: "com.anthropic.claudefordesktop").isEmpty
+            if running {
+                notes[a] = (false, "Claude 现在开着。它开着的时候会把设置文件写回原样，连接留不住。请先完全退出 Claude，再回来点一次「连接」。")
+                return
+            }
             notes[a] = editDesktopConfig { servers in servers["beanpod"] = ["command": Self.cli, "args": ["mcp"]] }
-                ? (true, "接上了。退出并重新打开 Claude 之后生效。") : (false, "没能改 Claude 的设置文件。")
+                ? (true, "接上了。现在打开 Claude 就能用。") : (false, "没能改 Claude 的设置文件。")
         case .grok:
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(BeanStore.mcpAddress, forType: .string)
@@ -252,6 +258,9 @@ struct ConnectView: View {
                 }
 
                 ForEach(Assistant.allCases) { card($0) }
+
+                Text("创作工具").font(.system(size: 20, weight: .semibold, design: .rounded)).padding(.top, 8)
+                RenoiseCard()
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("别的工具").font(.headline)

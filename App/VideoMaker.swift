@@ -299,7 +299,9 @@ final class VideoMaker {
 struct VideoSheet: View {
     @Environment(BeanStore.self) private var store
     @Environment(VideoMaker.self) private var maker
+    @Environment(RenoiseSetup.self) private var renoise
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var maker = maker
@@ -313,8 +315,20 @@ struct VideoSheet: View {
                 }
             }
 
-            if maker.cliMissing {
-                Label("这台 Mac 上没找到 Renoise 的命令行工具（renoise），做不了。", systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.amber)
+            if maker.cliMissing || (!renoise.checking && !renoise.loggedIn) {
+                // 还没装好 Renoise：说清楚差哪一步，给一个直达安装页面的按钮
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(maker.cliMissing ? "做视频要用 Renoise，这台 Mac 上还没装。" : "Renoise 装好了，但还没登录账户。", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Theme.amber)
+                    Text("安装和登录各点一下就行，装好回来再点「做成视频」。").font(.callout).foregroundStyle(.secondary)
+                    HStack {
+                        Spacer()
+                        Button("先不做") { dismiss() }
+                        Button(maker.cliMissing ? "去安装 Renoise" : "去登录 Renoise") { openWindow(id: "connect"); dismiss() }.buttonStyle(.glassProminent)
+                    }
+                    .controlSize(.large)
+                }
+                .task { await renoise.refresh() }
             } else if maker.segments.isEmpty {
                 Label("这篇稿子里没找到能念出来的句子。", systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.amber)
             } else {

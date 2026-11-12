@@ -7,12 +7,13 @@ struct BeanPodApp: App {
     @State private var dictation = Dictation()
     @State private var connector = Connector()
     @State private var maker = VideoMaker()
+    @State private var renoise = RenoiseSetup()
     @Environment(\.openWindow) private var openWindow
 
     var body: some SwiftUI.Scene {
         Window("豆仓", id: "main") {
             RootView()
-                .environment(store).environment(nav).environment(dictation).environment(connector).environment(maker)
+                .environment(store).environment(nav).environment(dictation).environment(connector).environment(maker).environment(renoise)
                 .task { dictation.attach(store) }
                 .frame(minWidth: 980, minHeight: 600)
                 .containerBackground(.clear, for: .window)
@@ -22,6 +23,7 @@ struct BeanPodApp: App {
             CommandGroup(replacing: .help) {
                 Button("上手引导") { nav.welcomeOpen = true }
                 Button("连接 AI 助手…") { openWindow(id: "connect") }
+                Button("安装 Renoise（做视频）…") { openWindow(id: "connect") }
             }
             CommandMenu("录音") {
                 // 好按的键只做能反悔的事：开始、暂停、继续。结束要按另一个键，免得手滑把录音断掉。
@@ -110,7 +112,7 @@ struct BeanPodApp: App {
         }
 
         Window("连接 AI 助手", id: "connect") {
-            ConnectView().environment(store).environment(connector)
+            ConnectView().environment(store).environment(connector).environment(renoise)
                 .frame(minWidth: 620, minHeight: 520)
         }
         .defaultSize(width: 720, height: 760)
