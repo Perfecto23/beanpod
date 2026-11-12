@@ -475,7 +475,7 @@ final class MascotScene: NSObject {
         material.diffuse.contents = image
     }
 
-    private func setRing(_ color: NSColor, glow: (low: CGFloat, high: CGFloat, period: Double), animated: Bool) {
+    func setRing(_ color: NSColor, glow: (low: CGFloat, high: CGFloat, period: Double), animated: Bool) {
         SCNTransaction.begin()
         SCNTransaction.animationDuration = animated ? 0.4 : 0
         material.setValue(NSValue(scnVector3: Self.vector(color)), forKey: "ringColor")
