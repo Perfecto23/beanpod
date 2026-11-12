@@ -112,13 +112,14 @@ final class BeanStore {
         var detail = ""
         var action: Action?
         enum Action: Equatable {
-            case settings, device, download(UInt32), process(UInt32)
+            case settings, device, download(UInt32), process(UInt32), screenPermission, micPermission
             var label: String {
                 switch self {
                 case .settings: "打开设置"
                 case .device: "去设备页"
                 case .download: "重新下载"
                 case .process: "再试一次"
+                case .screenPermission, .micPermission: "打开系统设置"
                 }
             }
         }
@@ -138,6 +139,10 @@ final class BeanStore {
         switch action {
         case .download(let id): download(id)
         case .process(let id): process(id)
+        case .screenPermission:
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+        case .micPermission:
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
         case .settings, .device: break      // 这两个要换页面，由界面自己处理
         }
     }
@@ -290,6 +295,13 @@ final class BeanStore {
     var macRec: MacRec = .off
     @ObservationIgnored var macRecorder: AVAudioRecorder?
     @ObservationIgnored var macMeter: Task<Void, Never>?
+    @ObservationIgnored var macTap: SystemAudioTap?
+    @ObservationIgnored var macMicStarted: Date?
+    @ObservationIgnored var macStarting = false
+    /// 用 Mac 录音时录哪一路：麦克风、电脑里的声音，还是两路一起。会记住上次的选择。
+    var macSource: MacSource = MacSource(rawValue: UserDefaults.standard.string(forKey: "macSource") ?? "") ?? .mic {
+        didSet { UserDefaults.standard.set(macSource.rawValue, forKey: "macSource") }
+    }
     /// 现在这条是不是用 Mac 的麦克风在录。
     var recordingOnMac: Bool { macRec != .off }
 

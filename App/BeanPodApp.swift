@@ -29,7 +29,14 @@ struct BeanPodApp: App {
                     }
                 }
                 .keyboardShortcut("r", modifiers: .command)
-                Button("用这台 Mac 的麦克风录音") { store.startMacRecording() }
+                // 用这台 Mac 录：三种声音来源，点哪个就用哪个开始，并记住这次的选择
+                Menu("用这台 Mac 录") {
+                    ForEach(BeanStore.MacSource.allCases) { source in
+                        Button(source.name + (store.macSource == source ? "　✓" : "")) { store.startMacRecording(source) }
+                    }
+                }
+                .disabled(store.recState != .idle)
+                Button("用这台 Mac 录（\(store.macSource.name)）") { store.startMacRecording() }
                     .keyboardShortcut("r", modifiers: [.command, .option])
                     .disabled(store.recState != .idle)
                 Button("标重点") { store.markNow() }

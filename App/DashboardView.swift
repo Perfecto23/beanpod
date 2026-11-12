@@ -289,7 +289,7 @@ struct Hero: View {
     }
 
     private var line: String {
-        if store.isRecording { return store.recordingOnMac ? "在听，用的是这台 Mac 的麦克风。" : "在听，你说。" }
+        if store.isRecording { return store.recordingOnMac ? "在听，录的是这台 Mac 的\(store.macSource.name)。" : "在听，你说。" }
         if store.link != .ready, store.stages.isEmpty, store.recState == .idle { return "录音豆没连上。把它拿出来我就醒；想现在就录，用这台 Mac 也行。" }
         if store.recState == .paused { return "先歇一下。想接着录就点继续，录完了点结束。" }
         if cheering, store.stages.isEmpty { return "连上啦，随时可以开始。" }
@@ -324,6 +324,12 @@ struct Hero: View {
                 HStack(spacing: 10) {
                     RecordControls(size: .extraLarge)
                     if store.link != .ready, store.recState == .idle {
+                        // 录哪一路声音：麦克风、电脑里的声音，或者两路一起
+                        Picker("声音来源", selection: Bindable(store).macSource) {
+                            ForEach(BeanStore.MacSource.allCases) { Text($0.name).tag($0) }
+                        }
+                        .labelsHidden().pickerStyle(.menu).fixedSize().controlSize(.extraLarge)
+                        .help(store.macSource.hint)
                         Button { nav.route = .device } label: { Label("连接录音豆", systemImage: "antenna.radiowaves.left.and.right") }
                             .buttonStyle(.glass).controlSize(.extraLarge)
                     }

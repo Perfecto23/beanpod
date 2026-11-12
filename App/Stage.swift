@@ -81,7 +81,7 @@ struct RecordStage: View {
                 .opacity(paused ? 1 : 0.55 + 0.45 * Double(level))
                 .animation(.easeOut(duration: 0.25), value: level)
             Text(paused ? "已暂停" : "正在录音").font(.callout.weight(.semibold)).tracking(1.5)
-            Text(store.recordingOnMac ? "这台 Mac 的麦克风" : store.displayDeviceName + (store.info.map { " · \($0.micBattery)%" } ?? ""))
+            Text(store.recordingOnMac ? "这台 Mac · " + store.macSource.name : store.displayDeviceName + (store.info.map { " · \($0.micBattery)%" } ?? ""))
                 .font(.callout).foregroundStyle(Theme.paper.opacity(0.45))
             Spacer()
             Button { nav.stageOpen = false } label: {
@@ -123,7 +123,7 @@ struct RecordStage: View {
             } else if let note = store.liveNote {
                 Text(note).font(.title3).foregroundStyle(Theme.amber)
             } else if store.recordingOnMac {
-                Text("用 Mac 的麦克风录音时暂时不出实时字幕。录完会完整转写、整理成纪要。").font(.title3).foregroundStyle(Theme.paper.opacity(0.45))
+                Text("用 Mac 录音时暂时不出实时字幕。录完会完整转写、整理成纪要。").font(.title3).foregroundStyle(Theme.paper.opacity(0.45))
             } else if !store.liveActive {
                 Text("没开实时转写，这里不出字，声音也画不出来。录音照常在录。").font(.title3).foregroundStyle(Theme.paper.opacity(0.45))
             } else {
