@@ -40,6 +40,14 @@ struct BeanPodApp: App {
                 Button(nav.stageOpen ? "收起录音舞台" : "打开录音舞台") { nav.stageOpen.toggle() }
                     .keyboardShortcut("l", modifiers: .command)
                     .disabled(store.recState == .idle)
+                Divider()
+                // 删除选中的那条录音。都会先问一句，不会直接删
+                let chosen = store.recordings.first { $0.id == nav.selection }
+                Button("从这台 Mac 删除选中的录音…") { nav.confirmLocalDelete = true }
+                    .keyboardShortcut(.delete, modifiers: .command)
+                    .disabled(chosen?.downloaded != true || store.recState != .idle)
+                Button("从录音豆删除选中的录音…") { nav.confirmDeviceDelete = true }
+                    .disabled(chosen?.onDevice != true || store.link != .ready || store.recState != .idle)
             }
             CommandMenu("回听") {
                 let current = nav.selection ?? store.playingID

@@ -15,6 +15,9 @@ final class Navigator {
     var stageOpen = false
     /// 上手引导是不是开着。
     var welcomeOpen = false
+    /// 正在问「真的要删吗」。放在这里，工具栏按钮和菜单栏命令都能触发同一个确认框。
+    var confirmDeviceDelete = false
+    var confirmLocalDelete = false
 
     func open(_ id: UInt32) { route = .all; selection = id }
 }
@@ -483,11 +486,10 @@ struct RecordingRow: View {
 
 struct RecordingDetail: View {
     @Environment(BeanStore.self) private var store
+    @Environment(Navigator.self) private var nav
     let recording: Recording
     @State private var title = ""
     @State private var tab = 0
-    @State private var confirmDeviceDelete = false
-    @State private var confirmLocalDelete = false
 
     var body: some View {
         ScrollView {
@@ -572,17 +574,17 @@ struct RecordingDetail: View {
                     .disabled(store.stages[recording.id] != nil)
                 }
                 Menu("删除", systemImage: "trash") {
-                    if recording.downloaded { Button("从这台 Mac 删除…") { confirmLocalDelete = true } }
-                    if recording.onDevice { Button("从录音豆删除…") { confirmDeviceDelete = true } }
+                    if recording.downloaded { Button("从这台 Mac 删除…") { nav.confirmLocalDelete = true } }
+                    if recording.onDevice { Button("从录音豆删除…") { nav.confirmDeviceDelete = true } }
                 }
             }
         }
-        .confirmationDialog("从录音豆里删除这条录音？", isPresented: $confirmDeviceDelete) {
+        .confirmationDialog("从录音豆里删除这条录音？", isPresented: Bindable(nav).confirmDeviceDelete) {
             Button("删除", role: .destructive) { store.deleteFromDevice(recording.id) }
         } message: {
             Text(recording.downloaded ? "这台 Mac 上已下载的副本会保留。" : "这条录音还没下载，删除后无法找回。")
         }
-        .confirmationDialog("从这台 Mac 删除这条录音？", isPresented: $confirmLocalDelete) {
+        .confirmationDialog("从这台 Mac 删除这条录音？", isPresented: Bindable(nav).confirmLocalDelete) {
             Button("删除", role: .destructive) { store.removeLocal(recording.id) }
         } message: {
             Text(recording.onDevice ? "文字稿和纪要会一起删除。录音豆里的原件还在，可以再下载。" : "录音豆里已经没有这条了，删除后无法找回。")
