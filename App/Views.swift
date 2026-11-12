@@ -201,50 +201,83 @@ struct Sidebar: View {
     @Environment(BeanStore.self) private var store
     @Environment(Navigator.self) private var nav
 
-    var body: some View {
-        @Bindable var nav = nav
-        List(selection: $nav.route) {
-            Label("总览", systemImage: "square.grid.2x2").tag(Route.dashboard)
-            Label("知识库", systemImage: "books.vertical").tag(Route.knowledge)
-
-            Section("录音") {
-                row("全部录音", "waveform", store.recordings.count).tag(Route.all)
-            }
+    /// 侧栏只有三个去处。录音页里的场景筛选、星标都算「录音」。
+    private var section: Int {
+        switch nav.route {
+        case .dashboard: 0
+        case .all, .starred, .scene: 1
+        case .knowledge: 2
+        case .device: -1
         }
-        .safeAreaInset(edge: .bottom) { DeviceChip() }
     }
 
-    private func row(_ title: String, _ icon: String, _ count: Int) -> some View {
-        HStack {
-            Label(title, systemImage: icon)
-            Spacer()
-            if count > 0 { Text("\(count)").foregroundStyle(.secondary).monospacedDigit() }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // 品牌：图标和名字
+            HStack(spacing: 9) {
+                Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 30, height: 30)
+                Text("豆仓").font(.system(size: 19, weight: .semibold, design: .rounded))
+            }
+            .padding(.horizontal, 14).padding(.top, 6).padding(.bottom, 14)
+            .accessibilityElement(children: .combine)
+
+            item("总览", "house", 0) { nav.route = .dashboard }
+            item("录音", "waveform", 1, count: store.recordings.count) { nav.route = .all }
+            item("知识库", "square.stack.3d.up", 2) { nav.route = .knowledge }
+            Spacer(minLength: 0)
+            DeviceChip()
         }
+        .padding(.horizontal, 10).padding(.bottom, 10)
+    }
+
+    private func item(_ title: String, _ icon: String, _ index: Int, count: Int = 0, action: @escaping () -> Void) -> some View {
+        let on = section == index
+        return Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: icon).font(.system(size: 15, weight: on ? .semibold : .regular)).frame(width: 22)
+                Text(title).font(.system(size: 14.5, weight: on ? .semibold : .regular))
+                Spacer()
+                if count > 0 { Text("\(count)").font(.callout).foregroundStyle(.tertiary).monospacedDigit() }
+            }
+            .foregroundStyle(on ? Theme.amber : Color.primary)
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .background(on ? Theme.amber.opacity(0.16) : .clear, in: .rect(cornerRadius: 10))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
-/// 侧栏底部的设备状态，点一下进设备页。
+/// 侧栏底部的设备卡，点一下进设备页。
 struct DeviceChip: View {
     @Environment(BeanStore.self) private var store
     @Environment(Navigator.self) private var nav
 
     var body: some View {
+        let on = nav.route == .device
         Button { nav.route = .device } label: {
             HStack(spacing: 10) {
-                Image(systemName: store.link == .ready ? "mic.circle.fill" : "mic.slash.circle")
-                    .font(.title2).foregroundStyle(store.link == .ready ? Theme.amber : .secondary)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(store.link == .ready ? store.displayDeviceName : "录音豆").font(.callout.weight(.medium)).lineLimit(1)
-                    Text(status).font(.caption).foregroundStyle(statusColor)
+                Image(systemName: store.link == .ready ? "earbuds" : "earbuds.case")
+                    .font(.system(size: 17)).foregroundStyle(store.link == .ready ? Theme.amber : .secondary)
+                    .frame(width: 34, height: 34).background(Theme.amber.opacity(store.link == .ready ? 0.14 : 0.05), in: .rect(cornerRadius: 10))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(store.link == .ready ? store.displayDeviceName : "录音豆").font(.callout.weight(.semibold)).lineLimit(1)
+                    HStack(spacing: 5) {
+                        Circle().fill(statusColor).frame(width: 6, height: 6)
+                        Text(status).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
-                Spacer()
+                Spacer(minLength: 0)
                 if let pull = store.pull { ProgressView(value: pull.fraction).progressViewStyle(.circular).controlSize(.small) }
             }
             .padding(10)
-            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 14))
+            .panel(radius: 14)
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.amber.opacity(on ? 0.7 : 0), lineWidth: 1.5))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain).padding(10)
+        .buttonStyle(.plain)
+        .help("设备：电量、存储和连接")
     }
 
     private var status: String {
@@ -263,7 +296,7 @@ struct DeviceChip: View {
 
     private var statusColor: Color {
         if store.link == .ready { return store.info?.recording == true ? Theme.rec : Theme.ok }
-        return .secondary
+        return .secondary.opacity(0.5)
     }
 }
 
@@ -282,11 +315,17 @@ struct ScenePill: View {
 
 struct Card<Content: View>: View {
     var title: String?
+    var icon: String?
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let title { Text(title).font(.headline) }
+            if let title {
+                HStack(spacing: 8) {
+                    if let icon { Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.amber) }
+                    Text(title).font(.headline)
+                }
+            }
             content
         }
         .padding(16)
@@ -1055,22 +1094,22 @@ struct NotesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let summary = recording.summary {
-                Card(title: "摘要") {
+                Card(title: "摘要", icon: "text.alignleft") {
                     Text(MarkdownView.inline(summary)).textSelection(.enabled).lineSpacing(4)
                 }
             }
             ForEach(recording.sections) { section in
-                Card(title: section.heading) {
+                Card(title: section.heading, icon: "list.bullet") {
                     ForEach(Array(section.items.enumerated()), id: \.offset) { _, item in
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Circle().fill(.tertiary).frame(width: 5, height: 5).offset(y: -3)
+                            Circle().fill(Theme.amber).frame(width: 5, height: 5).offset(y: -3)
                             Text(MarkdownView.inline(item)).textSelection(.enabled).lineSpacing(3)
                         }
                     }
                 }
             }
             if !recording.todos.isEmpty {
-                Card(title: "待办") {
+                Card(title: "待办", icon: "checkmark.square") {
                     ForEach(recording.todos) { todo in
                         Toggle(isOn: Binding(get: { todo.done }, set: { _ in store.toggleTodo(recording.id, todo.id) })) {
                             Text(todo.text).strikethrough(todo.done).foregroundStyle(todo.done ? .secondary : .primary)
@@ -1325,10 +1364,11 @@ struct DeviceView: View {
                 case .connecting: connecting
                 case .idle, .scanning: scanner
                 }
-                Button("诊断日志") { openWindow(id: "log") }.buttonStyle(.plain).foregroundStyle(Theme.amber).font(.callout)
+                Button("诊断日志") { openWindow(id: "log") }.buttonStyle(.plain).foregroundStyle(.tertiary).font(.caption)
+                    .frame(maxWidth: .infinity)
             }
             .padding(24)
-            .frame(maxWidth: 600, alignment: .leading)
+            .frame(maxWidth: 680, alignment: .leading)
             .frame(maxWidth: .infinity, minHeight: page.size.height, alignment: .center)
         }
         }
@@ -1394,50 +1434,104 @@ struct DeviceView: View {
         }
     }
 
+    /// 已连接：小豆坐在充电仓里当主视觉，三个圆环说清电量和空间，其余参数排成一张表。
     @ViewBuilder private var connected: some View {
-        Card {
-            HStack(spacing: 12) {
-                MascotView(mood: justPaired ? .happy : .idle, power: store.mascotPower)
-                    .frame(width: 120, height: 120)
+        VStack(spacing: 22) {
+            HStack(spacing: 28) {
+                MascotView(mood: justPaired ? .happy : .idle, power: store.mascotPower, inPod: true)
+                    .frame(width: 230, height: 230)
                     .task {
-                        // 进到这一屏就是刚连上：先庆祝一下，再回到电量对应的样子
                         try? await Task.sleep(for: .seconds(0.3))
                         justPaired = true
                         try? await Task.sleep(for: .seconds(2.2))
                         justPaired = false
                     }
-                VStack(alignment: .leading, spacing: 2) {
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 8) {
                     TextField("给它起个名字", text: Bindable(store.settings).deviceAlias, prompt: Text(store.deviceName))
-                        .textFieldStyle(.plain).font(.title3.bold())
+                        .textFieldStyle(.plain).font(.system(size: 34, weight: .bold, design: .rounded))
                         .help("点这里改名。名字只存在这台 Mac 上")
-                    Text(store.inCase ? "已连接 · 在充电盒里" : "已连接").font(.callout).foregroundStyle(Theme.ok)
+                    HStack(spacing: 7) {
+                        Circle().fill(Theme.ok).frame(width: 9, height: 9)
+                        Text(store.recState == .recording ? "已连接 · 正在录音" : store.inCase ? "已连接 · 正在充电盒里充电" : "已连接").font(.title3).foregroundStyle(.secondary)
+                    }
+                    HStack(spacing: 10) {
+                        if store.info != nil { RecordControls(size: .extraLarge) }
+                        Button("断开连接") { store.disconnect() }.buttonStyle(.glass).controlSize(.extraLarge)
+                    }
+                    .padding(.top, 10)
                 }
-                Spacer()
-                if store.info != nil { RecordControls(size: .large) }
-                Button("断开连接") { store.disconnect() }
             }
-            if store.info == nil { ProgressView("正在读取设备信息…").controlSize(.small) }
-        }
-        if let info = store.info {
-            Card(title: "状态") {
-                BatteryRow(title: "录音豆", percent: info.micBattery, charging: info.micCharging)
-                BatteryRow(title: "充电盒", percent: info.caseBattery, charging: info.caseCharging)
-                if info.totalKB > 0 {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("存储")
-                            Spacer()
-                            Text("\(size(info.usedKB)) / \(size(info.totalKB))").foregroundStyle(.secondary).monospacedDigit()
-                        }
-                        ProgressView(value: Double(info.usedKB), total: Double(info.totalKB))
+            .frame(maxWidth: .infinity)
+
+            if let info = store.info {
+                HStack(spacing: 18) {
+                    ring("录音豆", "\(info.micBattery)%", Double(info.micBattery) / 100, note: info.micCharging ? "充电中" : nil, warn: info.micBattery < 20)
+                    ring("充电盒", "\(info.caseBattery)%", Double(info.caseBattery) / 100, note: info.caseCharging ? "充电中" : nil, warn: info.caseBattery < 20)
+                    if info.totalKB > 0 {
+                        ring("已用空间", size(info.usedKB), max(0.004, Double(info.usedKB) / Double(info.totalKB)), note: "共 " + size(info.totalKB), warn: false)
                     }
                 }
-                Divider()
-                LabeledContent("固件", value: info.firmware)
-                LabeledContent("序列号") { Text(info.serial.uppercased()).textSelection(.enabled) }
-                if !store.encryptionReady { Text("密钥未协商，暂时无法下载").foregroundStyle(Theme.amber) }
+
+                let onDevice = store.recordings.filter(\.onDevice)
+                let waiting = onDevice.filter { !$0.downloaded }.count
+                // 每秒 8 KB：160 字节一帧、每秒 50 帧
+                let hoursLeft = Double(info.freeKB) / 8 / 3600
+                Card {
+                    Grid(alignment: .leading, horizontalSpacing: 28, verticalSpacing: 11) {
+                        GridRow {
+                            fact("录音豆里的录音", "\(onDevice.count) 条" + (waiting > 0 ? "，\(waiting) 条没下载" : "，都已下载"))
+                            fact("还能录", hoursLeft >= 100 ? "约 \(Int(hoursLeft)) 小时" : String(format: "约 %.1f 小时", hoursLeft))
+                        }
+                        GridRow {
+                            fact("录音豆固件", info.firmware)
+                            fact("充电盒固件", info.caseFirmware.isEmpty ? "—" : info.caseFirmware)
+                        }
+                        GridRow {
+                            fact("下载加密", store.encryptionReady ? "密钥已协商" : "还没协商好，暂时不能下载", warn: !store.encryptionReady)
+                            fact("序列号", info.serial.uppercased())
+                        }
+                    }
+                    if waiting > 0 {
+                        Divider()
+                        HStack {
+                            Text("有 \(waiting) 条录音还在录音豆里。").foregroundStyle(.secondary)
+                            Spacer()
+                            Button("全部下载") { store.downloadAll() }.disabled(store.pull != nil || !store.encryptionReady)
+                        }
+                    }
+                }
+            } else {
+                ProgressView("正在读取设备信息…").controlSize(.small)
             }
         }
+    }
+
+    private func ring(_ title: String, _ value: String, _ fraction: Double, note: String?, warn: Bool) -> some View {
+        VStack(spacing: 5) {
+            Text(title).font(.callout).foregroundStyle(.secondary)
+            Text(value).font(.system(size: 24, weight: .semibold, design: .rounded)).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1)
+            if let note { Text(note).font(.caption).foregroundStyle(.tertiary) }
+        }
+        .frame(width: 132, height: 132)
+        .background {
+            ZStack {
+                Circle().stroke(Theme.amber.opacity(0.15), lineWidth: 7)
+                Circle().trim(from: 0, to: min(1, fraction)).stroke(warn ? Theme.rec : Theme.amber, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.spring(response: 0.8, dampingFraction: 1), value: fraction)
+            }
+        }
+        .padding(6)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func fact(_ label: String, _ value: String, warn: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(.callout.weight(.medium)).foregroundStyle(warn ? Theme.amber : Color.primary).textSelection(.enabled)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func size(_ kb: UInt32) -> String { ByteCountFormatter.string(fromByteCount: Int64(kb) * 1024, countStyle: .memory) }

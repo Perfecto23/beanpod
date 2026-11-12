@@ -35,6 +35,8 @@ struct MascotView: NSViewRepresentable {
     var power: MascotPower = .unknown
     /// 现在的音量（0…1）。给了它，耳机的灯就跟着声音亮暗，不再按固定节奏呼吸。
     var level: Float?
+    /// 不管什么状态都坐在充电仓里（设备页的主视觉用）。
+    var inPod = false
 
     func makeCoordinator() -> MascotScene { MascotScene() }
 
@@ -47,6 +49,7 @@ struct MascotView: NSViewRepresentable {
         view.rendersContinuously = false
         view.isPlaying = true
         view.addGestureRecognizer(NSClickGestureRecognizer(target: context.coordinator, action: #selector(MascotScene.poke)))
+        context.coordinator.forcePod = inPod
         context.coordinator.apply(mood, power, animated: false)
         return view
     }
@@ -109,6 +112,7 @@ final class MascotScene: NSObject {
     private var face: Face = .open
     private var blinker: Task<Void, Never>?
     private var rootBase: SCNVector3?
+    var forcePod = false
 
     /// 待命时的灯：暖白，不抢眼
     static let warm = NSColor(calibratedRed: 1.0, green: 0.90, blue: 0.72, alpha: 1)
@@ -177,7 +181,7 @@ final class MascotScene: NSObject {
         setRing(look.ring, glow: look.glow, animated: animated)
         setBadge(look.badge, color: look.badgeColor, drift: mood == .sleeping)
         // 充电仓是小豆的窝：充电的时候在里面，没连上、睡着的时候也在里面
-        var inPod = mood == .sleeping
+        var inPod = mood == .sleeping || forcePod
         if case .charging = power, mood == .idle { inPod = true }
         setPod(inPod, animated: animated)
         if mood == .happy, animated, previous != .happy { jump(times: 2) }

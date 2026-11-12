@@ -47,7 +47,7 @@ struct KnowledgeView: View {
                 }
             }
             .padding(20)
-            .frame(maxWidth: 780, alignment: .leading)
+            .frame(maxWidth: 860, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
         .navigationTitle("知识库")
@@ -71,7 +71,13 @@ struct KnowledgeView: View {
     /// 页面的主角：一个提问框。问了之后，回答和依据就出在它下面。
     @ViewBuilder private var askBox: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("问问你的录音").font(.system(size: 26, weight: .semibold, design: .rounded))
+            HStack(spacing: 14) {
+                MascotView(mood: store.asking ? .thinking : .idle, power: .mid).frame(width: 110, height: 110).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("问问你的录音").font(.system(size: 36, weight: .bold, design: .rounded))
+                    Text("聊过的事，都有迹可循").font(.title3).foregroundStyle(.secondary)
+                }
+            }
             HStack(spacing: 10) {
                 Image(systemName: "sparkles").font(.title3).foregroundStyle(Theme.amber)
                 TextField("比如「上周和王总谈的价格是多少」", text: $question, axis: .vertical)
@@ -112,6 +118,7 @@ struct KnowledgeView: View {
                     if store.asking {
                         HStack(spacing: 8) { ProgressView().controlSize(.small); Text("正在翻你的录音…").foregroundStyle(.secondary) }
                     } else if let answer = store.answer {
+                        Label("小豆帮你整理好了", systemImage: "sparkles").font(.callout).foregroundStyle(Theme.amber)
                         MarkdownView(text: answer)
                         if !store.answerSources.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
@@ -148,10 +155,25 @@ struct KnowledgeView: View {
 
     /// 没在找东西的时候：按录音一条一条摆，每条是它的摘要，不是拆碎的要点。
     @ViewBuilder private var digest: some View {
-        Text("最近整理好的").font(.headline).padding(.top, 4)
-        LazyVStack(spacing: 10) {
-            ForEach(store.recordings.filter(\.isAnalyzed).prefix(12)) { r in
-                recordingCard(r, snippets: [])
+        Text("最近整理好的").font(.system(size: 20, weight: .semibold, design: .rounded)).padding(.top, 6)
+        // 三张一排的摘要卡
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12, alignment: .top)], spacing: 12) {
+            ForEach(store.recordings.filter(\.isAnalyzed).prefix(9)) { r in
+                Button { nav.open(r.id) } label: {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 7) {
+                            Image(systemName: (r.scene ?? .other).icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.amber)
+                            Text(r.displayTitle).font(.body.weight(.semibold)).lineLimit(1)
+                        }
+                        Text((r.date.map { $0.formatted(.dateTime.month().day()) + " · " } ?? "") + spokenDuration(r.duration))
+                            .font(.caption).foregroundStyle(.tertiary)
+                        Divider()
+                        Text(r.summary ?? "").font(.callout).foregroundStyle(.secondary).lineLimit(3).multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, minHeight: 54, alignment: .topLeading)
+                    }
+                    .padding(14).panel(radius: 14).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
     }

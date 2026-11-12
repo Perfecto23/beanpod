@@ -61,8 +61,8 @@ struct RecordStage: View {
                     timer
                     FlowWave(levels: store.liveLevels, total: store.liveLevelTotal, marks: store.liveMarks,
                              elapsed: { store.elapsed(at: $0) }, paused: paused, still: reduceMotion)
-                        .frame(height: 170)
-                        .padding(.top, 18)
+                        .frame(height: 120)
+                        .padding(.top, 4)
                     caption
                     Spacer(minLength: 12)
                 }
@@ -96,13 +96,13 @@ struct RecordStage: View {
     private var timer: some View {
         HStack(alignment: .center, spacing: 22) {
             MascotView(mood: paused ? .idle : .listening, power: .mid, level: paused ? nil : level)
-                .frame(width: 104, height: 104)
+                .frame(width: 230, height: 230)
                 .accessibilityHidden(true)
             TimelineView(.periodic(from: .now, by: 0.1)) { context in
                 let t = store.elapsed(at: context.date)
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(clock(t.rounded(.down)))
-                        .font(.system(size: 104, weight: .ultraLight, design: .rounded)).monospacedDigit()
+                        .font(.system(size: 132, weight: .ultraLight, design: .rounded)).monospacedDigit()
                     Text(String(format: ".%d", Int(t * 10) % 10))
                         .font(.system(size: 40, weight: .light, design: .rounded)).monospacedDigit()
                         .foregroundStyle(Theme.paper.opacity(0.4))
@@ -118,7 +118,7 @@ struct RecordStage: View {
         Group {
             if let last = store.liveSegments.last {
                 Text(store.settings.liveTidy ? stripFillers(last.text) : last.text)
-                    .font(.title2).lineLimit(2).multilineTextAlignment(.center)
+                    .font(.system(size: 26, weight: .medium)).lineLimit(2).multilineTextAlignment(.center)
                     .id(last.id).transition(.opacity.combined(with: .offset(y: 8)))
             } else if let note = store.liveNote {
                 Text(note).font(.title3).foregroundStyle(Theme.amber)

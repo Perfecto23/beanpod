@@ -32,6 +32,7 @@ struct DashboardView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Hero()
+                Divider().padding(.horizontal, 4)
 
                 pending
 
@@ -120,46 +121,62 @@ struct DashboardView: View {
     @AppStorage("dashShowStats") private var showStats = false
 
     private var recentAndTodos: some View {
-                HStack(alignment: .top, spacing: 12) {
-                    Card(title: "待办") {
-                        let todos = store.openTodos
-                        if todos.isEmpty {
-                            Text("没有未完成的待办。").font(.callout).foregroundStyle(.secondary)
-                        }
-                        ForEach(todos.prefix(8), id: \.todo.id) { item in
-                            HStack(alignment: .firstTextBaseline) {
-                                Toggle(isOn: Binding(get: { false }, set: { _ in store.toggleTodo(item.recording.id, item.todo.id) })) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.todo.text).lineLimit(2)
-                                        Button(item.recording.displayTitle) { nav.open(item.recording.id) }
-                                            .buttonStyle(.plain).foregroundStyle(Theme.amber).font(.caption)
-                                    }
-                                }
-                                .toggleStyle(.checkbox)
-                            }
-                        }
-                        if todos.count > 8 { Text("还有 \(todos.count - 8) 项").font(.caption).foregroundStyle(.secondary) }
-                    }
-                    Card(title: "最近的录音") {
-                        if store.recordings.isEmpty {
-                            Text("连接录音豆，把录音下载下来。").font(.callout).foregroundStyle(.secondary)
-                            Button("去连接") { nav.route = .device }
-                        }
-                        ForEach(store.recordings.prefix(6)) { r in
-                            Button { nav.open(r.id) } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: (r.scene ?? .other).icon).foregroundStyle(.secondary).frame(width: 18)
-                                    Text(r.displayTitle).lineLimit(1)
-                                    Spacer()
-                                    Text(clock(r.duration)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+        HStack(alignment: .top, spacing: 36) {
+            // 接下来要做的：最多五件，剩下的去录音页的「有待办」里看
+            VStack(alignment: .leading, spacing: 4) {
+                Text("接下来要做的").font(.system(size: 20, weight: .semibold, design: .rounded)).padding(.bottom, 8)
+                let todos = store.openTodos
+                if todos.isEmpty {
+                    Text("都做完了。").foregroundStyle(.secondary).padding(.vertical, 10)
                 }
+                ForEach(Array(todos.prefix(5).enumerated()), id: \.element.todo.id) { n, item in
+                    if n > 0 { Divider() }
+                    HStack(alignment: .top, spacing: 12) {
+                        Button { store.toggleTodo(item.recording.id, item.todo.id) } label: {
+                            Circle().strokeBorder(.tertiary, lineWidth: 1.5).frame(width: 20, height: 20).contentShape(Circle())
+                        }
+                        .buttonStyle(.plain).help("做完了，勾掉").accessibilityLabel("勾掉：\(item.todo.text)")
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.todo.text).font(.body.weight(.medium)).lineLimit(2)
+                            Button("来自「\(item.recording.displayTitle)」") { nav.open(item.recording.id) }
+                                .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                    .padding(.vertical, 9)
+                }
+                if todos.count > 5 {
+                    Text("还有 \(todos.count - 5) 件，在录音页的「有待办」里。").font(.caption).foregroundStyle(.tertiary).padding(.top, 6)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
+            VStack(alignment: .leading, spacing: 10) {
+                Text("最近的录音").font(.system(size: 20, weight: .semibold, design: .rounded)).padding(.bottom, 2)
+                if store.recordings.isEmpty {
+                    Text("录一段试试，录完会出现在这里。").foregroundStyle(.secondary).padding(.vertical, 10)
+                }
+                ForEach(store.recordings.prefix(4)) { r in
+                    Button { nav.open(r.id) } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: (r.scene ?? .other).icon).font(.system(size: 16, weight: .medium)).foregroundStyle(Theme.amber)
+                                .frame(width: 36, height: 36)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(r.displayTitle).font(.body.weight(.semibold)).lineLimit(1)
+                                if let s = r.summary { Text(s).font(.callout).foregroundStyle(.secondary).lineLimit(1) }
+                            }
+                            Spacer(minLength: 6)
+                            Text(spokenDuration(r.duration)).font(.callout).foregroundStyle(.tertiary).monospacedDigit()
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 11)
+                        .panel(radius: 14)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.top, 6)
     }
 
     /// 还有事情没做完时才出现的一栏。
@@ -307,27 +324,26 @@ struct Hero: View {
         default: break
         }
         let todos = store.openTodos.count
-        if todos > 0 { return "有 \(todos) 件待办还没做完，别忘了。" }
+        if todos > 0 { return "有 \(todos) 件事等你处理" }
         return store.recordings.isEmpty ? "录一段试试？我来帮你整理。" : "随时可以开始，我都记着。"
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 18) {
             MascotView(mood: mood, power: store.mascotPower)
-                .frame(width: 170, height: 170)
+                .frame(width: 210, height: 210)
                 .help("点我一下")
                 .accessibilityElement().accessibilityLabel("小豆").accessibilityValue(line)
-            VStack(alignment: .leading, spacing: 10) {
-                Text(greeting).font(.system(size: 26, weight: .semibold, design: .rounded))
-                Text(line).font(.title3).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(greeting).font(.system(size: 44, weight: .bold, design: .rounded))
+                Text(line).font(.title2).foregroundStyle(.secondary)
                     .contentTransition(.opacity).animation(.easeInOut(duration: 0.3), value: line)
-                // 第一排只放最要紧的一件事：录音，以及声音从哪来
+                    .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 10) {
                     RecordControls(size: .extraLarge)
                     if store.recState == .idle { SourceMenu() }
                 }
-                .padding(.top, 4)
-                // 第二排是次要的入口，小一号，不和录音抢位置
+                .padding(.top, 10)
                 HStack(spacing: 8) {
                     if store.link != .ready {
                         Button { nav.route = .device } label: { Label("连接录音豆", systemImage: "antenna.radiowaves.left.and.right").fixedSize() }
