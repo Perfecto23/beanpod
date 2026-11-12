@@ -209,7 +209,6 @@ struct Sidebar: View {
 
             Section("录音") {
                 row("全部录音", "waveform", store.recordings.count).tag(Route.all)
-                row("星标", "star", store.recordings.filter(\.starred).count).tag(Route.starred)
             }
         }
         .safeAreaInset(edge: .bottom) { DeviceChip() }
@@ -379,14 +378,41 @@ struct RecordingsView: View {
     @Environment(BeanStore.self) private var store
     @Environment(Navigator.self) private var nav
     @State private var query = ""
+    @State private var quick: Quick = .all
 
-    private var scoped: [Recording] {
-        switch nav.route {
-        case .starred: store.recordings.filter(\.starred)
-        case .scene(let s): store.recordings.filter { $0.scene == s }
-        default: store.recordings
+    /// 列表头上的快速筛选。星标以前是侧栏里单独的一页，没有星标时整页是空的，所以收进这里。
+    enum Quick: String, CaseIterable, Identifiable {
+        case all = "全部", starred = "星标", todos = "有待办", marked = "有重点"
+        var id: String { rawValue }
+        var emptyHint: String {
+            switch self {
+            case .all: ""
+            case .starred: "还没有星标的录音。打开一条录音，点右上角的星，它就会出现在这里。"
+            case .todos: "没有还没做完的待办。"
+            case .marked: "还没有打过重点标记的录音。录音时按 ⌘D，或者按录音豆上的标记键。"
+            }
         }
     }
+
+    private var scoped: [Recording] {
+        var base: [Recording]
+        switch nav.route {
+        case .starred: base = store.recordings.filter(\.starred)
+        case .scene(let s): base = store.recordings.filter { $0.scene == s }
+        default: base = store.recordings
+        }
+        switch quick {
+        case .all: break
+        case .starred: base = base.filter(\.starred)
+        case .todos: base = base.filter { r in r.todos.contains { !$0.done } }
+        case .marked: base = base.filter { !$0.marks.isEmpty }
+        }
+        return base
+    }
+
+    private var narrowed: Bool { quick != .all || !query.isEmpty || { if case .scene = nav.route { return true }; return false }() }
+
+    private func showAll() { quick = .all; query = ""; nav.route = .all }
 
     /// 搜索：标题、摘要、文字稿、话题里有这个词就算。
     private var items: [Recording] {
@@ -437,7 +463,13 @@ struct RecordingsView: View {
                 }
                 .padding(.horizontal, 10).padding(.vertical, 7)
                 .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 9))
-                .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 4)
+                .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 6)
+
+                Picker("筛选", selection: $quick) {
+                    ForEach(Quick.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden().controlSize(.small)
+                .padding(.horizontal, 12).padding(.bottom, 4)
 
                 List(selection: $nav.selection) {
                     ForEach(days, id: \.label) { day in
@@ -456,14 +488,10 @@ struct RecordingsView: View {
                 .scrollContentBackground(.hidden)
                 .listStyle(.sidebar)
                 .overlay {
+                    // 列表空的时候这里只留一句小字；要说的话放在右边，一个页面只出现一个空状态
                     if items.isEmpty {
                         if store.loadingList { ProgressView("正在读取录音列表…") }
-                        else if !query.isEmpty {
-                            ContentUnavailableView("没找到「\(query)」", systemImage: "magnifyingglass", description: Text("换个词试试，或者到知识库里直接提问。"))
-                        } else {
-                            ContentUnavailableView("这里还没有录音", systemImage: "tray",
-                                                   description: Text(nav.route == .all ? "录一段，或者把录音豆里的下载下来。" : "整理过的录音会自动归到对应的场景。"))
-                        }
+                        else { Text(store.recordings.isEmpty ? "还没有录音" : "这个条件下没有录音").font(.callout).foregroundStyle(.tertiary) }
                     }
                 }
             }
@@ -473,6 +501,16 @@ struct RecordingsView: View {
             Group {
                 if let id = nav.selection, let rec = store.recordings.first(where: { $0.id == id }) {
                     RecordingDetail(recording: rec).id(rec.id)
+                } else if !store.recordings.isEmpty {
+                    // 有录音，只是这个筛选条件下没有：说清为什么，给一个回去的按钮
+                    VStack(spacing: 12) {
+                        Image(systemName: quick == .starred ? "star" : "line.3.horizontal.decrease.circle").font(.system(size: 34)).foregroundStyle(.tertiary)
+                        Text(!query.isEmpty ? "没找到「\(query)」" : quick != .all ? "「\(quick.rawValue)」里现在是空的" : "这个场景下还没有录音").font(.title3.weight(.semibold))
+                        Text(!query.isEmpty ? "换个词试试，或者到知识库里直接提问。" : quick != .all ? quick.emptyHint : "整理过的录音会自动归到对应的场景。")
+                            .foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 380)
+                        Button("看全部录音") { showAll() }.buttonStyle(.glass).controlSize(.large).padding(.top, 4)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     // 只有一条录音都没有的时候才会到这里：给一个能直接动手的开始
                     VStack(spacing: 14) {
@@ -491,6 +529,7 @@ struct RecordingsView: View {
         // 不留空白：没选中任何一条时，自动打开最新的那条
         .onAppear { pickFirstIfNeeded() }
         .onChange(of: items.map(\.id)) { pickFirstIfNeeded() }
+        .onChange(of: nav.route) { if nav.route == .starred { nav.route = .all; quick = .starred } }
         .toolbar {
             ToolbarItemGroup {
                 RecordButton()
@@ -893,10 +932,7 @@ struct RecordDock: View {
 
     /// 没在录的时候，首页和录音页自己有开始按钮和播放条，就不再多摆一颗。
     private var hiddenWhenIdle: Bool {
-        switch nav.route {
-        case .dashboard, .all, .starred, .scene, .knowledge: true
-        default: false
-        }
+        true
     }
 
     var body: some View {
@@ -1278,6 +1314,8 @@ struct DeviceView: View {
     @State private var justPaired = false
 
     var body: some View {
+        // 这一页内容不多：摆在页面正中间，不贴着左上角留一大片空
+        GeometryReader { page in
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 switch store.link {
@@ -1290,8 +1328,9 @@ struct DeviceView: View {
                 Button("诊断日志") { openWindow(id: "log") }.buttonStyle(.plain).foregroundStyle(Theme.amber).font(.callout)
             }
             .padding(24)
-            .frame(maxWidth: 520, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: 600, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: page.size.height, alignment: .center)
+        }
         }
         .navigationTitle("设备")
     }
@@ -1359,7 +1398,7 @@ struct DeviceView: View {
         Card {
             HStack(spacing: 12) {
                 MascotView(mood: justPaired ? .happy : .idle, power: store.mascotPower)
-                    .frame(width: 96, height: 96)
+                    .frame(width: 120, height: 120)
                     .task {
                         // 进到这一屏就是刚连上：先庆祝一下，再回到电量对应的样子
                         try? await Task.sleep(for: .seconds(0.3))
@@ -1374,13 +1413,10 @@ struct DeviceView: View {
                     Text(store.inCase ? "已连接 · 在充电盒里" : "已连接").font(.callout).foregroundStyle(Theme.ok)
                 }
                 Spacer()
+                if store.info != nil { RecordControls(size: .large) }
                 Button("断开连接") { store.disconnect() }
             }
-            if store.info != nil {
-                RecordControls(size: .large)
-            } else {
-                ProgressView("正在读取设备信息…").controlSize(.small)
-            }
+            if store.info == nil { ProgressView("正在读取设备信息…").controlSize(.small) }
         }
         if let info = store.info {
             Card(title: "状态") {
