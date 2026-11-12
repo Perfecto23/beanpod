@@ -1,0 +1,1384 @@
+import BeanKit
+import SwiftUI
+
+// MARK: - 导航
+
+enum Route: Hashable {
+    case dashboard, live, all, starred, scene(Scene), knowledge, device
+}
+
+@Observable
+final class Navigator {
+    var route: Route = .dashboard
+    var selection: UInt32?
+    /// 录音舞台是不是铺开着。录音一开始就铺开，可以收起来接着用豆仓。
+    var stageOpen = false
+    /// 上手引导是不是开着。
+    var welcomeOpen = false
+
+    func open(_ id: UInt32) { route = .all; selection = id }
+}
+
+struct RootView: View {
+    @Environment(BeanStore.self) private var store
+    @Environment(Navigator.self) private var nav
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        @Bindable var nav = nav
+        NavigationSplitView {
+            Sidebar()
+                .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
+        } detail: {
+            switch nav.route {
+            case .dashboard: DashboardView().background(Backdrop())
+            case .knowledge: KnowledgeView().background(Backdrop())
+            case .live: LiveView().background(Backdrop())
+            case .device: DeviceView().background(Backdrop())
+            case .all, .starred, .scene: RecordingsView().background(Backdrop())
+            }
+        }
+        .accessibilityHidden(nav.stageOpen && store.recState != .idle)
+        .preferredColorScheme(store.settings.appearance.scheme)
+        .onChange(of: store.recState != .idle) { _, recording in nav.stageOpen = recording }
+        .dropDestination(for: URL.self) { urls, _ in
+            urls.forEach { store.importFile($0, consume: false) }
+            if !urls.isEmpty { nav.route = .all }
+            return !urls.isEmpty
+        }
+        .overlay(alignment: .bottom) { if !nav.stageOpen { RecordDock().padding(.bottom, 16) } }
+        .overlay {
+            if nav.stageOpen, store.recState != .idle {
+                RecordStage().transition(.opacity.combined(with: .scale(scale: 1.03)))
+            }
+        }
+        .animation(.spring(response: 0.45, dampingFraction: 1), value: nav.stageOpen)
+        // 舞台铺开时，窗口顶上那排工具按钮也收起来，不然会浮在舞台上面
+        .toolbar(nav.stageOpen && store.recState != .idle ? .hidden : .automatic, for: .windowToolbar)
+        .overlay(alignment: .top) {
+            if let banner = store.banner {
+                Label(banner.text, systemImage: banner.icon)
+                    .font(.callout.weight(.medium))
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .glassEffect(.regular, in: .capsule)
+                    .padding(.top, 10)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .id(banner.id)
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.banner)
+        .alert(store.problem?.title ?? "", isPresented: Binding(get: { store.problem != nil }, set: { if !$0 { store.problem = nil } }), presenting: store.problem) { p in
+            if let action = p.action {
+                Button(action.label) {
+                    switch action {
+                    case .settings: openSettings()
+                    case .device: nav.route = .device
+                    default: store.resolve(action)
+                    }
+                }
+                Button("先不管", role: .cancel) {}
+            } else {
+                Button("好") {}
+            }
+        } message: { p in
+            Text(p.detail)
+        }
+        .sheet(isPresented: $nav.welcomeOpen) { WelcomeView() }
+        .onAppear {
+            if !UserDefaults.standard.bool(forKey: "welcomed"), store.recordings.isEmpty { nav.welcomeOpen = true }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NotificationRouter.open)) { note in
+            if let id = note.object as? UInt32 { nav.stageOpen = false; nav.open(id) }
+        }
+    }
+}
+
+/// 窗口最上面的录音控制，哪个页面都能点到。
+struct RecordButton: View {
+    @Environment(BeanStore.self) private var store
+    @Environment(Navigator.self) private var nav
+
+    var body: some View {
+        if store.link == .ready {
+            RecordControls(size: .regular)
+        } else {
+            Button { nav.route = .device } label: {
+                Label("连接录音豆", systemImage: "mic.slash").labelStyle(.titleAndIcon)
+            }
+            .help("录音豆没连上，点这里去连接")
+        }
+    }
+}
+
+/// 录音的三个动作：开始、暂停/继续、结束。没在录时只有一个「录音」；录起来后显示已录时长、暂停键和结束键。
+struct RecordControls: View {
+    @Environment(BeanStore.self) private var store
+    var size: ControlSize
+
+    var body: some View {
+        switch store.recState {
+        case .idle:
+            Button { store.startRecording() } label: {
+                Label(size == .regular ? "录音" : "开始录音", systemImage: "record.circle.fill").labelStyle(.titleAndIcon)
+                    .padding(.horizontal, size == .regular ? 0 : 8)
+            }
+            .buttonStyle(size == .regular ? AnyButtonStyle(.glass) : AnyButtonStyle(.glassProminent))
+            .tint(.red).controlSize(size)
+            .help("让录音豆开始录音（⌘R）")
+        case .recording, .paused:
+            let paused = store.recState == .paused
+            HStack(spacing: size == .regular ? 6 : 10) {
+                HStack(spacing: 6) {
+                    Circle().fill(paused ? Color.orange : Color.red).frame(width: 8, height: 8)
+                        .opacity(paused ? 1 : 0.9)
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Text(clock(store.elapsed(at: context.date))).monospacedDigit()
+                    }
+                    if paused { Text("已暂停").foregroundStyle(.secondary).fixedSize() }
+                }
+                .font(size == .regular ? .callout.weight(.medium) : .title3.weight(.medium))
+                .padding(.horizontal, 8)
+
+                Button { paused ? store.resumeRecording() : store.pauseRecording() } label: {
+                    Label(paused ? "继续" : "暂停", systemImage: paused ? "play.fill" : "pause.fill")
+                        .labelStyle(size == .regular ? AnyLabelStyle(.iconOnly) : AnyLabelStyle(.titleAndIcon))
+                }
+                .buttonStyle(size == .regular ? AnyButtonStyle(.borderless) : AnyButtonStyle(.glass)).controlSize(size)
+                .help(paused ? "继续录（⌘R）" : "暂停，稍后可以接着录进同一条（⌘R）")
+
+                Button { store.finishRecording() } label: {
+                    Label("结束", systemImage: "stop.fill")
+                        .labelStyle(size == .regular ? AnyLabelStyle(.iconOnly) : AnyLabelStyle(.titleAndIcon))
+                }
+                .buttonStyle(size == .regular ? AnyButtonStyle(.borderless) : AnyButtonStyle(.glassProminent))
+                .tint(.red).foregroundStyle(size == .regular ? AnyShapeStyle(.red) : AnyShapeStyle(.white)).controlSize(size)
+                    .help("结束这条录音（⌘.）。结束后会自动下载并整理成纪要。")
+            }
+        }
+    }
+}
+
+/// 让同一个按钮在不同场合用不同的按钮样式。
+struct AnyButtonStyle: PrimitiveButtonStyle {
+    private let make: (Configuration) -> AnyView
+    init<S: PrimitiveButtonStyle>(_ style: S) { make = { configuration in AnyView(Button(configuration).buttonStyle(style)) } }
+    func makeBody(configuration: Configuration) -> some View { make(configuration) }
+}
+
+/// 让同一个按钮在不同场合用不同的标签样式。
+struct AnyLabelStyle: LabelStyle {
+    private let make: (Configuration) -> AnyView
+    init<S: LabelStyle>(_ style: S) {
+        make = { configuration in AnyView(Label { configuration.title } icon: { configuration.icon }.labelStyle(style)) }
+    }
+    func makeBody(configuration: Configuration) -> some View { make(configuration) }
+}
+
+struct Sidebar: View {
+    @Environment(BeanStore.self) private var store
+    @Environment(Navigator.self) private var nav
+
+    var body: some View {
+        @Bindable var nav = nav
+        List(selection: $nav.route) {
+            Label("总览", systemImage: "square.grid.2x2").tag(Route.dashboard)
+            Label("知识库", systemImage: "books.vertical").tag(Route.knowledge)
+            HStack {
+                Label("实时转写", systemImage: "captions.bubble")
+                Spacer()
+                if store.liveActive { Circle().fill(.red).frame(width: 7, height: 7) }
+            }
+            .tag(Route.live)
+
+            Section("录音") {
+                row("全部录音", "waveform", store.recordings.count).tag(Route.all)
+                row("星标", "star", store.recordings.filter(\.starred).count).tag(Route.starred)
+            }
+        }
+        .safeAreaInset(edge: .bottom) { DeviceChip() }
+    }
+
+    private func row(_ title: String, _ icon: String, _ count: Int) -> some View {
+        HStack {
+            Label(title, systemImage: icon)
+            Spacer()
+            if count > 0 { Text("\(count)").foregroundStyle(.secondary).monospacedDigit() }
+        }
+    }
+}
+
+/// 侧栏底部的设备状态，点一下进设备页。
+struct DeviceChip: View {
+    @Environment(BeanStore.self) private var store
+    @Environment(Navigator.self) private var nav
+
+    var body: some View {
+        Button { nav.route = .device } label: {
+            HStack(spacing: 10) {
+                Image(systemName: store.link == .ready ? "mic.circle.fill" : "mic.slash.circle")
+                    .font(.title2).foregroundStyle(store.link == .ready ? Theme.amber : .secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(store.link == .ready ? store.displayDeviceName : "录音豆").font(.callout.weight(.medium)).lineLimit(1)
+                    Text(status).font(.caption).foregroundStyle(statusColor)
+                }
+                Spacer()
+                if let pull = store.pull { ProgressView(value: pull.fraction).progressViewStyle(.circular).controlSize(.small) }
+            }
+            .padding(10)
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 14))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).padding(10)
+    }
+
+    private var status: String {
+        switch store.link {
+        case .ready:
+            if store.recState == .recording { return "录音中" }
+            if store.recState == .paused { return "录音已暂停" }
+            return store.info.map { "已连接 · \($0.micBattery)%" } ?? "已连接"
+        case .connecting: return "正在连接…"
+        case .scanning: return "正在搜索…"
+        case .off: return "蓝牙未打开"
+        case .unauthorized: return "没有蓝牙权限"
+        case .idle: return "未连接"
+        }
+    }
+
+    private var statusColor: Color {
+        if store.link == .ready { return store.info?.recording == true ? .red : .green }
+        return .secondary
+    }
+}
+
+// MARK: - 小组件
+
+struct ScenePill: View {
+    let scene: Scene
+    var body: some View {
+        Label(scene.name, systemImage: scene.icon)
+            .font(.caption.weight(.medium)).labelStyle(.titleAndIcon)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .foregroundStyle(.secondary)
+            .background(.quaternary.opacity(0.7), in: Capsule())
+    }
+}
+
+struct Card<Content: View>: View {
+    var title: String?
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let title { Text(title).font(.headline) }
+            content
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .panel()
+    }
+}
+
+extension View {
+    /// 放内容的底板：一块半透明的实底加一圈细线。玻璃只留给浮在内容上面的控件。
+    func panel(radius: CGFloat = 16) -> some View {
+        background(Color(nsColor: .controlBackgroundColor).opacity(0.62), in: .rect(cornerRadius: radius))
+            .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(.separator.opacity(0.45), lineWidth: 0.5))
+    }
+}
+
+/// 内容区的底：窗口本身半透明，透出桌面；上面再浮几团缓慢移动的彩色光。
+/// 液态玻璃靠折射和反光出效果，底下必须有颜色、有明暗，玻璃才看得出来。
+struct Backdrop: View {
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            WindowGlass()
+            // 只有一种色相：强调色的两团很淡的光，慢慢游动。够让玻璃有东西可折射，又不抢内容。
+            TimelineView(.animation(minimumInterval: 1 / 15, paused: reduceMotion)) { context in
+                let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
+                GeometryReader { geo in
+                    let w = geo.size.width, h = geo.size.height
+                    ZStack {
+                        glow(x: 0.22 + 0.05 * sin(t / 11), y: 0.08 + 0.04 * cos(t / 13), size: 0.7, w, h, strength: 1)
+                        glow(x: 0.86 + 0.04 * cos(t / 12), y: 0.9 + 0.04 * sin(t / 10), size: 0.6, w, h, strength: 0.7)
+                    }
+                }
+            }
+            Rectangle().fill(scheme == .dark ? Color.black.opacity(0.28) : Color.white.opacity(0.35))
+        }
+        .ignoresSafeArea()
+    }
+
+    private func glow(x: Double, y: Double, size: Double, _ w: CGFloat, _ h: CGFloat, strength: Double) -> some View {
+        let d = max(w, h) * size
+        return Circle().fill(Theme.amber.opacity((scheme == .dark ? 0.16 : 0.12) * strength))
+            .frame(width: d, height: d).blur(radius: d * 0.32).position(x: w * x, y: h * y)
+    }
+}
+
+/// 让窗口透出后面的桌面。
+struct WindowGlass: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let v = NSVisualEffectView()
+        v.blendingMode = .behindWindow
+        v.material = .underWindowBackground
+        v.state = .active
+        return v
+    }
+
+    func updateNSView(_ v: NSVisualEffectView, context: Context) {}
+}
+
+extension AppSettings.Appearance {
+    var scheme: ColorScheme? { self == .system ? nil : self == .light ? .light : .dark }
+}
+
+struct StageBadge: View {
+    let stage: BeanStore.Stage
+    var body: some View {
+        HStack(spacing: 6) {
+            switch stage {
+            case .queued:
+                Image(systemName: "clock"); Text("排队中")
+            case .transcribing(let f):
+                ProgressView(value: f).progressViewStyle(.circular).controlSize(.small); Text("转写 \(Int(f * 100))%")
+            case .analyzing:
+                ProgressView().controlSize(.small); Text("整理中")
+            }
+        }
+        .font(.caption).foregroundStyle(.secondary)
+    }
+}
+
+// MARK: - 录音列表
+
+struct RecordingsView: View {
+    @Environment(BeanStore.self) private var store
+    @Environment(Navigator.self) private var nav
+
+    private var items: [Recording] {
+        switch nav.route {
+        case .starred: store.recordings.filter(\.starred)
+        case .scene(let s): store.recordings.filter { $0.scene == s }
+        default: store.recordings
+        }
+    }
+
+    private var title: String {
+        switch nav.route {
+        case .starred: "星标"
+        case .scene(let s): s.name
+        default: "全部录音"
+        }
+    }
+
+    var body: some View {
+        @Bindable var nav = nav
+        HStack(spacing: 0) {
+            List(selection: $nav.selection) {
+                ForEach(items) { rec in RecordingRow(recording: rec).tag(rec.id) }
+            }
+            .frame(width: 300)
+            .scrollContentBackground(.hidden)
+            .listStyle(.sidebar)
+            .overlay {
+                if items.isEmpty {
+                    if store.loadingList { ProgressView("正在读取录音列表…") }
+                    else {
+                        ContentUnavailableView("这里还没有录音", systemImage: "tray",
+                                               description: Text(nav.route == .all ? "连接录音豆后，里面的录音会出现在这里。" : "整理过的录音会自动归到对应的场景。"))
+                    }
+                }
+            }
+
+            Divider()
+            Group {
+                if let id = nav.selection, let rec = store.recordings.first(where: { $0.id == id }) {
+                    RecordingDetail(recording: rec).id(rec.id)
+                } else {
+                    ContentUnavailableView("选一条录音", systemImage: "waveform",
+                                           description: Text("下载到这台 Mac 之后会自动转写、判断场景并整理成纪要。"))
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .navigationTitle(title)
+        .navigationSubtitle(items.isEmpty ? "" : "\(items.count) 条")
+        .toolbar {
+            ToolbarItemGroup {
+                Picker("场景", selection: Binding(get: { () -> Scene? in if case .scene(let s) = nav.route { return s }; return nil },
+                                                 set: { nav.route = $0.map { .scene($0) } ?? .all })) {
+                    Text("全部场景").tag(Scene?.none)
+                    ForEach(Scene.allCases.filter { s in store.recordings.contains { $0.scene == s } }) { s in
+                        Label(s.name, systemImage: s.icon).tag(Scene?.some(s))
+                    }
+                }
+                .help("按场景筛选")
+                if store.pull != nil || !store.queue.isEmpty {
+                    Button("取消下载", systemImage: "xmark.circle") { store.cancelDownloads() }
+                } else {
+                    Button("全部下载", systemImage: "arrow.down.circle") { store.downloadAll() }
+                        .disabled(!store.recordings.contains { $0.onDevice && !$0.downloaded && !$0.inProgress } || !store.encryptionReady)
+                        .help("把录音豆里还没下载的录音都下到这台 Mac")
+                }
+                Button("刷新", systemImage: "arrow.clockwise") { store.refreshFiles() }
+                    .disabled(store.link != .ready || store.loadingList || store.pull != nil)
+                    .help("重新读取录音豆里的录音列表")
+                Button("导入", systemImage: "square.and.arrow.down") { store.chooseFilesToImport() }
+                    .help("导入电脑上的录音或文字文件。也可以直接把文件拖进窗口")
+            }
+        }
+    }
+}
+
+struct RecordingRow: View {
+    @Environment(BeanStore.self) private var store
+    let recording: Recording
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                if recording.starred { Image(systemName: "star.fill").font(.caption).foregroundStyle(Theme.amber) }
+                Text(recording.displayTitle).fontWeight(.medium).lineLimit(1)
+                Spacer(minLength: 4)
+                trailing
+            }
+            if let s = recording.summary {
+                Text(s).font(.callout).foregroundStyle(.secondary).lineLimit(2)
+            }
+            HStack(spacing: 8) {
+                if let scene = recording.scene { ScenePill(scene: scene) }
+                Text(meta).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            }
+        }
+        .padding(.vertical, 5)
+    }
+
+    private var meta: String {
+        var parts: [String] = []
+        if let d = recording.date, recording.title?.isEmpty == false { parts.append(d.formatted(.dateTime.month().day().hour().minute())) }
+        parts.append(recording.textOnly ? "文字" : clock(recording.duration))
+        return parts.joined(separator: " · ")
+    }
+
+    @ViewBuilder private var trailing: some View {
+        if recording.inProgress {
+            Image(systemName: "record.circle").foregroundStyle(.red).help("正在录音")
+        } else if let pull = store.pull, pull.id == recording.id {
+            ProgressView(value: pull.fraction).progressViewStyle(.circular).controlSize(.small)
+        } else if store.queue.contains(recording.id) {
+            Image(systemName: "clock").foregroundStyle(.secondary).help("排队下载")
+        } else if let stage = store.stages[recording.id] {
+            StageBadge(stage: stage)
+        } else if !recording.downloaded {
+            Image(systemName: "icloud.and.arrow.down").foregroundStyle(.secondary).help("还在录音豆里，没下载")
+        }
+    }
+}
+
+// MARK: - 录音详情
+
+struct RecordingDetail: View {
+    @Environment(BeanStore.self) private var store
+    let recording: Recording
+    @State private var title = ""
+    @State private var tab = 0
+    @State private var confirmDeviceDelete = false
+    @State private var confirmLocalDelete = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                header
+                if recording.downloaded {
+                    if let stage = store.stages[recording.id] { processing(stage) }
+                    if recording.transcript != nil {
+                        Picker("", selection: $tab) {
+                            Text("纪要").tag(0)
+                            Text("文字稿").tag(1)
+                            Text("改写").tag(2)
+                        }
+                        .pickerStyle(.segmented).labelsHidden().frame(width: 260)
+                        switch tab {
+                        case 0: NotesView(recording: recording)
+                        case 1: TranscriptView(recording: recording)
+                        default: RewriteView(recording: recording)
+                        }
+                    } else if store.stages[recording.id] == nil {
+                        notProcessed
+                    }
+                } else {
+                    notDownloaded
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .onAppear { title = recording.title ?? "" }
+        // 播放条浮在内容上面，文字稿从它底下滚过去
+        .safeAreaInset(edge: .bottom) {
+            if recording.downloaded, !recording.textOnly, store.recState == .idle {
+                VStack(spacing: 8) {
+                    if !recording.marks.isEmpty {
+                        // 重点标记：点一个就从那一刻前两秒开始放
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(recording.marks, id: \.self) { m in
+                                    Button { store.play(recording.id, at: max(0, m - 2)) } label: {
+                                        Label(clock(m), systemImage: "flag.fill").font(.callout.monospacedDigit())
+                                    }
+                                    .buttonStyle(.glass).tint(Theme.amber)
+                                    .help("跳到这个重点标记。右键可以删掉")
+                                    .accessibilityLabel("重点标记 \(clock(m))")
+                                    .contextMenu { Button("删掉这个标记", role: .destructive) { store.removeMark(recording.id, m) } }
+                                }
+                            }
+                            .padding(.horizontal, 4)
+                        }
+                        .frame(maxWidth: 620)
+                    }
+                    PlayerBar(recording: recording).frame(maxWidth: 680)
+                }
+                .padding(.horizontal, 24).padding(.bottom, 14)
+            }
+        }
+        .toolbar {
+            ToolbarItemGroup {
+                Button(recording.starred ? "取消星标" : "星标", systemImage: recording.starred ? "star.fill" : "star") {
+                    store.toggleStar(recording.id)
+                }
+                if recording.downloaded, recording.transcript != nil {
+                    Button("整理", systemImage: "sparkles") { store.process(recording.id) }
+                        .disabled(store.stages[recording.id] != nil)
+                        .help("用分析模型重新判断场景、整理纪要")
+                }
+                if recording.downloaded {
+                    Menu("更多", systemImage: "ellipsis.circle") {
+                        Button("重新整理纪要") { store.process(recording.id) }.disabled(recording.transcript == nil)
+                        Button("重新转写") { store.process(recording.id, retranscribe: true) }.disabled(recording.textOnly)
+                        Divider()
+                        Button("导出为 Markdown…") { store.exportMarkdown([recording]) }.disabled(!recording.isAnalyzed)
+                        if !recording.textOnly {
+                            Button("导出音频（M4A，体积小）…") { store.exportAudio(recording.id, m4a: true) }
+                            Button("导出音频（WAV，无损）…") { store.exportAudio(recording.id, m4a: false) }
+                        }
+                        Button("拷贝文字稿") { copy(recording.transcript ?? "") }.disabled(recording.transcript == nil)
+                        if recording.origin == nil { Button("在访达中显示音频") { store.reveal(recording.id) } }
+                    }
+                    .disabled(store.stages[recording.id] != nil)
+                }
+                Menu("删除", systemImage: "trash") {
+                    if recording.downloaded { Button("从这台 Mac 删除…") { confirmLocalDelete = true } }
+                    if recording.onDevice { Button("从录音豆删除…") { confirmDeviceDelete = true } }
+                }
+            }
+        }
+        .confirmationDialog("从录音豆里删除这条录音？", isPresented: $confirmDeviceDelete) {
+            Button("删除", role: .destructive) { store.deleteFromDevice(recording.id) }
+        } message: {
+            Text(recording.downloaded ? "这台 Mac 上已下载的副本会保留。" : "这条录音还没下载，删除后无法找回。")
+        }
+        .confirmationDialog("从这台 Mac 删除这条录音？", isPresented: $confirmLocalDelete) {
+            Button("删除", role: .destructive) { store.removeLocal(recording.id) }
+        } message: {
+            Text(recording.onDevice ? "文字稿和纪要会一起删除。录音豆里的原件还在，可以再下载。" : "录音豆里已经没有这条了，删除后无法找回。")
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Menu {
+                    ForEach(Scene.allCases) { s in
+                        Button { store.setScene(recording.id, s) } label: { Label(s.name, systemImage: s.icon) }
+                    }
+                } label: {
+                    if let scene = recording.scene { ScenePill(scene: scene) }
+                    else { Label("未分类", systemImage: "tag").font(.caption).foregroundStyle(.secondary) }
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+                .help("场景是自动判断的，判断错了可以在这里改")
+                Text(subtitle).font(.callout).foregroundStyle(.secondary)
+            }
+            TextField("标题", text: $title, prompt: Text(recording.displayTitle))
+                .textFieldStyle(.plain).font(.title.bold())
+                .onSubmit { store.rename(recording.id, to: title) }
+                .disabled(!recording.downloaded)
+        }
+    }
+
+    private var subtitle: String {
+        var parts: [String] = []
+        if let o = recording.origin { parts.append(o) }
+        if let d = recording.date { parts.append(d.formatted(date: .long, time: .shortened)) }
+        if !recording.textOnly { parts.append(spokenDuration(recording.duration)) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func processing(_ stage: BeanStore.Stage) -> some View {
+        HStack(spacing: 10) {
+            switch stage {
+            case .queued:
+                Image(systemName: "clock"); Text("排队中，等前面的处理完")
+            case .transcribing(let f):
+                ProgressView(value: f).frame(width: 140); Text("正在本机转写 \(Int(f * 100))%")
+            case .analyzing:
+                ProgressView().controlSize(.small); Text("正在判断场景、整理纪要…")
+            }
+        }
+        .font(.callout).foregroundStyle(.secondary)
+    }
+
+    private var notProcessed: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("这条录音还没转写。").foregroundStyle(.secondary)
+            Button("转写并整理", systemImage: "sparkles") { store.process(recording.id) }
+                .controlSize(.large).buttonStyle(.borderedProminent)
+        }
+    }
+
+    @ViewBuilder private var notDownloaded: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if recording.inProgress {
+                Label("这条还在录。暂停录音后才能下载完整的。", systemImage: "record.circle").foregroundStyle(.secondary)
+            } else if let pull = store.pull, pull.id == recording.id {
+                ProgressView(value: pull.fraction) { Text("正在通过蓝牙下载 \(Int(pull.fraction * 100))%") }
+                Text("蓝牙比较慢，长录音要等几分钟。期间请让录音豆留在电脑旁边。").font(.callout).foregroundStyle(.secondary)
+                Button("取消") { store.cancelDownloads() }
+            } else if store.queue.contains(recording.id) {
+                Label("排队中，等前面的下载完", systemImage: "clock").foregroundStyle(.secondary)
+            } else {
+                Text("这条录音还在录音豆里。下载后会自动转写并整理。").foregroundStyle(.secondary)
+                Button("下载到这台 Mac", systemImage: "arrow.down.circle") { store.download(recording.id) }
+                    .controlSize(.large).buttonStyle(.borderedProminent)
+                    .disabled(store.link != .ready || !store.encryptionReady)
+            }
+        }
+    }
+}
+
+func copy(_ text: String) {
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(text, forType: .string)
+}
+
+struct PlayerBar: View {
+    @Environment(BeanStore.self) private var store
+    let recording: Recording
+    @State private var bars: [Float] = []
+    /// 播放条太窄：把前后跳的按钮收起来（菜单和快捷键还在），先保住时间轴的长度。
+    @State private var compact = false
+
+    var body: some View {
+        let active = store.playingID == recording.id
+        HStack(spacing: compact ? 10 : 14) {
+            Button { store.togglePlay(recording.id) } label: {
+                Image(systemName: active && store.isPlaying ? "pause.circle.fill" : "play.circle.fill").font(.system(size: 36))
+            }
+            .buttonStyle(.plain).foregroundStyle(.tint)
+            .keyboardShortcut(.space, modifiers: [])
+            .help(active && store.isPlaying ? "暂停（空格）" : "播放（空格）")
+            .accessibilityLabel(active && store.isPlaying ? "暂停" : "播放")
+            if !compact {
+                Button { store.skip(recording.id, by: -15) } label: { Image(systemName: "gobackward.15").font(.title3) }
+                    .buttonStyle(.plain).foregroundStyle(.secondary).help("往回 15 秒（⌥⌘←）")
+                    .accessibilityLabel("往回 15 秒")
+                Button { store.skip(recording.id, by: 15) } label: { Image(systemName: "goforward.15").font(.title3) }
+                    .buttonStyle(.plain).foregroundStyle(.secondary).help("往后 15 秒（⌥⌘→）")
+                    .accessibilityLabel("往后 15 秒")
+            }
+            Timeline(bars: bars, duration: recording.duration, playhead: active ? store.playhead : 0,
+                     marks: recording.segments.map(\.start), flags: recording.marks) { time in
+                store.play(recording.id, at: time)
+            }
+            .frame(height: 34)
+            .accessibilityElement()
+            .accessibilityLabel("播放进度")
+            .accessibilityValue("\(clock(active ? store.playhead : 0))，共 \(clock(recording.duration))" + (recording.marks.isEmpty ? "" : "，\(recording.marks.count) 个重点标记"))
+            .accessibilityAdjustableAction { direction in
+                store.skip(recording.id, by: direction == .increment ? 15 : -15)
+            }
+            Text(compact ? clock(active ? store.playhead : 0) : "\(clock(active ? store.playhead : 0)) / \(clock(recording.duration))")
+                .font(.callout).monospacedDigit().foregroundStyle(.secondary)
+            // 点一下换下一档速度
+            Button {
+                let i = BeanStore.rates.firstIndex(of: store.playRate) ?? 1
+                store.setRate(BeanStore.rates[(i + 1) % BeanStore.rates.count])
+            } label: {
+                Text(rateLabel(store.playRate)).font(.callout.weight(.semibold)).monospacedDigit()
+                    .foregroundStyle(store.playRate == 1 ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.amber))
+                    .frame(width: 44)
+            }
+            .buttonStyle(.plain).help("播放速度，点一下换一档（⌘] 加快，⌘[ 放慢）")
+            .accessibilityLabel("播放速度").accessibilityValue("\(rateLabel(store.playRate).dropLast()) 倍")
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .onGeometryChange(for: Bool.self) { $0.size.width < 520 } action: { compact = $0 }
+        .task(id: recording.id) {
+            let url = store.wavURL(recording.id)
+            bars = await Task.detached { BeanStore.waveform(of: url) }.value
+        }
+    }
+}
+
+func rateLabel(_ rate: Float) -> String {
+    rate == rate.rounded() ? "\(Int(rate))×" : String(format: "%g×", rate)
+}
+
+/// 录音的时间轴：一条波形，播过的部分着色，每句话开头有个小刻度。点一下或拖动就跳到那里。
+struct Timeline: View {
+    let bars: [Float]
+    let duration: TimeInterval
+    let playhead: TimeInterval
+    let marks: [TimeInterval]
+    var flags: [TimeInterval] = []
+    let seek: (TimeInterval) -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            let progress = duration > 0 ? CGFloat(min(1, playhead / duration)) : 0
+            Canvas { context, size in
+                let count = max(bars.count, 1)
+                let step = size.width / CGFloat(count)
+                for (i, level) in (bars.isEmpty ? [Float](repeating: 0.08, count: 80) : bars).enumerated() {
+                    let x = CGFloat(i) * (bars.isEmpty ? size.width / 80 : step)
+                    let barH = max(2, CGFloat(level) * size.height)
+                    let rect = CGRect(x: x, y: (size.height - barH) / 2, width: max(1.5, (bars.isEmpty ? size.width / 80 : step) * 0.6), height: barH)
+                    let played = x <= size.width * progress
+                    context.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(played ? Theme.amber : .secondary.opacity(0.45)))
+                }
+                // 每句话开头的刻度
+                if duration > 0 {
+                    for m in marks {
+                        let x = size.width * CGFloat(m / duration)
+                        context.fill(Path(CGRect(x: x, y: size.height - 3, width: 1, height: 3)), with: .color(.secondary.opacity(0.7)))
+                    }
+                    // 重点标记：琥珀色的一根线，顶上一个点
+                    for f in flags {
+                        let x = size.width * CGFloat(min(1, f / duration))
+                        context.fill(Path(CGRect(x: x - 0.75, y: 0, width: 1.5, height: size.height)), with: .color(Theme.amber))
+                        context.fill(Path(ellipseIn: CGRect(x: x - 3, y: 0, width: 6, height: 6)), with: .color(Theme.amber))
+                    }
+                }
+            }
+            .frame(width: w, height: h)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                guard duration > 0 else { return }
+                seek(duration * Double(max(0, min(1, value.location.x / w))))
+            })
+        }
+        .help("点一下或拖动，跳到那里")
+    }
+}
+
+/// 窗口底部的录音条。录音时显示实时波形、已录时长、暂停和结束；没在录时是一颗开始按钮。
+struct RecordDock: View {
+    @Environment(BeanStore.self) private var store
+    @Environment(Navigator.self) private var nav
+
+    /// 没在录的时候，首页和录音页自己有开始按钮和播放条，就不再多摆一颗。
+    private var hiddenWhenIdle: Bool {
+        switch nav.route {
+        case .dashboard, .all, .starred, .scene: true
+        default: false
+        }
+    }
+
+    var body: some View {
+        Group {
+            if store.link != .ready {
+                if !hiddenWhenIdle && nav.route != .device {
+                    Button { nav.route = .device } label: { Label("连接录音豆", systemImage: "mic.slash").padding(.horizontal, 6) }
+                        .buttonStyle(.glass).controlSize(.large)
+                }
+            } else if store.recState == .idle {
+                if !hiddenWhenIdle {
+                    Button { store.startRecording() } label: {
+                        Label("开始录音", systemImage: "record.circle.fill").padding(.horizontal, 6)
+                    }
+                    .buttonStyle(.glassProminent).tint(.red).controlSize(.extraLarge)
+                            .help("让录音豆开始录音（⌘R）")
+                }
+            } else {
+                active
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: store.recState)
+    }
+
+    private var active: some View {
+        let paused = store.recState == .paused
+        return HStack(spacing: 14) {
+            HStack(spacing: 8) {
+                Circle().fill(paused ? Color.orange : Color.red).frame(width: 9, height: 9)
+                    .symbolEffect(.pulse, isActive: !paused)
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(clock(store.elapsed(at: context.date)))
+                        .font(.system(size: 20, weight: .semibold, design: .rounded)).monospacedDigit()
+                }
+            }
+            Button { nav.stageOpen = true } label: {
+                FlowWave(levels: store.liveLevels, total: store.liveLevelTotal, marks: store.liveMarks,
+                         elapsed: { store.elapsed(at: $0) }, paused: paused, color: .primary)
+                    .frame(width: 220, height: 30)
+            }
+            .buttonStyle(.plain)
+            .help("回到录音舞台")
+            if paused { Text("已暂停").font(.callout).foregroundStyle(.secondary) }
+
+            Button { paused ? store.resumeRecording() : store.pauseRecording() } label: {
+                Image(systemName: paused ? "play.fill" : "pause.fill").frame(width: 18, height: 18)
+            }
+            .buttonStyle(.glass).controlSize(.large)
+            .help(paused ? "继续录（⌘R）" : "暂停，稍后可以接着录进同一条（⌘R）")
+
+            Button { store.finishRecording() } label: {
+                Label("结束", systemImage: "stop.fill")
+            }
+            .buttonStyle(.glassProminent).tint(.red).controlSize(.large)
+            .help("结束这条录音（⌘.）。结束后会自动下载并整理成纪要。")
+        }
+        .padding(.leading, 20).padding(.trailing, 10).padding(.vertical, 9)
+        .glassEffect(.regular, in: .capsule)
+        .shadow(color: .black.opacity(0.12), radius: 14, y: 6)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+}
+
+/// 把录音改写成别的东西：口播稿、文章、邮件，或者自己写要求。
+struct RewriteView: View {
+    @Environment(BeanStore.self) private var store
+    let recording: Recording
+    @State private var template: RewriteTemplate = .voiceover
+    @State private var extra = ""
+
+    var body: some View {
+        let busy = store.rewriting.contains(recording.id)
+        VStack(alignment: .leading, spacing: 14) {
+            Card {
+                Picker("改成", selection: $template) {
+                    ForEach(RewriteTemplate.allCases) { Text($0.name).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden()
+                if template != .custom {
+                    Text(template.instruction).font(.callout).foregroundStyle(.secondary)
+                }
+                TextField(template == .custom ? "写下你想把它改成什么样，比如：改成给投资人的三句话电梯演讲" : "补充要求（可不填），比如：控制在 200 字以内、语气再轻松一点",
+                          text: $extra, axis: .vertical)
+                    .lineLimit(1...4)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    Button { store.rewrite(recording.id, template: template, extra: extra) } label: {
+                        Label(busy ? "正在写…" : "生成", systemImage: "sparkles")
+                    }
+                    .buttonStyle(.glassProminent).controlSize(.large)
+                    .disabled(busy || !store.analysisAvailable || (template == .custom && extra.trimmingCharacters(in: .whitespaces).isEmpty))
+                    if busy { ProgressView().controlSize(.small) }
+                    if !store.analysisAvailable {
+                        Text("需要先设置分析模型。").font(.callout).foregroundStyle(.secondary)
+                        SettingsLink { Text("去设置") }
+                    }
+                }
+            }
+            ForEach(recording.rewrites) { item in
+                Card {
+                    HStack {
+                        Text(item.name).font(.headline)
+                        Text(item.date.formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("拷贝", systemImage: "doc.on.doc") { copy(item.text); store.toast("doc.on.doc", "已拷贝") }
+                            .labelStyle(.iconOnly).buttonStyle(.borderless)
+                        Button("删除", systemImage: "trash") { store.deleteRewrite(recording.id, item.id) }
+                            .labelStyle(.iconOnly).buttonStyle(.borderless)
+                    }
+                    MarkdownView(text: item.text)
+                }
+            }
+            if recording.rewrites.isEmpty {
+                Text("改写会按你在设置里选的职业来把握语气。结果由模型生成，发出去之前请自己过一遍。")
+                    .font(.caption).foregroundStyle(.tertiary)
+            }
+        }
+    }
+}
+
+struct NotesView: View {
+    @Environment(BeanStore.self) private var store
+    let recording: Recording
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let summary = recording.summary {
+                Card(title: "摘要") {
+                    Text(MarkdownView.inline(summary)).textSelection(.enabled).lineSpacing(4)
+                }
+            }
+            ForEach(recording.sections) { section in
+                Card(title: section.heading) {
+                    ForEach(Array(section.items.enumerated()), id: \.offset) { _, item in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Circle().fill(.tertiary).frame(width: 5, height: 5).offset(y: -3)
+                            Text(MarkdownView.inline(item)).textSelection(.enabled).lineSpacing(3)
+                        }
+                    }
+                }
+            }
+            if !recording.todos.isEmpty {
+                Card(title: "待办") {
+                    ForEach(recording.todos) { todo in
+                        Toggle(isOn: Binding(get: { todo.done }, set: { _ in store.toggleTodo(recording.id, todo.id) })) {
+                            Text(todo.text).strikethrough(todo.done).foregroundStyle(todo.done ? .secondary : .primary)
+                        }
+                        .toggleStyle(.checkbox)
+                    }
+                }
+            }
+            if !recording.tags.isEmpty || !recording.people.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(recording.people, id: \.self) { p in chip(p, "person.fill") }
+                    ForEach(recording.tags, id: \.self) { t in chip(t, "number") }
+                }
+            }
+            if recording.analyzedBy == "关键词规则" {
+                Card {
+                    Label("这条只按关键词粗略分了类，还没有完整纪要。", systemImage: "info.circle").foregroundStyle(.secondary)
+                    if store.analysisAvailable {
+                        Button("用分析模型整理", systemImage: "sparkles") { store.process(recording.id) }
+                            .buttonStyle(.glassProminent).controlSize(.large)
+                            .disabled(store.stages[recording.id] != nil)
+                    } else {
+                        Text("先在设置里配置云端模型，或下载本机模型。").font(.callout).foregroundStyle(.secondary)
+                        SettingsLink { Text("打开设置") }
+                    }
+                }
+            }
+            Text(credits).font(.caption).foregroundStyle(.tertiary)
+        }
+    }
+
+    private func chip(_ text: String, _ icon: String) -> some View {
+        Label(text, systemImage: icon).font(.caption)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(.quaternary.opacity(0.6), in: Capsule())
+    }
+
+    private var credits: String {
+        var parts: [String] = []
+        if let t = recording.transcribedBy { parts.append("转写：\(t)") }
+        if let a = recording.analyzedBy, a != "—" { parts.append("整理：\(a)") }
+        parts.append("内容由模型生成，重要信息请对照录音核实")
+        return parts.joined(separator: " · ")
+    }
+}
+
+struct TranscriptView: View {
+    @Environment(BeanStore.self) private var store
+    let recording: Recording
+    @State private var showClean = true
+    @State private var editing = false
+    @State private var replacing = false
+    @State private var wrong = ""
+    @State private var right = ""
+    @State private var remember = true
+    @State private var everywhere = false
+    @State private var renaming: Int?
+    @State private var newName = ""
+
+    private var hasClean: Bool { recording.segments.contains { $0.clean != nil } }
+    private let palette: [Color] = Theme.speakers
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            controls
+            if let fix = store.pendingFix, fix.recording == recording.id { fixBar(fix) }
+            if recording.segments.isEmpty {
+                Text(recording.transcript ?? "").textSelection(.enabled).lineSpacing(5)
+            }
+            ForEach(recording.segments) { seg in row(seg) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .alert("给这位说话人起个名字", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("名字", text: $newName)
+            Button("好") { if let r = renaming { store.renameSpeaker(recording.id, r, to: newName) }; renaming = nil }
+            Button("取消", role: .cancel) { renaming = nil }
+        }
+    }
+
+    private var controls: some View {
+        HStack(spacing: 10) {
+            if hasClean {
+                Picker("", selection: $showClean) {
+                    Text("润色版").tag(true)
+                    Text("原文").tag(false)
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(width: 150)
+                .help("润色版去掉了语气词和重复；原文是模型听到的原话")
+            }
+            Toggle(isOn: $editing) { Label("修改", systemImage: "pencil") }
+                .toggleStyle(.button)
+                .help("打开后可以直接改每一句的文字")
+            Button { replacing.toggle() } label: { Label("替换词语", systemImage: "arrow.left.arrow.right") }
+                .popover(isPresented: $replacing, arrowEdge: .bottom) { replaceForm }
+            Spacer()
+        }
+    }
+
+    private var replaceForm: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("把听错的词全部改掉").font(.headline)
+            TextField("听错成了", text: $wrong).frame(width: 240)
+            TextField("应该是", text: $right).frame(width: 240)
+            Toggle("记住，以后转写时自动改", isOn: $remember)
+            Toggle("所有录音都改，不只这一条", isOn: $everywhere)
+            HStack {
+                Spacer()
+                Button("替换") {
+                    let n = store.replaceWord(wrong, with: right, in: recording.id, everywhere: everywhere, remember: remember)
+                    store.toast("checkmark.circle.fill", n > 0 ? "改了 \(n) 处" : (remember ? "这里没有这个词，已记进词库" : "这里没有这个词"))
+                    wrong = ""; right = ""; replacing = false
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(wrong.isEmpty || wrong == right)
+            }
+        }
+        .padding(16)
+    }
+
+    private func fixBar(_ fix: BeanStore.PendingFix) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "sparkles").foregroundStyle(.tint)
+            Text("你把「\(fix.wrong)」改成了「\(fix.right)」。").lineLimit(1)
+            Spacer()
+            Button("全部替换并记住") {
+                let n = store.replaceWord(fix.wrong, with: fix.right, in: recording.id, everywhere: true, remember: true)
+                store.toast("checkmark.circle.fill", "又改了 \(n) 处，以后会自动改")
+                store.pendingFix = nil
+            }
+            .buttonStyle(.borderedProminent)
+            Button("只改这一处") { store.pendingFix = nil }
+        }
+        .font(.callout)
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .glassEffect(.regular, in: .rect(cornerRadius: 14))
+    }
+
+    private func row(_ seg: Segment) -> some View {
+        let useClean = showClean && seg.clean != nil
+        let marked = isMarked(seg)
+        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Button(clock(seg.start)) { store.play(recording.id, at: seg.start) }
+                .buttonStyle(.plain).foregroundStyle(Theme.amber).font(.callout.monospacedDigit())
+                .frame(width: 46, alignment: .leading)
+                .help("从这里开始播放")
+                .overlay(alignment: .leading) {
+                    if marked { Image(systemName: "flag.fill").font(.caption2).foregroundStyle(Theme.amber).offset(x: -16).help("这句标了重点") }
+                }
+            speakerMenu(seg)
+            if editing {
+                SegmentEditor(text: useClean ? (seg.clean ?? seg.text) : seg.text) { new in
+                    store.editSegment(recording.id, start: seg.start, to: new, clean: useClean)
+                }
+            } else {
+                Text(useClean ? (seg.clean ?? seg.text) : seg.text).textSelection(.enabled).lineSpacing(5)
+                    .foregroundStyle(isCurrent(seg) ? .primary : .secondary)
+            }
+        }
+        .padding(.vertical, marked ? 6 : 0).padding(.horizontal, marked ? 8 : 0)
+        .background(marked ? Theme.amber.opacity(0.12) : .clear, in: .rect(cornerRadius: 8))
+        .padding(.horizontal, marked ? -8 : 0)
+        .contextMenu {
+            if marked {
+                Button("取消重点标记") { for m in marksIn(seg) { store.removeMark(recording.id, m) } }
+            } else {
+                Button("标为重点") { store.addMark(recording.id, at: seg.start + 0.5) }
+            }
+            Button("从这里开始播放") { store.play(recording.id, at: seg.start) }
+        }
+    }
+
+    /// 落在这句话里的重点标记。
+    private func marksIn(_ seg: Segment) -> [TimeInterval] {
+        let next = recording.segments.first { $0.start > seg.start }?.start ?? .infinity
+        let first = recording.segments.first?.start == seg.start
+        return recording.marks.filter { ($0 >= seg.start || first) && $0 < next }
+    }
+
+    private func isMarked(_ seg: Segment) -> Bool { !recording.marks.isEmpty && !marksIn(seg).isEmpty }
+
+    /// 每句前面的小标签：点一下选这句是谁说的。
+    private func speakerMenu(_ seg: Segment) -> some View {
+        Menu {
+            ForEach(Array(recording.speakers.enumerated()), id: \.offset) { n, name in
+                Button(name) { store.setSpeaker(recording.id, start: seg.start, to: n) }
+            }
+            Button("新增说话人") { store.addSpeaker(recording.id, start: seg.start) }
+            if let n = seg.speaker, recording.speakers.indices.contains(n) {
+                Divider()
+                Button("改名…") { newName = recording.speakers[n]; renaming = n }
+                Button("不标记") { store.setSpeaker(recording.id, start: seg.start, to: nil) }
+            }
+        } label: {
+            if let n = seg.speaker, recording.speakers.indices.contains(n) {
+                Text(recording.speakers[n]).font(.caption.weight(.medium))
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .foregroundStyle(palette[n % palette.count])
+                    .background(palette[n % palette.count].opacity(0.14), in: Capsule())
+            } else {
+                Image(systemName: "person.crop.circle.badge.plus").foregroundStyle(.tertiary)
+            }
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help("标记这句是谁说的")
+    }
+
+    private func isCurrent(_ seg: Segment) -> Bool {
+        guard store.playingID == recording.id else { return true }
+        let next = recording.segments.first { $0.start > seg.start }?.start ?? .infinity
+        return store.playhead >= seg.start && store.playhead < next
+    }
+}
+
+/// 一句话的编辑框：改完按回车或点到别处才提交。
+struct SegmentEditor: View {
+    @State private var draft: String
+    @FocusState private var focused: Bool
+    let commit: (String) -> Void
+
+    init(text: String, commit: @escaping (String) -> Void) {
+        _draft = State(initialValue: text)
+        self.commit = commit
+    }
+
+    var body: some View {
+        TextField("", text: $draft, axis: .vertical)
+            .textFieldStyle(.plain).lineSpacing(5)
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+            .focused($focused)
+            .onSubmit { commit(draft) }
+            .onChange(of: focused) { _, now in if !now { commit(draft) } }
+    }
+}
+
+// MARK: - 设备
+
+struct DeviceView: View {
+    @Environment(BeanStore.self) private var store
+    @Environment(\.openWindow) private var openWindow
+    @State private var justPaired = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                switch store.link {
+                case .ready: connected
+                case .off: ContentUnavailableView("蓝牙没打开", systemImage: "antenna.radiowaves.left.and.right.slash", description: Text("请在菜单栏或系统设置里打开蓝牙。"))
+                case .unauthorized: ContentUnavailableView("没有蓝牙权限", systemImage: "lock", description: Text("请到 系统设置 → 隐私与安全性 → 蓝牙 里允许「豆仓」。"))
+                case .connecting: connecting
+                case .idle, .scanning: scanner
+                }
+                Button("诊断日志") { openWindow(id: "log") }.buttonStyle(.plain).foregroundStyle(Theme.amber).font(.callout)
+            }
+            .padding(24)
+            .frame(maxWidth: 520, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .navigationTitle("设备")
+    }
+
+    private var connecting: some View {
+        Card {
+            VStack(spacing: 14) {
+                Radar(active: true, found: true)
+                Text(store.waitingForKnownDevice ? "正在等「\(store.displayDeviceName)」出现" : "正在连接…").font(.headline)
+                Text("把录音豆从充电盒里取出来，放在电脑旁边。\n手机连着它的话，先关掉手机蓝牙。")
+                    .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Button("取消") { store.disconnect() }
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var scanner: some View {
+        Card {
+            let beans = store.found.filter(\.isBean)
+            VStack(spacing: 14) {
+                Radar(active: store.link == .scanning, found: !beans.isEmpty)
+                Text(beans.isEmpty ? (store.link == .scanning ? "正在找附近的录音豆" : "连接录音豆") : (beans.count == 1 ? "找到了，正在连接…" : "找到 \(beans.count) 颗，选一颗"))
+                    .font(.headline)
+                    .contentTransition(.opacity)
+                if beans.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        step("1", "把录音豆从充电盒里取出来")
+                        step("2", "放在电脑旁边")
+                        step("3", "手机连着它的话，先关掉手机蓝牙")
+                    }
+                    .padding(.top, 2)
+                }
+                ForEach(beans) { device in
+                    Button { store.autoConnectAllowed = true; store.connect(device) } label: {
+                        HStack {
+                            Image(systemName: "mic.circle.fill").font(.title2).foregroundStyle(.tint)
+                            Text(device.name).fontWeight(.medium)
+                            Spacer()
+                            Text("连接").foregroundStyle(.tint)
+                        }
+                        .padding(10).glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12)).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+                }
+                Button(store.link == .scanning ? "停止搜索" : "开始搜索") {
+                    if store.link == .scanning { store.stopScan() } else { store.autoConnectAllowed = true; store.scan() }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: beans.count)
+        }
+        .onAppear { if store.link == .idle, store.autoConnectAllowed { store.scan() } }
+    }
+
+    private func step(_ n: String, _ text: String) -> some View {
+        HStack(spacing: 10) {
+            Text(n).font(.caption.bold()).frame(width: 20, height: 20).background(.quaternary, in: Circle())
+            Text(text).font(.callout).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder private var connected: some View {
+        Card {
+            HStack(spacing: 12) {
+                MascotView(mood: justPaired ? .happy : .idle, power: store.mascotPower)
+                    .frame(width: 96, height: 96)
+                    .task {
+                        // 进到这一屏就是刚连上：先庆祝一下，再回到电量对应的样子
+                        try? await Task.sleep(for: .seconds(0.3))
+                        justPaired = true
+                        try? await Task.sleep(for: .seconds(2.2))
+                        justPaired = false
+                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    TextField("给它起个名字", text: Bindable(store.settings).deviceAlias, prompt: Text(store.deviceName))
+                        .textFieldStyle(.plain).font(.title3.bold())
+                        .help("点这里改名。名字只存在这台 Mac 上")
+                    Text(store.inCase ? "已连接 · 在充电盒里" : "已连接").font(.callout).foregroundStyle(.green)
+                }
+                Spacer()
+                Button("断开连接") { store.disconnect() }
+            }
+            if store.info != nil {
+                RecordControls(size: .large)
+            } else {
+                ProgressView("正在读取设备信息…").controlSize(.small)
+            }
+        }
+        if let info = store.info {
+            Card(title: "状态") {
+                BatteryRow(title: "录音豆", percent: info.micBattery, charging: info.micCharging)
+                BatteryRow(title: "充电盒", percent: info.caseBattery, charging: info.caseCharging)
+                if info.totalKB > 0 {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("存储")
+                            Spacer()
+                            Text("\(size(info.usedKB)) / \(size(info.totalKB))").foregroundStyle(.secondary).monospacedDigit()
+                        }
+                        ProgressView(value: Double(info.usedKB), total: Double(info.totalKB))
+                    }
+                }
+                Divider()
+                LabeledContent("固件", value: info.firmware)
+                LabeledContent("序列号") { Text(info.serial.uppercased()).textSelection(.enabled) }
+                if !store.encryptionReady { Text("密钥未协商，暂时无法下载").foregroundStyle(.orange) }
+            }
+        }
+    }
+
+    private func size(_ kb: UInt32) -> String { ByteCountFormatter.string(fromByteCount: Int64(kb) * 1024, countStyle: .memory) }
+}
+
+struct BatteryRow: View {
+    let title: String
+    let percent: Int
+    let charging: Bool
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer()
+            if charging { Image(systemName: "bolt.fill").foregroundStyle(.green).font(.caption) }
+            Text("\(percent)%").monospacedDigit().foregroundStyle(.secondary)
+            Image(systemName: icon).foregroundStyle(percent <= 20 ? .red : .secondary)
+        }
+    }
+
+    private var icon: String {
+        switch percent {
+        case ..<13: "battery.0percent"
+        case ..<38: "battery.25percent"
+        case ..<63: "battery.50percent"
+        case ..<88: "battery.75percent"
+        default: "battery.100percent"
+        }
+    }
+}
+
+// MARK: - 诊断日志
+
+struct LogView: View {
+    @Environment(BeanStore.self) private var store
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(store.log.enumerated()), id: \.offset) { i, line in
+                        Text(line).font(.system(size: 11, design: .monospaced)).textSelection(.enabled).id(i)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).padding(10)
+            }
+            .onChange(of: store.log.count) { proxy.scrollTo(store.log.count - 1, anchor: .bottom) }
+        }
+        .toolbar {
+            Button("拷贝全部", systemImage: "doc.on.doc") { copy(store.log.joined(separator: "\n")) }
+        }
+    }
+}
+
+/// 搜索时的雷达波纹：一圈圈往外扩，找到设备后中间的图标亮起来。
+struct Radar: View {
+    var active: Bool
+    var found: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            if active && !reduceMotion {
+                TimelineView(.animation) { context in
+                    let t = context.date.timeIntervalSinceReferenceDate
+                    ZStack {
+                        ForEach(0..<3, id: \.self) { i in
+                            let phase = (t / 2.4 + Double(i) / 3).truncatingRemainder(dividingBy: 1)
+                            Circle().strokeBorder(Theme.amber.opacity(0.55 * (1 - phase)), lineWidth: 1.5)
+                                .scaleEffect(0.35 + phase * 0.65)
+                        }
+                    }
+                }
+            }
+            Image(systemName: found ? "mic.circle.fill" : "mic.circle")
+                .font(.system(size: 44))
+                .foregroundStyle(found ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .symbolEffect(.bounce, value: found)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .frame(width: 150, height: 150)
+    }
+}

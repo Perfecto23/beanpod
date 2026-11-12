@@ -1,0 +1,9 @@
+.build/
+build/
+*.xcodeproj
+DerivedData/
+
+# 建模中间文件太大（Tripo 导出的原始模型），App 用的成品在 App/MascotAssets
+design/ip/model/
+*.log
+.DS_Store

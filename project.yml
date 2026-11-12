@@ -1,0 +1,41 @@
+name: BeanPod
+options:
+  developmentLanguage: zh-Hans
+  bundleIdPrefix: com.andyhu
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+packages:
+  BeanKit:
+    path: .
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  BeanPod:
+    type: application
+    platform: macOS
+    sources: [App]
+    dependencies:
+      - package: BeanKit
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: 豆仓
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleLocalizations: [zh-Hans]
+        CFBundleAllowMixedLocalizations: true
+        LSApplicationCategoryType: public.app-category.productivity
+        NSBluetoothAlwaysUsageDescription: 需要蓝牙来连接你的录音豆。
+        NSSpeechRecognitionUsageDescription: 需要语音识别来把录音转成文字，全部在本机完成。
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.andyhu.beanpod
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: NO
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor

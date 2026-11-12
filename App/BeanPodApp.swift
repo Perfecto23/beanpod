@@ -1,0 +1,132 @@
+import SwiftUI
+
+@main
+struct BeanPodApp: App {
+    @State private var store = BeanStore()
+    @State private var nav = Navigator()
+    @State private var dictation = Dictation()
+
+    var body: some SwiftUI.Scene {
+        Window("豆仓", id: "main") {
+            RootView()
+                .environment(store).environment(nav).environment(dictation)
+                .task { dictation.attach(store) }
+                .frame(minWidth: 980, minHeight: 600)
+                .containerBackground(.clear, for: .window)
+        }
+        .defaultSize(width: 1180, height: 760)
+        .commands {
+            CommandGroup(replacing: .help) {
+                Button("上手引导") { nav.welcomeOpen = true }
+            }
+            CommandMenu("录音") {
+                // 好按的键只做能反悔的事：开始、暂停、继续。结束要按另一个键，免得手滑把录音断掉。
+                Button(store.recState == .idle ? "开始录音" : store.recState == .paused ? "继续录音" : "暂停") {
+                    switch store.recState {
+                    case .idle: store.startRecording()
+                    case .recording: store.pauseRecording()
+                    case .paused: store.resumeRecording()
+                    }
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(store.link != .ready)
+                Button("标重点") { store.markNow() }
+                    .keyboardShortcut("d", modifiers: .command)
+                    .disabled(store.recState != .recording)
+                Button("结束录音") { store.finishRecording() }
+                    .keyboardShortcut(".", modifiers: .command)
+                    .disabled(store.recState == .idle)
+                Divider()
+                Button(nav.stageOpen ? "收起录音舞台" : "打开录音舞台") { nav.stageOpen.toggle() }
+                    .keyboardShortcut("l", modifiers: .command)
+                    .disabled(store.recState == .idle)
+            }
+            CommandMenu("回听") {
+                let current = nav.selection ?? store.playingID
+                Button("往回 15 秒") { if let current { store.skip(current, by: -15) } }
+                    .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                Button("往后 15 秒") { if let current { store.skip(current, by: 15) } }
+                    .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                Button("上一个重点标记") { if let current { store.jumpToMark(current, forward: false) } }
+                    .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                Button("下一个重点标记") { if let current { store.jumpToMark(current, forward: true) } }
+                    .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                Button("在播放的位置加重点标记") { if let id = store.playingID { store.addMark(id, at: store.playhead) } }
+                    .keyboardShortcut("d", modifiers: [.command, .option])
+                    .disabled(store.playingID == nil)
+                Divider()
+                Button("放慢") {
+                    let i = BeanStore.rates.firstIndex(of: store.playRate) ?? 1
+                    store.setRate(BeanStore.rates[max(0, i - 1)])
+                }
+                .keyboardShortcut("[", modifiers: .command)
+                Button("加快") {
+                    let i = BeanStore.rates.firstIndex(of: store.playRate) ?? 1
+                    store.setRate(BeanStore.rates[min(BeanStore.rates.count - 1, i + 1)])
+                }
+                .keyboardShortcut("]", modifiers: .command)
+                Button("正常速度") { store.setRate(1) }
+                    .keyboardShortcut("0", modifiers: .command)
+            }
+            CommandMenu("语音输入") {
+                Button("试一次（录 5 秒，只显示结果）") { dictation.tryOnce() }
+                    .keyboardShortcut("d", modifiers: [.command, .shift])
+            }
+            CommandMenu("小豆") {
+                Button("跟着真实状态") { store.mascotPreview = nil }
+                Divider()
+                Button("看看：待命") { store.mascotPreview = (.idle, .mid) }
+                Button("看看：满电") { store.mascotPreview = (.idle, .full) }
+                Button("看看：低电量") { store.mascotPreview = (.idle, .low) }
+                Button("看看：充电中") { store.mascotPreview = (.idle, .charging(40)) }
+                Button("看看：充满了") { store.mascotPreview = (.idle, .charging(100)) }
+                Button("看看：没连上") { store.mascotPreview = (.sleeping, .unknown) }
+                Button("看看：录音中") { store.mascotPreview = (.listening, .mid) }
+                Button("看看：整理中") { store.mascotPreview = (.thinking, .mid) }
+                Button("看看：开心") { store.mascotPreview = (.happy, .mid) }
+            }
+        }
+
+        Window("诊断日志", id: "log") {
+            LogView().environment(store)
+        }
+        .defaultSize(width: 720, height: 480)
+
+        // 菜单栏常驻：不用切回豆仓窗口就能开始、停止录音
+        MenuBarExtra {
+            MenuBarContent().environment(store)
+        } label: {
+            Image(systemName: store.isRecording ? "record.circle.fill" : "waveform.circle")
+        }
+
+        Settings {
+            SettingsView().environment(store).environment(dictation)
+        }
+    }
+}
+
+struct MenuBarContent: View {
+    @Environment(BeanStore.self) private var store
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        if store.link == .ready {
+            Text(store.recState == .paused ? "\(store.displayDeviceName) 录音已暂停" : store.isRecording ? "\(store.displayDeviceName) 正在录音" : "\(store.displayDeviceName) 已连接" + (store.info.map { " · \($0.micBattery)%" } ?? ""))
+            switch store.recState {
+            case .idle: Button("开始录音") { store.startRecording() }
+            case .recording:
+                Button("暂停") { store.pauseRecording() }
+                Button("结束录音") { store.finishRecording() }
+            case .paused:
+                Button("继续录音") { store.resumeRecording() }
+                Button("结束录音") { store.finishRecording() }
+            }
+        } else {
+            Text("录音豆未连接")
+        }
+        if !store.stages.isEmpty { Text("正在处理 \(store.stages.count) 条录音") }
+        Divider()
+        Button("打开豆仓") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
+        Button("退出豆仓") { NSApp.terminate(nil) }
+    }
+}
