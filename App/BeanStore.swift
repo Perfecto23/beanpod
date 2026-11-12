@@ -455,8 +455,11 @@ final class BeanStore {
                 let wasInCase = info?.micCharging
                 info = parsed
                 caseChanged(from: wasInCase, to: parsed.micCharging)
-                if parsed.recording, recordingSince == nil { recordingSince = .now; sessionOpen = true }
-                if !parsed.recording, let since = recordingSince { elapsedBase += Date.now.timeIntervalSince(since); recordingSince = nil }
+                // 正在用 Mac 录音时，计时归 Mac 那边管，录音豆报的状态不去动它
+                if macRec == .off {
+                    if parsed.recording, recordingSince == nil { recordingSince = .now; sessionOpen = true }
+                    if !parsed.recording, let since = recordingSince { elapsedBase += Date.now.timeIntervalSince(since); recordingSince = nil }
+                }
             }
         case (0x01, 0x03):
             let b = Array(p.payload)
