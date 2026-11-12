@@ -24,6 +24,13 @@ extension BeanStore {
             case .both: "你说的话加对方的声音：线上会议、语音通话"
             }
         }
+        var icon: String {
+            switch self {
+            case .mic: "mic"
+            case .system: "desktopcomputer"
+            case .both: "mic.badge.plus"
+            }
+        }
         var usesMic: Bool { self != .system }
         var usesSystem: Bool { self != .mic }
     }

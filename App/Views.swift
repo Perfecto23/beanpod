@@ -114,12 +114,12 @@ struct RecordControls: View {
         switch store.recState {
         case .idle:
             Button { store.startRecording() } label: {
-                Label(size == .regular ? "录音" : (store.link == .ready ? "开始录音" : "用 Mac 录音"), systemImage: "record.circle.fill").labelStyle(.titleAndIcon)
+                Label(size == .regular ? "录音" : "开始录音", systemImage: "record.circle.fill").labelStyle(.titleAndIcon).fixedSize()
                     .padding(.horizontal, size == .regular ? 0 : 8)
             }
             .buttonStyle(size == .regular ? AnyButtonStyle(.glass) : AnyButtonStyle(.glassProminent))
             .tint(Theme.rec).controlSize(size)
-            .help(store.link == .ready ? "让录音豆开始录音（⌘R）" : "录音豆没连上，用这台 Mac 的麦克风录（⌘R）")
+            .help("开始录音，声音来自：\(store.sourceName)（⌘R）")
         case .recording, .paused:
             let paused = store.recState == .paused
             HStack(spacing: size == .regular ? 6 : 10) {
@@ -150,6 +150,34 @@ struct RecordControls: View {
                     .help("结束这条录音（⌘.）。结束后会自动下载并整理成纪要。")
             }
         }
+    }
+}
+
+/// 选声音从哪来：录音豆、这台 Mac 的麦克风、电脑里的声音，或者后两样一起。就放在录音按钮旁边。
+struct SourceMenu: View {
+    @Environment(BeanStore.self) private var store
+
+    var body: some View {
+        Menu {
+            if store.link == .ready {
+                Button { store.preferMac = false } label: { Label(store.displayDeviceName + (store.preferMac ? "" : "　✓"), systemImage: "dot.radiowaves.left.and.right") }
+                Divider()
+            }
+            Section("用这台 Mac 录") {
+                ForEach(BeanStore.MacSource.allCases) { source in
+                    let on = (store.link != .ready || store.preferMac) && store.macSource == source
+                    Button { store.macSource = source; store.preferMac = true } label: {
+                        Label(source.name + (on ? "　✓" : ""), systemImage: source.icon)
+                    }
+                    .help(source.hint)
+                }
+            }
+        } label: {
+            Label(store.sourceName, systemImage: store.sourceIcon).labelStyle(.titleAndIcon).lineLimit(1)
+        }
+        .menuStyle(.button).buttonStyle(.glass).controlSize(.extraLarge).fixedSize()
+        .help("声音从哪来。点一下可以换")
+        .accessibilityLabel("声音来源").accessibilityValue(store.sourceName)
     }
 }
 
@@ -350,13 +378,40 @@ struct StageBadge: View {
 struct RecordingsView: View {
     @Environment(BeanStore.self) private var store
     @Environment(Navigator.self) private var nav
+    @State private var query = ""
 
-    private var items: [Recording] {
+    private var scoped: [Recording] {
         switch nav.route {
         case .starred: store.recordings.filter(\.starred)
         case .scene(let s): store.recordings.filter { $0.scene == s }
         default: store.recordings
         }
+    }
+
+    /// 搜索：标题、摘要、文字稿、话题里有这个词就算。
+    private var items: [Recording] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return scoped }
+        return scoped.filter { r in
+            r.displayTitle.lowercased().contains(q) || (r.summary ?? "").lowercased().contains(q)
+                || (r.transcript ?? "").lowercased().contains(q) || r.tags.contains { $0.lowercased().contains(q) }
+        }
+    }
+
+    /// 按天分组：今天、昨天、更早的写日期。
+    private var days: [(label: String, items: [Recording])] {
+        let cal = Calendar.current
+        var out: [(String, [Recording])] = []
+        for r in items {
+            let label: String
+            if let d = r.date {
+                if cal.isDateInToday(d) { label = "今天" }
+                else if cal.isDateInYesterday(d) { label = "昨天" }
+                else { label = d.formatted(.dateTime.month().day().weekday(.abbreviated)) }
+            } else { label = "没有日期" }
+            if out.last?.0 == label { out[out.count - 1].1.append(r) } else { out.append((label, [r])) }
+        }
+        return out
     }
 
     private var title: String {
@@ -370,37 +425,75 @@ struct RecordingsView: View {
     var body: some View {
         @Bindable var nav = nav
         HStack(spacing: 0) {
-            List(selection: $nav.selection) {
-                ForEach(items) { rec in RecordingRow(recording: rec).tag(rec.id) }
-            }
-            .frame(width: 300)
-            .scrollContentBackground(.hidden)
-            .listStyle(.sidebar)
-            .overlay {
-                if items.isEmpty {
-                    if store.loadingList { ProgressView("正在读取录音列表…") }
-                    else {
-                        ContentUnavailableView("这里还没有录音", systemImage: "tray",
-                                               description: Text(nav.route == .all ? "连接录音豆后，里面的录音会出现在这里。" : "整理过的录音会自动归到对应的场景。"))
+            VStack(spacing: 0) {
+                // 搜索就放在列表头上：在哪找，就在哪输
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("搜标题、内容、话题", text: $query).textFieldStyle(.plain)
+                    if !query.isEmpty {
+                        Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
+                            .buttonStyle(.plain).help("清空").accessibilityLabel("清空搜索")
+                    }
+                }
+                .padding(.horizontal, 10).padding(.vertical, 7)
+                .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 9))
+                .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 4)
+
+                List(selection: $nav.selection) {
+                    ForEach(days, id: \.label) { day in
+                        Section {
+                            ForEach(day.items) { rec in RecordingRow(recording: rec).tag(rec.id) }
+                        } header: {
+                            HStack {
+                                Text(day.label)
+                                Spacer()
+                                Text("\(day.items.count) 条 · \(spokenDuration(day.items.reduce(0) { $0 + $1.duration }))").monospacedDigit()
+                            }
+                            .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .scrollContentBackground(.hidden)
+                .listStyle(.sidebar)
+                .overlay {
+                    if items.isEmpty {
+                        if store.loadingList { ProgressView("正在读取录音列表…") }
+                        else if !query.isEmpty {
+                            ContentUnavailableView("没找到「\(query)」", systemImage: "magnifyingglass", description: Text("换个词试试，或者到知识库里直接提问。"))
+                        } else {
+                            ContentUnavailableView("这里还没有录音", systemImage: "tray",
+                                                   description: Text(nav.route == .all ? "录一段，或者把录音豆里的下载下来。" : "整理过的录音会自动归到对应的场景。"))
+                        }
                     }
                 }
             }
+            .frame(width: 330)
 
             Divider()
             Group {
                 if let id = nav.selection, let rec = store.recordings.first(where: { $0.id == id }) {
                     RecordingDetail(recording: rec).id(rec.id)
                 } else {
-                    ContentUnavailableView("选一条录音", systemImage: "waveform",
-                                           description: Text("下载到这台 Mac 之后会自动转写、判断场景并整理成纪要。"))
+                    // 只有一条录音都没有的时候才会到这里：给一个能直接动手的开始
+                    VStack(spacing: 14) {
+                        MascotView(mood: .idle, power: store.mascotPower).frame(width: 130, height: 130).accessibilityHidden(true)
+                        Text("录下第一段").font(.title2.bold())
+                        Text("录完会自动转成文字，再整理成摘要、待办和重点。").foregroundStyle(.secondary)
+                        RecordControls(size: .extraLarge).padding(.top, 4)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle(title)
         .navigationSubtitle(items.isEmpty ? "" : "\(items.count) 条")
+        // 不留空白：没选中任何一条时，自动打开最新的那条
+        .onAppear { pickFirstIfNeeded() }
+        .onChange(of: items.map(\.id)) { pickFirstIfNeeded() }
         .toolbar {
             ToolbarItemGroup {
+                RecordButton()
                 Picker("场景", selection: Binding(get: { () -> Scene? in if case .scene(let s) = nav.route { return s }; return nil },
                                                  set: { nav.route = $0.map { .scene($0) } ?? .all })) {
                     Text("全部场景").tag(Scene?.none)
@@ -411,9 +504,10 @@ struct RecordingsView: View {
                 .help("按场景筛选")
                 if store.pull != nil || !store.queue.isEmpty {
                     Button("取消下载", systemImage: "xmark.circle") { store.cancelDownloads() }
-                } else {
+                } else if store.recordings.contains(where: { $0.onDevice && !$0.downloaded && !$0.inProgress }) {
+                    // 只有录音豆里真有没下载的，才摆出这个按钮
                     Button("全部下载", systemImage: "arrow.down.circle") { store.downloadAll() }
-                        .disabled(!store.recordings.contains { $0.onDevice && !$0.downloaded && !$0.inProgress } || !store.encryptionReady)
+                        .disabled(!store.encryptionReady)
                         .help("把录音豆里还没下载的录音都下到这台 Mac")
                 }
                 Button("刷新", systemImage: "arrow.clockwise") { store.refreshFiles() }
@@ -424,35 +518,58 @@ struct RecordingsView: View {
             }
         }
     }
+
+    private func pickFirstIfNeeded() {
+        if let id = nav.selection, items.contains(where: { $0.id == id }) { return }
+        nav.selection = items.first?.id
+    }
 }
 
+/// 列表里的一行：左边一个场景色块，右边三层——标题、一句摘要、时间和时长。
 struct RecordingRow: View {
     @Environment(BeanStore.self) private var store
     let recording: Recording
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 6) {
-                if recording.starred { Image(systemName: "star.fill").font(.caption).foregroundStyle(Theme.amber) }
-                Text(recording.displayTitle).fontWeight(.medium).lineLimit(1)
-                Spacer(minLength: 4)
-                trailing
-            }
-            if let s = recording.summary {
-                Text(s).font(.callout).foregroundStyle(.secondary).lineLimit(2)
-            }
-            HStack(spacing: 8) {
-                if let scene = recording.scene { ScenePill(scene: scene) }
-                Text(meta).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+        HStack(alignment: .top, spacing: 10) {
+            // 场景：一个带颜色的小方块，扫一眼就知道这条是什么场合
+            Image(systemName: (recording.scene ?? .other).icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(recording.isAnalyzed ? Theme.amber : Color.secondary)
+                .frame(width: 30, height: 30)
+                .background((recording.isAnalyzed ? Theme.amber : Color.secondary).opacity(0.14), in: .rect(cornerRadius: 8))
+                .help((recording.scene ?? .other).name)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) {
+                    Text(recording.displayTitle).font(.body.weight(.semibold)).lineLimit(1)
+                    Spacer(minLength: 4)
+                    trailing
+                }
+                if let s = recording.summary {
+                    Text(s).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                }
+                HStack(spacing: 6) {
+                    Text(meta).monospacedDigit()
+                    if recording.starred { Image(systemName: "star.fill").foregroundStyle(Theme.amber) }
+                    if !recording.marks.isEmpty {
+                        Label("\(recording.marks.count)", systemImage: "flag.fill").labelStyle(.titleAndIcon).foregroundStyle(Theme.amber)
+                            .help("\(recording.marks.count) 个重点标记")
+                    }
+                    let todo = recording.todos.filter { !$0.done }.count
+                    if todo > 0 { Label("\(todo)", systemImage: "checklist").labelStyle(.titleAndIcon).help("\(todo) 件待办没做完") }
+                }
+                .font(.caption).foregroundStyle(.tertiary)
             }
         }
         .padding(.vertical, 5)
     }
 
+    /// 日期已经写在分组标题上了，这里只写几点、多长、什么场合。
     private var meta: String {
         var parts: [String] = []
-        if let d = recording.date, recording.title?.isEmpty == false { parts.append(d.formatted(.dateTime.month().day().hour().minute())) }
+        if let d = recording.date { parts.append(d.formatted(.dateTime.hour().minute())) }
         parts.append(recording.textOnly ? "文字" : clock(recording.duration))
+        if let scene = recording.scene { parts.append(scene.name) }
         return parts.joined(separator: " · ")
     }
 

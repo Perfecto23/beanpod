@@ -321,26 +321,23 @@ struct Hero: View {
                 Text(greeting).font(.system(size: 26, weight: .semibold, design: .rounded))
                 Text(line).font(.title3).foregroundStyle(.secondary)
                     .contentTransition(.opacity).animation(.easeInOut(duration: 0.3), value: line)
+                // 第一排只放最要紧的一件事：录音，以及声音从哪来
                 HStack(spacing: 10) {
                     RecordControls(size: .extraLarge)
-                    if store.link != .ready, store.recState == .idle {
-                        // 录哪一路声音：麦克风、电脑里的声音，或者两路一起
-                        Picker("声音来源", selection: Bindable(store).macSource) {
-                            ForEach(BeanStore.MacSource.allCases) { Text($0.name).tag($0) }
-                        }
-                        .labelsHidden().pickerStyle(.menu).fixedSize().controlSize(.extraLarge)
-                        .help(store.macSource.hint)
-                        Button { nav.route = .device } label: { Label("连接录音豆", systemImage: "antenna.radiowaves.left.and.right") }
-                            .buttonStyle(.glass).controlSize(.extraLarge)
-                    }
-                    Button { store.chooseFilesToImport() } label: { Label("导入录音", systemImage: "square.and.arrow.down") }
-                        .buttonStyle(.glass).controlSize(.extraLarge)
-                    if store.recordings.contains(where: \.isAnalyzed) {
-                        Button { nav.route = .knowledge } label: { Label("问问知识库", systemImage: "sparkles") }
-                            .buttonStyle(.glass).controlSize(.extraLarge)
-                    }
+                    if store.recState == .idle { SourceMenu() }
                 }
                 .padding(.top, 4)
+                // 第二排是次要的入口，小一号，不和录音抢位置
+                HStack(spacing: 8) {
+                    if store.link != .ready {
+                        Button { nav.route = .device } label: { Label("连接录音豆", systemImage: "antenna.radiowaves.left.and.right").fixedSize() }
+                    }
+                    Button { store.chooseFilesToImport() } label: { Label("导入录音", systemImage: "square.and.arrow.down").fixedSize() }
+                    if store.recordings.contains(where: \.isAnalyzed) {
+                        Button { nav.route = .knowledge } label: { Label("问问知识库", systemImage: "sparkles").fixedSize() }
+                    }
+                }
+                .buttonStyle(.glass).controlSize(.regular)
             }
             Spacer(minLength: 0)
         }

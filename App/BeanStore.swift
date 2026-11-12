@@ -298,6 +298,11 @@ final class BeanStore {
     @ObservationIgnored var macTap: SystemAudioTap?
     @ObservationIgnored var macMicStarted: Date?
     @ObservationIgnored var macStarting = false
+    /// 录音豆连着，但这次想用 Mac 录。录音豆断开后自然就是用 Mac，不用管这个。
+    var preferMac = false
+    /// 点「开始录音」时声音从哪来。
+    var sourceName: String { link == .ready && !preferMac ? displayDeviceName : macSource.name }
+    var sourceIcon: String { link == .ready && !preferMac ? "dot.radiowaves.left.and.right" : macSource.icon }
     /// 用 Mac 录音时录哪一路：麦克风、电脑里的声音，还是两路一起。会记住上次的选择。
     var macSource: MacSource = MacSource(rawValue: UserDefaults.standard.string(forKey: "macSource") ?? "") ?? .mic {
         didSet { UserDefaults.standard.set(macSource.rawValue, forKey: "macSource") }
@@ -322,7 +327,7 @@ final class BeanStore {
 
     func startRecording() {
         // 录音豆没连上：直接用这台 Mac 的麦克风录
-        if link != .ready, recState == .idle { startMacRecording(); return }
+        if link != .ready || preferMac, recState == .idle { startMacRecording(); return }
         guard link == .ready, recState == .idle else { return }
         ble.send(Command.startRecording())
         info?.recording = true          // 先把界面切过去，不等设备回话
