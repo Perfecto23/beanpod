@@ -117,10 +117,11 @@ struct KnowledgeView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("依据这几条录音").font(.caption).foregroundStyle(.secondary)
                                 FlowLayout(spacing: 6) {
-                                    ForEach(Array(store.answerSources.enumerated()), id: \.offset) { _, id in
+                                    ForEach(Array(store.answerSources.enumerated()), id: \.offset) { n, id in
                                         if let r = store.recordings.first(where: { $0.id == id }) {
                                             Button { nav.open(id) } label: {
-                                                Label(r.displayTitle, systemImage: (r.scene ?? .other).icon).font(.callout).lineLimit(1)
+                                                // 前面的编号对应回答里的 [1] [2]
+                                                (Text("\(n + 1)  ").foregroundStyle(Theme.amber).fontWeight(.semibold) + Text(r.displayTitle)).font(.callout).lineLimit(1)
                                                     .padding(.horizontal, 10).padding(.vertical, 5)
                                                     .background(.quaternary.opacity(0.6), in: .capsule)
                                             }
