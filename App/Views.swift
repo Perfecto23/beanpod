@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - 导航
 
 enum Route: Hashable {
-    case dashboard, live, all, starred, scene(Scene), knowledge, device
+    case dashboard, all, starred, scene(Scene), knowledge, device
 }
 
 @Observable
@@ -36,7 +36,6 @@ struct RootView: View {
             switch nav.route {
             case .dashboard: DashboardView().background(Backdrop())
             case .knowledge: KnowledgeView().background(Backdrop())
-            case .live: LiveView().background(Backdrop())
             case .device: DeviceView().background(Backdrop())
             case .all, .starred, .scene: RecordingsView().background(Backdrop())
             }
@@ -179,12 +178,6 @@ struct Sidebar: View {
         List(selection: $nav.route) {
             Label("总览", systemImage: "square.grid.2x2").tag(Route.dashboard)
             Label("知识库", systemImage: "books.vertical").tag(Route.knowledge)
-            HStack {
-                Label("实时转写", systemImage: "captions.bubble")
-                Spacer()
-                if store.liveActive { Circle().fill(Theme.rec).frame(width: 7, height: 7) }
-            }
-            .tag(Route.live)
 
             Section("录音") {
                 row("全部录音", "waveform", store.recordings.count).tag(Route.all)

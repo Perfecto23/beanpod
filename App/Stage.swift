@@ -25,6 +25,9 @@ struct RecordStage: View {
     @Environment(Navigator.self) private var nav
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// 舞台有两种看法：平时只看时间和刚说的那一句；点「全部文字」换成从头到尾的字幕，适合投到屏幕上给大家看。
+    @State private var reading = false
+
     private var paused: Bool { store.recState == .paused }
     private var level: Float { paused ? 0 : (store.liveLevels.suffix(3).max() ?? 0) }
 
@@ -39,17 +42,34 @@ struct RecordStage: View {
 
             VStack(spacing: 0) {
                 top
-                Spacer(minLength: 12)
-                timer
-                FlowWave(levels: store.liveLevels, total: store.liveLevelTotal, marks: store.liveMarks,
-                         elapsed: { store.elapsed(at: $0) }, paused: paused, still: reduceMotion)
-                    .frame(height: 170)
-                    .padding(.top, 18)
-                caption
-                Spacer(minLength: 12)
+                if reading {
+                    // 全文模式：时间和波形缩成一行，地方让给字
+                    HStack(spacing: 18) {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            Text(clock(store.elapsed(at: context.date)))
+                                .font(.system(size: 34, weight: .light, design: .rounded)).monospacedDigit()
+                                .opacity(paused ? 0.55 : 1)
+                        }
+                        FlowWave(levels: store.liveLevels, total: store.liveLevelTotal, marks: store.liveMarks,
+                                 elapsed: { store.elapsed(at: $0) }, paused: paused, still: reduceMotion)
+                            .frame(height: 44)
+                    }
+                    .padding(.top, 14)
+                    transcript
+                } else {
+                    Spacer(minLength: 12)
+                    timer
+                    FlowWave(levels: store.liveLevels, total: store.liveLevelTotal, marks: store.liveMarks,
+                             elapsed: { store.elapsed(at: $0) }, paused: paused, still: reduceMotion)
+                        .frame(height: 170)
+                        .padding(.top, 18)
+                    caption
+                    Spacer(minLength: 12)
+                }
                 controls
             }
             .padding(.horizontal, 36).padding(.top, 18).padding(.bottom, 30)
+            .animation(.spring(response: 0.45, dampingFraction: 1), value: reading)
         }
         .environment(\.colorScheme, .dark)
         .foregroundStyle(Theme.paper)
@@ -115,6 +135,37 @@ struct RecordStage: View {
         .animation(.easeOut(duration: 0.3), value: store.liveSegments.last?.id)
     }
 
+    /// 从头到尾的字幕：新的一句出现在最下面，自动跟着往下滚。
+    private var transcript: some View {
+        let size = store.settings.liveFontSize
+        return ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: size * 0.7) {
+                    ForEach(store.liveSegments) { seg in
+                        HStack(alignment: .firstTextBaseline, spacing: 16) {
+                            Text(clock(seg.start)).font(.callout.monospacedDigit()).foregroundStyle(Theme.paper.opacity(0.35))
+                                .frame(width: 48, alignment: .trailing)
+                            Text(store.settings.liveTidy ? stripFillers(seg.text) : seg.text)
+                                .font(.system(size: size, weight: .medium)).lineSpacing(size * 0.35)
+                                .textSelection(.enabled)
+                                .foregroundStyle(seg.id == store.liveSegments.last?.id ? Theme.paper : Theme.paper.opacity(0.6))
+                        }
+                        .id(seg.id)
+                        .transition(.opacity.combined(with: .offset(y: 8)))
+                    }
+                    Text(paused ? "已暂停" : "在听…").font(.title3).foregroundStyle(Theme.paper.opacity(0.4))
+                        .padding(.leading, 64).id("tail")
+                }
+                .padding(.vertical, 22)
+                .frame(maxWidth: 920, alignment: .leading)
+                .frame(maxWidth: .infinity)
+                .animation(.easeOut(duration: 0.25), value: store.liveSegments.count)
+            }
+            .onChange(of: store.liveSegments.count) { withAnimation { proxy.scrollTo("tail", anchor: .bottom) } }
+            .onAppear { proxy.scrollTo("tail", anchor: .bottom) }
+        }
+    }
+
     private var controls: some View {
         HStack(spacing: 14) {
             Button { store.markNow() } label: {
@@ -132,11 +183,27 @@ struct RecordStage: View {
 
             Spacer()
 
-            Button { nav.route = .live; nav.stageOpen = false } label: {
-                Label("全部文字", systemImage: "text.alignleft")
+            if reading {
+                // 全文模式下才用得上的三样：去语气词、字号、拷贝
+                Toggle(isOn: Bindable(store.settings).liveTidy) { Label("去语气词", systemImage: "wand.and.stars") }
+                    .toggleStyle(.button).buttonStyle(.glass).controlSize(.extraLarge)
+                    .help("在字幕里去掉「呃」「嗯」和结巴重复")
+                Button { store.settings.liveFontSize = max(14, store.settings.liveFontSize - 2) } label: { Image(systemName: "textformat.size.smaller") }
+                    .buttonStyle(.glass).controlSize(.extraLarge).help("字小一点").accessibilityLabel("字小一点")
+                Button { store.settings.liveFontSize = min(48, store.settings.liveFontSize + 2) } label: { Image(systemName: "textformat.size.larger") }
+                    .buttonStyle(.glass).controlSize(.extraLarge).help("字大一点").accessibilityLabel("字大一点")
+                Button {
+                    copy(store.liveSegments.map { store.settings.liveTidy ? stripFillers($0.text) : $0.text }.joined(separator: "\n"))
+                    store.toast("doc.on.doc", "已拷贝")
+                } label: { Image(systemName: "doc.on.doc") }
+                    .buttonStyle(.glass).controlSize(.extraLarge).help("拷贝到现在为止的全部文字").accessibilityLabel("拷贝全部文字")
+            }
+            Button { reading.toggle() } label: {
+                Label(reading ? "只看当前" : "全部文字", systemImage: reading ? "rectangle.compress.vertical" : "text.alignleft")
             }
             .buttonStyle(.glass).controlSize(.extraLarge)
-            .disabled(store.liveSegments.isEmpty)
+            .disabled(store.liveSegments.isEmpty && !reading)
+            .help(reading ? "回到只看时间和刚说的那一句" : "从头到尾看这次录音出的字，适合投到屏幕上")
 
             Button { store.finishRecording() } label: {
                 Label("结束", systemImage: "stop.fill").padding(.horizontal, 10)
