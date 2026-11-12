@@ -284,12 +284,20 @@ final class BeanStore {
 
     // MARK: 设备操作
 
-    var isRecording: Bool { link == .ready && info?.recording == true }
+    var isRecording: Bool { macRec == .recording || (link == .ready && info?.recording == true) }
+
+    /// 用这台 Mac 的麦克风录音时的状态。
+    var macRec: MacRec = .off
+    @ObservationIgnored var macRecorder: AVAudioRecorder?
+    @ObservationIgnored var macMeter: Task<Void, Never>?
+    /// 现在这条是不是用 Mac 的麦克风在录。
+    var recordingOnMac: Bool { macRec != .off }
 
     enum RecState { case idle, recording, paused }
 
     /// 录音豆现在的状态：没在录、正在录、录到一半暂停着。
     var recState: RecState {
+        if macRec != .off { return macRec == .recording ? .recording : .paused }
         guard link == .ready else { return .idle }
         if info?.recording == true { return .recording }
         return sessionOpen ? .paused : .idle
@@ -301,6 +309,8 @@ final class BeanStore {
     }
 
     func startRecording() {
+        // 录音豆没连上：直接用这台 Mac 的麦克风录
+        if link != .ready, recState == .idle { startMacRecording(); return }
         guard link == .ready, recState == .idle else { return }
         ble.send(Command.startRecording())
         info?.recording = true          // 先把界面切过去，不等设备回话
@@ -314,6 +324,7 @@ final class BeanStore {
     }
 
     func pauseRecording() {
+        if macRec != .off { pauseMacRecording(); return }
         guard recState == .recording else { return }
         ble.send(Command.pauseRecording())
         elapsedBase = elapsed()
@@ -324,6 +335,7 @@ final class BeanStore {
     }
 
     func resumeRecording() {
+        if macRec != .off { resumeMacRecording(); return }
         guard recState == .paused else { return }
         ble.send(Command.startRecording())
         info?.recording = true
@@ -336,6 +348,7 @@ final class BeanStore {
 
     /// 结束这条录音。结束后设备才把它当成一条完整的录音，才能下载；下次再录是新的一条。
     func finishRecording() {
+        if macRec != .off { finishMacRecording(); return }
         guard link == .ready, recState != .idle else { return }
         ble.send(Command.stopRecording())
         if !liveMarks.isEmpty, let since = sessionStart {

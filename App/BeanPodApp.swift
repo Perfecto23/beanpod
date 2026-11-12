@@ -29,7 +29,9 @@ struct BeanPodApp: App {
                     }
                 }
                 .keyboardShortcut("r", modifiers: .command)
-                .disabled(store.link != .ready)
+                Button("用这台 Mac 的麦克风录音") { store.startMacRecording() }
+                    .keyboardShortcut("r", modifiers: [.command, .option])
+                    .disabled(store.recState != .idle)
                 Button("标重点") { store.markNow() }
                     .keyboardShortcut("d", modifiers: .command)
                     .disabled(store.recState != .recording)
@@ -90,6 +92,7 @@ struct BeanPodApp: App {
                 Button("看看：充满了") { store.mascotPreview = (.idle, .charging(100)) }
                 Button("看看：没连上") { store.mascotPreview = (.sleeping, .unknown) }
                 Button("看看：录音中") { store.mascotPreview = (.listening, .mid) }
+                Button("看看：转写中") { store.mascotPreview = (.writing, .mid) }
                 Button("看看：整理中") { store.mascotPreview = (.thinking, .mid) }
                 Button("看看：开心") { store.mascotPreview = (.happy, .mid) }
             }
@@ -130,7 +133,16 @@ struct MenuBarContent: View {
                 Button("结束录音") { store.finishRecording() }
             }
         } else {
-            Text("录音豆未连接")
+            Text(store.recordingOnMac ? "正在用这台 Mac 录音" : "录音豆未连接")
+            switch store.recState {
+            case .idle: Button("用 Mac 录音") { store.startRecording() }
+            case .recording:
+                Button("暂停") { store.pauseRecording() }
+                Button("结束录音") { store.finishRecording() }
+            case .paused:
+                Button("继续录音") { store.resumeRecording() }
+                Button("结束录音") { store.finishRecording() }
+            }
         }
         if !store.stages.isEmpty { Text("正在处理 \(store.stages.count) 条录音") }
         Divider()

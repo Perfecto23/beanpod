@@ -6,6 +6,8 @@ nonisolated enum Theme {
     static let rec = Color(red: 1.0, green: 0.27, blue: 0.23)
     static let graphite = Color(red: 0.055, green: 0.055, blue: 0.06)
     static let paper = Color(red: 0.96, green: 0.93, blue: 0.87)
+    /// 「没问题」的颜色：一种不扎眼的绿，只用在已连接、已就绪这类状态上。
+    static let ok = Color(red: 0.42, green: 0.72, blue: 0.47)
     /// 区分说话人用的一组颜色：都在暖色和中性色里选。
     static let speakers: [Color] = [
         Color(red: 0.93, green: 0.62, blue: 0.16),   // 琥珀
@@ -59,7 +61,7 @@ struct RecordStage: View {
                 .opacity(paused ? 1 : 0.55 + 0.45 * Double(level))
                 .animation(.easeOut(duration: 0.25), value: level)
             Text(paused ? "已暂停" : "正在录音").font(.callout.weight(.semibold)).tracking(1.5)
-            Text(store.displayDeviceName + (store.info.map { " · \($0.micBattery)%" } ?? ""))
+            Text(store.recordingOnMac ? "这台 Mac 的麦克风" : store.displayDeviceName + (store.info.map { " · \($0.micBattery)%" } ?? ""))
                 .font(.callout).foregroundStyle(Theme.paper.opacity(0.45))
             Spacer()
             Button { nav.stageOpen = false } label: {
@@ -100,6 +102,8 @@ struct RecordStage: View {
                     .id(last.id).transition(.opacity.combined(with: .offset(y: 8)))
             } else if let note = store.liveNote {
                 Text(note).font(.title3).foregroundStyle(Theme.amber)
+            } else if store.recordingOnMac {
+                Text("用 Mac 的麦克风录音时暂时不出实时字幕。录完会完整转写、整理成纪要。").font(.title3).foregroundStyle(Theme.paper.opacity(0.45))
             } else if !store.liveActive {
                 Text("没开实时转写，这里不出字，声音也画不出来。录音照常在录。").font(.title3).foregroundStyle(Theme.paper.opacity(0.45))
             } else {

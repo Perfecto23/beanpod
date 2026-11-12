@@ -102,14 +102,7 @@ struct RecordButton: View {
     @Environment(Navigator.self) private var nav
 
     var body: some View {
-        if store.link == .ready {
-            RecordControls(size: .regular)
-        } else {
-            Button { nav.route = .device } label: {
-                Label("连接录音豆", systemImage: "mic.slash").labelStyle(.titleAndIcon)
-            }
-            .help("录音豆没连上，点这里去连接")
-        }
+        RecordControls(size: .regular)
     }
 }
 
@@ -122,17 +115,17 @@ struct RecordControls: View {
         switch store.recState {
         case .idle:
             Button { store.startRecording() } label: {
-                Label(size == .regular ? "录音" : "开始录音", systemImage: "record.circle.fill").labelStyle(.titleAndIcon)
+                Label(size == .regular ? "录音" : (store.link == .ready ? "开始录音" : "用 Mac 录音"), systemImage: "record.circle.fill").labelStyle(.titleAndIcon)
                     .padding(.horizontal, size == .regular ? 0 : 8)
             }
             .buttonStyle(size == .regular ? AnyButtonStyle(.glass) : AnyButtonStyle(.glassProminent))
-            .tint(.red).controlSize(size)
-            .help("让录音豆开始录音（⌘R）")
+            .tint(Theme.rec).controlSize(size)
+            .help(store.link == .ready ? "让录音豆开始录音（⌘R）" : "录音豆没连上，用这台 Mac 的麦克风录（⌘R）")
         case .recording, .paused:
             let paused = store.recState == .paused
             HStack(spacing: size == .regular ? 6 : 10) {
                 HStack(spacing: 6) {
-                    Circle().fill(paused ? Color.orange : Color.red).frame(width: 8, height: 8)
+                    Circle().fill(paused ? Theme.amber : Theme.rec).frame(width: 8, height: 8)
                         .opacity(paused ? 1 : 0.9)
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         Text(clock(store.elapsed(at: context.date))).monospacedDigit()
@@ -154,7 +147,7 @@ struct RecordControls: View {
                         .labelStyle(size == .regular ? AnyLabelStyle(.iconOnly) : AnyLabelStyle(.titleAndIcon))
                 }
                 .buttonStyle(size == .regular ? AnyButtonStyle(.borderless) : AnyButtonStyle(.glassProminent))
-                .tint(.red).foregroundStyle(size == .regular ? AnyShapeStyle(.red) : AnyShapeStyle(.white)).controlSize(size)
+                .tint(Theme.rec).foregroundStyle(size == .regular ? AnyShapeStyle(Theme.rec) : AnyShapeStyle(.white)).controlSize(size)
                     .help("结束这条录音（⌘.）。结束后会自动下载并整理成纪要。")
             }
         }
@@ -189,7 +182,7 @@ struct Sidebar: View {
             HStack {
                 Label("实时转写", systemImage: "captions.bubble")
                 Spacer()
-                if store.liveActive { Circle().fill(.red).frame(width: 7, height: 7) }
+                if store.liveActive { Circle().fill(Theme.rec).frame(width: 7, height: 7) }
             }
             .tag(Route.live)
 
@@ -249,7 +242,7 @@ struct DeviceChip: View {
     }
 
     private var statusColor: Color {
-        if store.link == .ready { return store.info?.recording == true ? .red : .green }
+        if store.link == .ready { return store.info?.recording == true ? Theme.rec : Theme.ok }
         return .secondary
     }
 }
@@ -285,40 +278,43 @@ struct Card<Content: View>: View {
 extension View {
     /// 放内容的底板：一块半透明的实底加一圈细线。玻璃只留给浮在内容上面的控件。
     func panel(radius: CGFloat = 16) -> some View {
-        background(Color(nsColor: .controlBackgroundColor).opacity(0.62), in: .rect(cornerRadius: radius))
-            .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(.separator.opacity(0.45), lineWidth: 0.5))
+        modifier(Panel(radius: radius))
     }
 }
 
-/// 内容区的底：窗口本身半透明，透出桌面；上面再浮几团缓慢移动的彩色光。
-/// 液态玻璃靠折射和反光出效果，底下必须有颜色、有明暗，玻璃才看得出来。
+/// 底板的样子跟着深浅色走：深色是比底色亮一级的石墨，上沿一道极细的亮边；浅色是白纸加很轻的影子。
+struct Panel: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+    var radius: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .background(scheme == .dark ? Color.white.opacity(0.055) : Color.white.opacity(0.86), in: .rect(cornerRadius: radius))
+            .overlay(RoundedRectangle(cornerRadius: radius)
+                .strokeBorder(LinearGradient(colors: scheme == .dark ? [.white.opacity(0.14), .white.opacity(0.03)] : [.black.opacity(0.05), .black.opacity(0.09)],
+                                             startPoint: .top, endPoint: .bottom), lineWidth: 0.5))
+            .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.05), radius: 8, y: 3)
+    }
+}
+
+/// 内容区的底。深色是石墨黑，浅色是暖白纸；左上角一团很淡的琥珀色光，像仪器面板上的一盏灯。
+/// 不透出桌面：桌面是什么颜色，豆仓就跟着变灰变花，没有自己的样子。
 struct Backdrop: View {
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
-            WindowGlass()
-            // 只有一种色相：强调色的两团很淡的光，慢慢游动。够让玻璃有东西可折射，又不抢内容。
-            TimelineView(.animation(minimumInterval: 1 / 15, paused: reduceMotion)) { context in
-                let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
-                GeometryReader { geo in
-                    let w = geo.size.width, h = geo.size.height
-                    ZStack {
-                        glow(x: 0.22 + 0.05 * sin(t / 11), y: 0.08 + 0.04 * cos(t / 13), size: 0.7, w, h, strength: 1)
-                        glow(x: 0.86 + 0.04 * cos(t / 12), y: 0.9 + 0.04 * sin(t / 10), size: 0.6, w, h, strength: 0.7)
-                    }
-                }
+            if scheme == .dark {
+                LinearGradient(colors: [Color(red: 0.085, green: 0.083, blue: 0.082), Color(red: 0.05, green: 0.05, blue: 0.055)],
+                               startPoint: .top, endPoint: .bottom)
+            } else {
+                LinearGradient(colors: [Color(red: 0.975, green: 0.965, blue: 0.945), Color(red: 0.945, green: 0.93, blue: 0.905)],
+                               startPoint: .top, endPoint: .bottom)
             }
-            Rectangle().fill(scheme == .dark ? Color.black.opacity(0.28) : Color.white.opacity(0.35))
+            RadialGradient(colors: [Theme.amber.opacity(scheme == .dark ? 0.13 : 0.16), .clear],
+                           center: .init(x: 0.12, y: 0.0), startRadius: 0, endRadius: 620)
         }
         .ignoresSafeArea()
-    }
-
-    private func glow(x: Double, y: Double, size: Double, _ w: CGFloat, _ h: CGFloat, strength: Double) -> some View {
-        let d = max(w, h) * size
-        return Circle().fill(Theme.amber.opacity((scheme == .dark ? 0.16 : 0.12) * strength))
-            .frame(width: d, height: d).blur(radius: d * 0.32).position(x: w * x, y: h * y)
     }
 }
 
@@ -469,7 +465,7 @@ struct RecordingRow: View {
 
     @ViewBuilder private var trailing: some View {
         if recording.inProgress {
-            Image(systemName: "record.circle").foregroundStyle(.red).help("正在录音")
+            Image(systemName: "record.circle").foregroundStyle(Theme.rec).help("正在录音")
         } else if let pull = store.pull, pull.id == recording.id {
             ProgressView(value: pull.fraction).progressViewStyle(.circular).controlSize(.small)
         } else if store.queue.contains(recording.id) {
@@ -681,7 +677,7 @@ struct PlayerBar: View {
             Button { store.togglePlay(recording.id) } label: {
                 Image(systemName: active && store.isPlaying ? "pause.circle.fill" : "play.circle.fill").font(.system(size: 36))
             }
-            .buttonStyle(.plain).foregroundStyle(.tint)
+            .buttonStyle(.plain).foregroundStyle(Theme.amber)
             .keyboardShortcut(.space, modifiers: [])
             .help(active && store.isPlaying ? "暂停（空格）" : "播放（空格）")
             .accessibilityLabel(active && store.isPlaying ? "暂停" : "播放")
@@ -795,18 +791,13 @@ struct RecordDock: View {
 
     var body: some View {
         Group {
-            if store.link != .ready {
-                if !hiddenWhenIdle && nav.route != .device {
-                    Button { nav.route = .device } label: { Label("连接录音豆", systemImage: "mic.slash").padding(.horizontal, 6) }
-                        .buttonStyle(.glass).controlSize(.large)
-                }
-            } else if store.recState == .idle {
+            if store.recState == .idle {
                 if !hiddenWhenIdle {
                     Button { store.startRecording() } label: {
-                        Label("开始录音", systemImage: "record.circle.fill").padding(.horizontal, 6)
+                        Label(store.link == .ready ? "开始录音" : "用 Mac 录音", systemImage: "record.circle.fill").padding(.horizontal, 6)
                     }
-                    .buttonStyle(.glassProminent).tint(.red).controlSize(.extraLarge)
-                            .help("让录音豆开始录音（⌘R）")
+                    .buttonStyle(.glassProminent).tint(Theme.rec).controlSize(.extraLarge)
+                            .help(store.link == .ready ? "让录音豆开始录音（⌘R）" : "录音豆没连上，用这台 Mac 的麦克风录（⌘R）")
                 }
             } else {
                 active
@@ -819,7 +810,7 @@ struct RecordDock: View {
         let paused = store.recState == .paused
         return HStack(spacing: 14) {
             HStack(spacing: 8) {
-                Circle().fill(paused ? Color.orange : Color.red).frame(width: 9, height: 9)
+                Circle().fill(paused ? Theme.amber : Theme.rec).frame(width: 9, height: 9)
                     .symbolEffect(.pulse, isActive: !paused)
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(clock(store.elapsed(at: context.date)))
@@ -844,7 +835,7 @@ struct RecordDock: View {
             Button { store.finishRecording() } label: {
                 Label("结束", systemImage: "stop.fill")
             }
-            .buttonStyle(.glassProminent).tint(.red).controlSize(.large)
+            .buttonStyle(.glassProminent).tint(Theme.rec).controlSize(.large)
             .help("结束这条录音（⌘.）。结束后会自动下载并整理成纪要。")
         }
         .padding(.leading, 20).padding(.trailing, 10).padding(.vertical, 9)
@@ -1055,7 +1046,7 @@ struct TranscriptView: View {
 
     private func fixBar(_ fix: BeanStore.PendingFix) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: "sparkles").foregroundStyle(.tint)
+            Image(systemName: "sparkles").foregroundStyle(Theme.amber)
             Text("你把「\(fix.wrong)」改成了「\(fix.right)」。").lineLimit(1)
             Spacer()
             Button("全部替换并记住") {
@@ -1227,10 +1218,10 @@ struct DeviceView: View {
                 ForEach(beans) { device in
                     Button { store.autoConnectAllowed = true; store.connect(device) } label: {
                         HStack {
-                            Image(systemName: "mic.circle.fill").font(.title2).foregroundStyle(.tint)
+                            Image(systemName: "mic.circle.fill").font(.title2).foregroundStyle(Theme.amber)
                             Text(device.name).fontWeight(.medium)
                             Spacer()
-                            Text("连接").foregroundStyle(.tint)
+                            Text("连接").foregroundStyle(Theme.amber)
                         }
                         .padding(10).glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12)).contentShape(Rectangle())
                     }
@@ -1270,7 +1261,7 @@ struct DeviceView: View {
                     TextField("给它起个名字", text: Bindable(store.settings).deviceAlias, prompt: Text(store.deviceName))
                         .textFieldStyle(.plain).font(.title3.bold())
                         .help("点这里改名。名字只存在这台 Mac 上")
-                    Text(store.inCase ? "已连接 · 在充电盒里" : "已连接").font(.callout).foregroundStyle(.green)
+                    Text(store.inCase ? "已连接 · 在充电盒里" : "已连接").font(.callout).foregroundStyle(Theme.ok)
                 }
                 Spacer()
                 Button("断开连接") { store.disconnect() }
@@ -1298,7 +1289,7 @@ struct DeviceView: View {
                 Divider()
                 LabeledContent("固件", value: info.firmware)
                 LabeledContent("序列号") { Text(info.serial.uppercased()).textSelection(.enabled) }
-                if !store.encryptionReady { Text("密钥未协商，暂时无法下载").foregroundStyle(.orange) }
+                if !store.encryptionReady { Text("密钥未协商，暂时无法下载").foregroundStyle(Theme.amber) }
             }
         }
     }
@@ -1315,9 +1306,9 @@ struct BatteryRow: View {
         HStack {
             Text(title)
             Spacer()
-            if charging { Image(systemName: "bolt.fill").foregroundStyle(.green).font(.caption) }
+            if charging { Image(systemName: "bolt.fill").foregroundStyle(Theme.ok).font(.caption) }
             Text("\(percent)%").monospacedDigit().foregroundStyle(.secondary)
-            Image(systemName: icon).foregroundStyle(percent <= 20 ? .red : .secondary)
+            Image(systemName: icon).foregroundStyle(percent <= 20 ? AnyShapeStyle(Theme.rec) : AnyShapeStyle(.secondary))
         }
     }
 
@@ -1377,7 +1368,7 @@ struct Radar: View {
             }
             Image(systemName: found ? "mic.circle.fill" : "mic.circle")
                 .font(.system(size: 44))
-                .foregroundStyle(found ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .foregroundStyle(found ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(.secondary))
                 .symbolEffect(.bounce, value: found)
                 .contentTransition(.symbolEffect(.replace))
         }

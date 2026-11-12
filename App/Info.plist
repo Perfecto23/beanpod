@@ -30,6 +30,8 @@
 	<string>public.app-category.productivity</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>需要蓝牙来连接你的录音豆。</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>录音豆没连上时，用这台 Mac 的麦克风录音。</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>需要语音识别来把录音转成文字，全部在本机完成。</string>
 </dict>

@@ -290,16 +290,16 @@ struct DictationHUD: View {
                 ProgressView().controlSize(.small)
                 Text("准备中…")
             case .listening:
-                Image(systemName: "waveform").symbolEffect(.variableColor.iterative).foregroundStyle(.red)
+                Image(systemName: "waveform").symbolEffect(.variableColor.iterative).foregroundStyle(Theme.rec)
                 Text("在听，松开结束")
             case .working:
                 ProgressView().controlSize(.small)
                 Text("正在转成文字…")
             case .done(let text):
-                Image(systemName: dictation.accessibilityGranted ? "checkmark.circle.fill" : "doc.on.clipboard").foregroundStyle(.green)
+                Image(systemName: dictation.accessibilityGranted ? "checkmark.circle.fill" : "doc.on.clipboard").foregroundStyle(Theme.ok)
                 Text(text).lineLimit(1)
             case .failed(let why):
-                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
+                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.amber)
                 Text(why).lineLimit(1)
             case .idle:
                 EmptyView()

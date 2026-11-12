@@ -68,7 +68,7 @@ final class AppSettings {
     init() {
         let d = UserDefaults.standard
         analysisMode = AnalysisMode(rawValue: d.string(forKey: "analysisMode") ?? "") ?? .auto
-        appearance = Appearance(rawValue: d.string(forKey: "appearance") ?? "") ?? .system
+        appearance = Appearance(rawValue: d.string(forKey: "appearance") ?? "") ?? .dark
         profession = Profession(rawValue: d.string(forKey: "profession") ?? "") ?? .general
         engine = Engine(rawValue: d.string(forKey: "engine") ?? "") ?? .qwen
         language = d.string(forKey: "language") ?? "zh-CN"

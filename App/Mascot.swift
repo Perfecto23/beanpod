@@ -8,7 +8,8 @@ enum MascotMood: Equatable {
     case sleeping    // 录音豆没连上
     case idle        // 待命
     case listening   // 正在录音
-    case thinking    // 正在转写、整理
+    case writing     // 正在把录音转成文字：埋头、两只手轮流敲
+    case thinking    // 正在整理纪要：歪着头左看右看、一只手举着
     case happy       // 刚处理完一条、刚配对成功
 }
 
@@ -73,6 +74,15 @@ final class MascotScene: NSObject {
         var sway: CGFloat = 0.035    // 待着时左右晃头的幅度
         var swayPeriod: Double = 4.2
         var breath: CGFloat = 0.018  // 呼吸时身体起伏的幅度
+        // 下面这几样是「动作」：让每种状态一眼就看得出不一样
+        var nod: CGFloat = 0         // 点头的幅度
+        var armSwingL: CGFloat = 0.05  // 手上下摆的幅度
+        var armSwingR: CGFloat = 0.05  // 和左手同号是一起摆，反号是轮流摆
+        var armPeriod: Double = 0      // 手摆一个来回多久；0 表示跟着呼吸
+        var yaw: CGFloat = 0         // 整个身子左右转的幅度
+        var yawPeriod: Double = 3
+        var bob: CGFloat = 0         // 整个身子上下颠的幅度
+        var bobPeriod: Double = 1
         var breathPeriod: Double = 3.2
     }
 
@@ -98,6 +108,7 @@ final class MascotScene: NSObject {
     private var current: (MascotMood, MascotPower)?
     private var face: Face = .open
     private var blinker: Task<Void, Never>?
+    private var rootBase: SCNVector3?
 
     /// 待命时的灯：暖白，不抢眼
     static let warm = NSColor(calibratedRed: 1.0, green: 0.90, blue: 0.72, alpha: 1)
@@ -117,11 +128,21 @@ final class MascotScene: NSObject {
         case .happy:
             return Look(face: .happy, pose: Pose(headPitch: -0.10, ears: -0.10, armL: 1.05, armR: 1.05, sway: 0.05, swayPeriod: 1.2),
                         ring: green, glow: (0.9, 1.6, 0.6), badge: "sparkles", badgeColor: amber)
+        case .writing:
+            // 埋头写：身子前倾、低头，小幅快速点头，两只手轮流上下敲，整个身子跟着轻轻颠
+            return Look(face: .open, pose: Pose(lean: 0.30, headPitch: 0.34, ears: -0.05, armL: 0.75, armR: 0.75, sway: 0.015, swayPeriod: 0.7,
+                                                breath: 0.012, nod: 0.09, armSwingL: 0.5, armSwingR: -0.5, armPeriod: 0.34,
+                                                yaw: 0.07, yawPeriod: 1.4, bob: 0.028, bobPeriod: 0.34, breathPeriod: 1.6),
+                        ring: amber, glow: (0.5, 1.7, 0.34), badge: "pencil.line", badgeColor: amber)
         case .listening:
-            return Look(face: .open, pose: Pose(lean: 0.07, headPitch: 0.02, headRoll: 0.13, ears: -0.14, armL: 0.25, armR: 0.25, sway: 0.02, swayPeriod: 2.6),
+            // 侧耳听：身子朝一边探过去，耳朵竖起来，慢慢左右转着找声音
+            return Look(face: .open, pose: Pose(lean: 0.10, headPitch: -0.04, headRoll: 0.20, ears: -0.22, armL: 0.25, armR: 0.25, sway: 0.03, swayPeriod: 2.6,
+                                                nod: 0.03, yaw: 0.16, yawPeriod: 4.5),
                         ring: red, glow: (0.5, 1.7, 1.1), badge: nil)
         case .thinking:
-            return Look(face: .open, pose: Pose(headPitch: -0.06, headRoll: -0.12, armL: 0.95, armR: -0.1, sway: 0.11, swayPeriod: 2.4),
+            // 歪头想：头仰着大幅度左右歪，一只手举到下巴边一下一下点，身子左看右看
+            return Look(face: .open, pose: Pose(headPitch: -0.14, headRoll: -0.10, ears: 0.05, armL: 1.05, armR: -0.15, sway: 0.22, swayPeriod: 3.2,
+                                                armSwingL: 0.16, armSwingR: 0.02, armPeriod: 0.7, yaw: 0.38, yawPeriod: 5.0),
                         ring: amber, glow: (0.4, 1.5, 0.8), badge: "ellipsis", badgeColor: amber)
         case .sleeping:
             return Look(face: .sleep, pose: Pose(lean: 0.05, headPitch: 0.20, headRoll: 0.06, ears: 0.30, armL: -0.25, armR: -0.25, sway: 0.012, swayPeriod: 6, breath: 0.03, breathPeriod: 4.6),
@@ -155,7 +176,10 @@ final class MascotScene: NSObject {
         setFace(look.face)
         setRing(look.ring, glow: look.glow, animated: animated)
         setBadge(look.badge, color: look.badgeColor, drift: mood == .sleeping)
-        if case .charging = power, mood == .idle { setPod(true, animated: animated) } else { setPod(false, animated: animated) }
+        // 充电仓是小豆的窝：充电的时候在里面，没连上、睡着的时候也在里面
+        var inPod = mood == .sleeping
+        if case .charging = power, mood == .idle { inPod = true }
+        setPod(inPod, animated: animated)
         if mood == .happy, animated, previous != .happy { jump(times: 2) }
     }
 
@@ -361,11 +385,29 @@ final class MascotScene: NSObject {
 
     private func set(_ p: Pose, duration: Double) {
         move("body", to: SCNVector3(p.lean, 0, 0), swing: SCNVector3(0, 0, p.sway * 0.3), period: p.swayPeriod, duration: duration)
-        move("head", to: SCNVector3(p.headPitch, 0, p.headRoll), swing: SCNVector3(p.sway * 0.4, 0, p.sway), period: p.swayPeriod, duration: duration)
+        move("head", to: SCNVector3(p.headPitch, 0, p.headRoll), swing: SCNVector3(p.sway * 0.4 + p.nod, 0, p.sway), period: p.swayPeriod, duration: duration)
         move("earL", to: SCNVector3(-abs(p.ears) * 0.3, 0, -p.ears), swing: SCNVector3(0, 0, 0.03), period: p.swayPeriod / 2, duration: duration)
         move("earR", to: SCNVector3(-abs(p.ears) * 0.3, 0, p.ears), swing: SCNVector3(0, 0, -0.03), period: p.swayPeriod / 2, duration: duration)
-        move("armL", to: SCNVector3(0, 0, p.armL), swing: SCNVector3(0, 0, 0.05), period: p.breathPeriod, duration: duration)
-        move("armR", to: SCNVector3(0, 0, -p.armR), swing: SCNVector3(0, 0, -0.05), period: p.breathPeriod, duration: duration)
+        let armPeriod = p.armPeriod > 0 ? p.armPeriod : p.breathPeriod
+        move("armL", to: SCNVector3(0, 0, p.armL), swing: SCNVector3(0, 0, p.armSwingL), period: armPeriod, duration: duration)
+        move("armR", to: SCNVector3(0, 0, -p.armR), swing: SCNVector3(0, 0, -p.armSwingR), period: armPeriod, duration: duration)
+        // 整个身子的动作：左右转、上下颠
+        if let root = bones["root"] {
+            if rootBase == nil { rootBase = root.position }
+            let base = rootBase ?? SCNVector3Zero
+            root.removeAction(forKey: "gesture")
+            let yaw = p.yaw, yawPeriod = p.yawPeriod, bob = p.bob, bobPeriod = p.bobPeriod
+            if yaw == 0, bob == 0 {
+                root.runAction(.group([.rotateTo(x: 0, y: 0, z: 0, duration: max(duration, 0.01)), .move(to: base, duration: max(duration, 0.01))]), forKey: "gesture")
+            } else {
+                root.runAction(.repeatForever(.customAction(duration: 3600) { node, t in
+                    let time = Double(t)
+                    let ease = CGFloat(min(1, time / 0.5))          // 刚换状态时慢慢动起来，不突然甩头
+                    node.eulerAngles.y = yaw * ease * CGFloat(sin(time / yawPeriod * 2 * .pi))
+                    node.position.y = base.y + bob * ease * CGFloat(abs(sin(time / bobPeriod * .pi)))
+                }), forKey: "gesture")
+            }
+        }
         // 呼吸：身体轻轻鼓起来再落回去
         guard let body = bones["body"] else { return }
         body.removeAction(forKey: "breath")

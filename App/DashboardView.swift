@@ -269,9 +269,13 @@ struct Hero: View {
     private var mood: MascotMood {
         if let preview = store.mascotPreview { return preview.mood }
         if cheering { return .happy }
-        if store.link != .ready { return .sleeping }
         if store.isRecording { return .listening }
-        if !store.stages.isEmpty { return .thinking }
+        // 转写时是「埋头写」，整理时是「歪头想」，两个动作不一样
+        if let stage = store.stages.values.first {
+            if case .transcribing = stage { return .writing }
+            return .thinking
+        }
+        if store.link != .ready { return .sleeping }
         return .idle
     }
 
@@ -285,8 +289,8 @@ struct Hero: View {
     }
 
     private var line: String {
-        if store.link != .ready { return "我先眯一会儿。把录音豆拿出来，我就醒。" }
-        if store.isRecording { return "在听，你说。" }
+        if store.isRecording { return store.recordingOnMac ? "在听，用的是这台 Mac 的麦克风。" : "在听，你说。" }
+        if store.link != .ready, store.stages.isEmpty, store.recState == .idle { return "录音豆没连上。把它拿出来我就醒；想现在就录，用这台 Mac 也行。" }
         if store.recState == .paused { return "先歇一下。想接着录就点继续，录完了点结束。" }
         if cheering, store.stages.isEmpty { return "连上啦，随时可以开始。" }
         if let stage = store.stages.values.first {
@@ -318,11 +322,10 @@ struct Hero: View {
                 Text(line).font(.title3).foregroundStyle(.secondary)
                     .contentTransition(.opacity).animation(.easeInOut(duration: 0.3), value: line)
                 HStack(spacing: 10) {
-                    if store.link == .ready {
-                        RecordControls(size: .extraLarge)
-                    } else {
-                        Button { nav.route = .device } label: { Label("连接录音豆", systemImage: "antenna.radiowaves.left.and.right").padding(.horizontal, 8) }
-                            .buttonStyle(.glassProminent).controlSize(.extraLarge)
+                    RecordControls(size: .extraLarge)
+                    if store.link != .ready, store.recState == .idle {
+                        Button { nav.route = .device } label: { Label("连接录音豆", systemImage: "antenna.radiowaves.left.and.right") }
+                            .buttonStyle(.glass).controlSize(.extraLarge)
                     }
                     Button { store.chooseFilesToImport() } label: { Label("导入录音", systemImage: "square.and.arrow.down") }
                         .buttonStyle(.glass).controlSize(.extraLarge)

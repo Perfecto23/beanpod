@@ -69,7 +69,7 @@ struct KnowledgeView: View {
     @ViewBuilder private var askBox: some View {
         Card {
             HStack {
-                Image(systemName: "sparkles").foregroundStyle(.tint)
+                Image(systemName: "sparkles").foregroundStyle(Theme.amber)
                 TextField("问问你的录音，比如「上周和王总谈的价格是多少」", text: $question)
                     .textFieldStyle(.plain)
                     .onSubmit { store.ask(question) }
@@ -163,7 +163,7 @@ struct KnowledgeView: View {
                     HStack(spacing: 8) {
                         ScenePill(scene: hit.scene)
                         Text(hit.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        if let t = hit.time { Label(clock(t), systemImage: "play.fill").font(.caption).foregroundStyle(.tint) }
+                        if let t = hit.time { Label(clock(t), systemImage: "play.fill").font(.caption).foregroundStyle(Theme.amber) }
                     }
                 }
                 .padding(12).frame(maxWidth: .infinity, alignment: .leading)

@@ -50,10 +50,10 @@ struct SettingsView: View {
                     Button("试一次（录 5 秒，只显示结果）") { dictation.tryOnce() }
                     LabeledContent("辅助功能权限") {
                         if trusted {
-                            Label("已允许", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                            Label("已允许", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.ok)
                         } else {
                             HStack {
-                                Text("未允许").foregroundStyle(.orange)
+                                Text("未允许").foregroundStyle(Theme.amber)
                                 Button("去授权") { dictation.requestAccessibility() }
                                 Button("重新检查") { trusted = AXIsProcessTrusted(); dictation.refresh() }
                             }
@@ -77,13 +77,13 @@ struct SettingsView: View {
                         if let progress = store.modelDownload {
                             ProgressView(value: progress) { Text("正在下载 \(Int(progress * 100))%") }.frame(width: 200)
                         } else if QwenASR.locateModel() != nil {
-                            Label("\(QwenASR.displayName) 已就绪", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                            Label("\(QwenASR.displayName) 已就绪", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.ok)
                         } else {
                             Button("下载 \(QwenASR.displayName)（约 1 GB）") { store.downloadASRModel() }
                         }
                     }
                     if !store.asrAvailable {
-                        Text("Qwen3‑ASR 还不能用，暂时会改用系统语音识别。").font(.callout).foregroundStyle(.orange)
+                        Text("Qwen3‑ASR 还不能用，暂时会改用系统语音识别。").font(.callout).foregroundStyle(Theme.amber)
                     }
                 } else {
                     Picker("语言", selection: $settings.language) {
@@ -101,7 +101,7 @@ struct SettingsView: View {
                     if let progress = store.llmDownload {
                         ProgressView(value: progress) { Text("正在下载 \(Int(progress * 100))%") }.frame(width: 200)
                     } else if store.localLLMReady {
-                        Label("\(LocalLLM.modelLabel) 已就绪", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        Label("\(LocalLLM.modelLabel) 已就绪", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.ok)
                     } else {
                         Button("下载 \(LocalLLM.displayName)（约 2.5 GB）") { store.downloadLocalLLM() }
                     }

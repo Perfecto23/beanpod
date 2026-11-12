@@ -41,7 +41,7 @@ struct LiveView: View {
             Text("开始录音后，录音豆听到的话会一段一段出现在这里。\n适合开会、访谈时投在屏幕上。录音结束后，完整的录音还会再整体转写、整理成纪要。")
                 .multilineTextAlignment(.center).foregroundStyle(.secondary).frame(maxWidth: 440)
             Toggle("录音时自动实时转写", isOn: Bindable(store.settings).liveTranscribe).toggleStyle(.switch).fixedSize()
-            if let note = store.liveNote { Text(note).font(.callout).foregroundStyle(.orange) }
+            if let note = store.liveNote { Text(note).font(.callout).foregroundStyle(Theme.amber) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(40)
@@ -67,7 +67,7 @@ struct LiveView: View {
                     if store.liveActive {
                         HStack(spacing: 10) {
                             Image(systemName: "waveform").symbolEffect(.variableColor.iterative, isActive: store.livePending > 0)
-                                .foregroundStyle(.red)
+                                .foregroundStyle(Theme.rec)
                             Text(store.recState == .paused ? "已暂停" : (store.liveSegments.isEmpty && store.livePending == 0 ? "等录音豆把声音传过来…" : "在听…"))
                                 .foregroundStyle(.secondary)
                         }
