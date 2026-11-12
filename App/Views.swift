@@ -218,8 +218,10 @@ struct Sidebar: View {
                 Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 30, height: 30)
                 Text("豆仓").font(.system(size: 19, weight: .semibold, design: .rounded))
             }
-            .padding(.horizontal, 14).padding(.top, 6).padding(.bottom, 14)
+            .padding(.horizontal, 14).padding(.top, 6).padding(.bottom, 12)
             .accessibilityElement(children: .combine)
+
+            SidebarRecord().padding(.bottom, 12)
 
             item("总览", "house", 0) { nav.route = .dashboard }
             item("录音", "waveform", 1, count: store.recordings.count) { nav.route = .all }
@@ -246,6 +248,77 @@ struct Sidebar: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+/// 整个应用里唯一的录音按钮，固定在侧栏顶上：哪一页都在同一个位置、同一个大小、同一个形状。
+struct SidebarRecord: View {
+    @Environment(BeanStore.self) private var store
+    @Environment(Navigator.self) private var nav
+
+    var body: some View {
+        VStack(spacing: 6) {
+            if store.recState == .idle {
+                Button { store.startRecording() } label: {
+                    Label("开始录音", systemImage: "record.circle.fill").font(.callout.weight(.semibold))
+                        .frame(maxWidth: .infinity).frame(height: 34)
+                        .foregroundStyle(.white)
+                        .background(Theme.rec, in: .capsule)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("开始录音，声音来自：\(store.sourceName)（⌘R）")
+                SourceLine()
+            } else {
+                let paused = store.recState == .paused
+                // 录音中：同一个位置换成计时，点一下回到录音舞台
+                Button { nav.stageOpen = true } label: {
+                    HStack(spacing: 7) {
+                        Circle().fill(paused ? Theme.amber : Theme.rec).frame(width: 8, height: 8)
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            Text(clock(store.elapsed(at: context.date))).font(.callout.weight(.semibold)).monospacedDigit()
+                        }
+                        Text(paused ? "已暂停" : "录音中").font(.callout).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity).frame(height: 34)
+                    .background(Theme.rec.opacity(0.12), in: .capsule)
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain).help("回到录音舞台（⌘L）")
+            }
+        }
+    }
+}
+
+/// 录音按钮下面的一行小字：声音从哪来，点一下可以换。
+struct SourceLine: View {
+    @Environment(BeanStore.self) private var store
+
+    var body: some View {
+        Menu {
+            if store.link == .ready {
+                Button { store.preferMac = false } label: { Label(store.displayDeviceName + (store.preferMac ? "" : "　✓"), systemImage: "dot.radiowaves.left.and.right") }
+                Divider()
+            }
+            Section("用这台 Mac 录") {
+                ForEach(BeanStore.MacSource.allCases) { source in
+                    let on = (store.link != .ready || store.preferMac) && store.macSource == source
+                    Button { store.macSource = source; store.preferMac = true } label: {
+                        Label(source.name + (on ? "　✓" : ""), systemImage: source.icon)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: store.sourceIcon)
+                Text(store.sourceName).lineLimit(1)
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
+            }
+            .font(.caption).foregroundStyle(.secondary)
+        }
+        .menuStyle(.button).buttonStyle(.plain).fixedSize()
+        .help("声音从哪来。点一下可以换")
+        .accessibilityLabel("声音来源").accessibilityValue(store.sourceName)
     }
 }
 
@@ -555,8 +628,7 @@ struct RecordingsView: View {
                     VStack(spacing: 14) {
                         MascotView(mood: .idle, power: store.mascotPower).frame(width: 130, height: 130).accessibilityHidden(true)
                         Text("录下第一段").font(.title2.bold())
-                        Text("录完会自动转成文字，再整理成摘要、待办和重点。").foregroundStyle(.secondary)
-                        RecordControls(size: .extraLarge).padding(.top, 4)
+                        Text("点左上角的「开始录音」。录完会自动转成文字，再整理成摘要、待办和重点。").foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -571,7 +643,6 @@ struct RecordingsView: View {
         .onChange(of: nav.route) { if nav.route == .starred { nav.route = .all; quick = .starred } }
         .toolbar {
             ToolbarItemGroup {
-                RecordButton()
                 Picker("场景", selection: Binding(get: { () -> Scene? in if case .scene(let s) = nav.route { return s }; return nil },
                                                  set: { nav.route = $0.map { .scene($0) } ?? .all })) {
                     Text("全部场景").tag(Scene?.none)
@@ -1455,11 +1526,8 @@ struct DeviceView: View {
                         Circle().fill(Theme.ok).frame(width: 9, height: 9)
                         Text(store.recState == .recording ? "已连接 · 正在录音" : store.inCase ? "已连接 · 正在充电盒里充电" : "已连接").font(.title3).foregroundStyle(.secondary)
                     }
-                    HStack(spacing: 10) {
-                        if store.info != nil { RecordControls(size: .extraLarge) }
-                        Button("断开连接") { store.disconnect() }.buttonStyle(.glass).controlSize(.extraLarge)
-                    }
-                    .padding(.top, 10)
+                    Button("断开连接") { store.disconnect() }.buttonStyle(.glass).controlSize(.large)
+                        .padding(.top, 10)
                 }
             }
             .frame(maxWidth: .infinity)

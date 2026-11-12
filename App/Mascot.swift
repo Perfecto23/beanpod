@@ -30,7 +30,7 @@ enum MascotPower: Equatable {
     }
 }
 
-struct MascotView: NSViewRepresentable {
+struct Mascot3DView: NSViewRepresentable {
     var mood: MascotMood
     var power: MascotPower = .unknown
     /// 现在的音量（0…1）。给了它，耳机的灯就跟着声音亮暗，不再按固定节奏呼吸。

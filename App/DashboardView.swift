@@ -339,11 +339,6 @@ struct Hero: View {
                 Text(line).font(.title2).foregroundStyle(.secondary)
                     .contentTransition(.opacity).animation(.easeInOut(duration: 0.3), value: line)
                     .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 10) {
-                    RecordControls(size: .extraLarge)
-                    if store.recState == .idle { SourceMenu() }
-                }
-                .padding(.top, 10)
                 HStack(spacing: 8) {
                     if store.link != .ready {
                         Button { nav.route = .device } label: { Label("连接录音豆", systemImage: "antenna.radiowaves.left.and.right").fixedSize() }
@@ -353,7 +348,8 @@ struct Hero: View {
                         Button { nav.route = .knowledge } label: { Label("问问知识库", systemImage: "sparkles").fixedSize() }
                     }
                 }
-                .buttonStyle(.glass).controlSize(.regular)
+                .buttonStyle(.glass).controlSize(.large)
+                .padding(.top, 10)
             }
             Spacer(minLength: 0)
         }
