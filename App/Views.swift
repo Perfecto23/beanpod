@@ -1104,6 +1104,8 @@ struct RecordDock: View {
 /// 把录音改写成别的东西：口播稿、文章、邮件，或者自己写要求。
 struct RewriteView: View {
     @Environment(BeanStore.self) private var store
+    @Environment(VideoMaker.self) private var maker
+    @State private var makingVideo = false
     let recording: Recording
     @State private var template: RewriteTemplate = .voiceover
     @State private var extra = ""
@@ -1136,12 +1138,38 @@ struct RewriteView: View {
                     }
                 }
             }
+            // 用这条录音做出来的视频
+            ForEach(recording.videos) { clip in
+                let url = store.folder.appendingPathComponent(clip.file)
+                HStack(spacing: 12) {
+                    Image(systemName: "play.rectangle.fill").font(.title2).foregroundStyle(Theme.amber)
+                        .frame(width: 44, height: 44).background(Theme.amber.opacity(0.14), in: .rect(cornerRadius: 11))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("数字人口播 · \(clip.host)").font(.body.weight(.semibold))
+                        Text(clip.date.formatted(date: .abbreviated, time: .shortened) + (clip.seconds > 0 ? " · 约 \(clip.seconds) 秒" : "") + " · \(clip.credits) 积分")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("打开") { NSWorkspace.shared.open(url) }.buttonStyle(.glassProminent)
+                    Button("在访达中显示", systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }.labelStyle(.iconOnly).buttonStyle(.borderless)
+                    Button("删除", systemImage: "trash") { store.deleteVideo(recording.id, clip.id) }.labelStyle(.iconOnly).buttonStyle(.borderless)
+                        .help("把这条视频移到废纸篓")
+                }
+                .padding(14).panel(radius: 14)
+            }
             ForEach(recording.rewrites) { item in
                 Card {
                     HStack {
                         Text(item.name).font(.headline)
                         Text(item.date.formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                         Spacer()
+                        Button {
+                            makingVideo = true
+                            Task { await maker.prepare(text: item.text, recording: recording.id, title: recording.displayTitle) }
+                        } label: { Label("做成视频", systemImage: "play.rectangle.on.rectangle") }
+                            .buttonStyle(.glass).tint(Theme.amber)
+                            .disabled(maker.phase == .running || maker.phase == .joining)
+                            .help("用 Renoise 把这篇稿子做成数字人口播。会先报价，确认了才开始")
                         Button("拷贝", systemImage: "doc.on.doc") { copy(item.text); store.toast("doc.on.doc", "已拷贝") }
                             .labelStyle(.iconOnly).buttonStyle(.borderless)
                         Button("删除", systemImage: "trash") { store.deleteRewrite(recording.id, item.id) }
@@ -1150,11 +1178,21 @@ struct RewriteView: View {
                     MarkdownView(text: item.text)
                 }
             }
+            if maker.recording == recording.id, maker.phase == .running || maker.phase == .joining {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("正在做视频，做好 \(maker.done) / \(maker.segments.count) 段…").foregroundStyle(.secondary)
+                    Spacer()
+                    Button("看进度") { makingVideo = true }
+                }
+                .padding(12).panel(radius: 12)
+            }
             if recording.rewrites.isEmpty {
                 Text("改写会按你在设置里选的职业来把握语气。结果由模型生成，发出去之前请自己过一遍。")
                     .font(.caption).foregroundStyle(.tertiary)
             }
         }
+        .sheet(isPresented: $makingVideo) { VideoSheet() }
     }
 }
 

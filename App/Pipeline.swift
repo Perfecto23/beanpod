@@ -726,6 +726,19 @@ extension BeanStore {
         }
     }
 
+    func addVideo(_ id: UInt32, file: String, host: String, seconds: Int, credits: Int) {
+        guard let i = index(id) else { return }
+        recordings[i].videos.insert(VideoClip(file: file, host: host, seconds: seconds, credits: credits), at: 0)
+        saveLibrary()
+    }
+
+    func deleteVideo(_ id: UInt32, _ video: UUID) {
+        guard let i = index(id), let n = recordings[i].videos.firstIndex(where: { $0.id == video }) else { return }
+        try? FileManager.default.trashItem(at: folder.appendingPathComponent(recordings[i].videos[n].file), resultingItemURL: nil)
+        recordings[i].videos.remove(at: n)
+        saveLibrary()
+    }
+
     func deleteRewrite(_ id: UInt32, _ rewrite: UUID) {
         guard let i = recordings.firstIndex(where: { $0.id == id }) else { return }
         recordings[i].rewrites.removeAll { $0.id == rewrite }

@@ -192,6 +192,16 @@ nonisolated struct Rewrite: Codable, Equatable, Identifiable {
     var date = Date()
 }
 
+/// 用这条录音的稿子做出来的视频。文件和录音放在同一个文件夹里。
+nonisolated struct VideoClip: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var file: String
+    var host: String
+    var seconds: Int
+    var credits: Int
+    var date = Date()
+}
+
 nonisolated enum RewriteTemplate: String, CaseIterable, Identifiable {
     case voiceover, shortVideo, thread, article, email, custom
     var id: String { rawValue }
@@ -268,6 +278,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
     var textOnly = false
     /// 重点标记：录音时在录音豆上按过标记键、或在豆仓里点过「标重点」的时刻（秒）。
     var marks: [TimeInterval] = []
+    var videos: [VideoClip] = []
 
     var displayTitle: String {
         if let title, !title.isEmpty { return title }
@@ -284,7 +295,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
 
     private enum CodingKeys: String, CodingKey {
         case id, size, date, duration, title, titleEdited, downloaded, onDevice, transcript, segments, transcribedBy, speakers, rewrites
-        case scene, sceneLocked, summary, sections, todos, tags, people, analyzedBy, starred, origin, textOnly, marks
+        case scene, sceneLocked, summary, sections, todos, tags, people, analyzedBy, starred, origin, textOnly, marks, videos
     }
 
     /// 每个字段都容错读取：以后加字段，旧的记录文件照样能打开。
@@ -315,6 +326,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
         origin = try c.decodeIfPresent(String.self, forKey: .origin)
         textOnly = try c.decodeIfPresent(Bool.self, forKey: .textOnly) ?? false
         marks = (try? c.decodeIfPresent([TimeInterval].self, forKey: .marks)) ?? []
+        videos = (try? c.decodeIfPresent([VideoClip].self, forKey: .videos)) ?? []
     }
 }
 

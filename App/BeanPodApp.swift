@@ -6,12 +6,13 @@ struct BeanPodApp: App {
     @State private var nav = Navigator()
     @State private var dictation = Dictation()
     @State private var connector = Connector()
+    @State private var maker = VideoMaker()
     @Environment(\.openWindow) private var openWindow
 
     var body: some SwiftUI.Scene {
         Window("豆仓", id: "main") {
             RootView()
-                .environment(store).environment(nav).environment(dictation).environment(connector)
+                .environment(store).environment(nav).environment(dictation).environment(connector).environment(maker)
                 .task { dictation.attach(store) }
                 .frame(minWidth: 980, minHeight: 600)
                 .containerBackground(.clear, for: .window)
