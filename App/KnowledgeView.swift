@@ -5,60 +5,54 @@ struct KnowledgeView: View {
     @Environment(BeanStore.self) private var store
     @Environment(Navigator.self) private var nav
     @State private var query = ""
-    @State private var tag: String?
-    @State private var scene: Scene?
     @State private var question = ""
     @State private var filter = BeanStore.SearchFilter()
 
-    private var items: [BeanStore.KnowledgeItem] {
-        store.knowledge.filter { (tag == nil || $0.tags.contains(tag!)) && (scene == nil || $0.scene == scene) }
+    /// 上一个问的是什么，显示在回答上面。
+    @State private var asked = ""
+
+    private var searching: Bool { !query.isEmpty || !filter.isEmpty }
+
+    /// 几个现成的问题：按这个人自己的录音来出，点一下就问。
+    private var suggestions: [String] {
+        var out = ["最近这几天我都聊了什么？", "我还有哪些答应了别人、还没做的事？"]
+        if let tag = store.allTags.first?.tag { out.append("关于「\(tag)」都说过什么？") }
+        if let person = store.allPeople.first { out.append("和\(person)聊过哪些事？") }
+        out.append("有哪些想法还没落实？")
+        return out
     }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 18) {
                 askBox
 
-                if !query.isEmpty || !filter.isEmpty {
-                    searchFilters
-                    results
-                } else if store.knowledge.isEmpty {
-                    ContentUnavailableView("知识库还是空的", systemImage: "books.vertical",
-                                           description: Text("录音转写整理之后，里面的要点会自动汇总到这里，不用手动添加。"))
-                        .padding(.top, 40)
-                } else {
-                    searchFilters
-                    filters
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(items) { item in
-                            Button { nav.open(item.recordingID) } label: {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(item.text).lineSpacing(3).multilineTextAlignment(.leading)
-                                    HStack(spacing: 8) {
-                                        ScenePill(scene: item.scene)
-                                        Text(item.heading).font(.caption).foregroundStyle(.secondary)
-                                        Text("·").foregroundStyle(.tertiary)
-                                        Text(item.title + (item.date.map { "  " + $0.formatted(.dateTime.month().day()) } ?? ""))
-                                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                    }
+                if store.recordings.contains(where: \.isAnalyzed) {
+                    // 找东西的两条路：按条件收窄，或者点一个话题
+                    VStack(alignment: .leading, spacing: 10) {
+                        searchFilters
+                        if !searching {
+                            FlowLayout(spacing: 6) {
+                                ForEach(store.allTags.prefix(18), id: \.tag) { item in
+                                    chip("# \(item.tag)  \(item.count)", selected: false) { query = item.tag }
                                 }
-                                .padding(12)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .panel(radius: 14)
-                                .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
                         }
                     }
+                    if searching { results } else { digest }
+                } else {
+                    ContentUnavailableView("知识库还是空的", systemImage: "books.vertical",
+                                           description: Text("录音转写整理之后会自动进到这里，不用手动添加。到时候直接问就行。"))
+                        .padding(.top, 40)
                 }
             }
             .padding(20)
-            .frame(maxWidth: 820, alignment: .leading)
+            .frame(maxWidth: 780, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
         .navigationTitle("知识库")
-        .navigationSubtitle(store.knowledge.isEmpty ? "" : "\(store.knowledge.count) 条要点，来自 \(store.recordings.filter(\.isAnalyzed).count) 条录音")
-        .searchable(text: $query, prompt: "搜索标题、要点和文字稿")
+        .navigationSubtitle(store.recordings.contains(where: \.isAnalyzed) ? "来自 \(store.recordings.filter(\.isAnalyzed).count) 条录音" : "")
+        .searchable(text: $query, prompt: "找原话：搜标题、要点和文字稿")
         .toolbar {
             Button("导出 Markdown", systemImage: "square.and.arrow.up") { store.exportMarkdown(store.recordings.filter(\.isAnalyzed)) }
                 .disabled(!store.recordings.contains(where: \.isAnalyzed))
@@ -66,39 +60,141 @@ struct KnowledgeView: View {
         }
     }
 
+    private func submit(_ q: String) {
+        let q = q.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty, store.analysisAvailable, !store.asking else { return }
+        asked = q
+        question = ""
+        store.ask(q)
+    }
+
+    /// 页面的主角：一个提问框。问了之后，回答和依据就出在它下面。
     @ViewBuilder private var askBox: some View {
-        Card {
-            HStack {
-                Image(systemName: "sparkles").foregroundStyle(Theme.amber)
-                TextField("问问你的录音，比如「上周和王总谈的价格是多少」", text: $question)
-                    .textFieldStyle(.plain)
-                    .onSubmit { store.ask(question) }
+        VStack(alignment: .leading, spacing: 14) {
+            Text("问问你的录音").font(.system(size: 26, weight: .semibold, design: .rounded))
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles").font(.title3).foregroundStyle(Theme.amber)
+                TextField("比如「上周和王总谈的价格是多少」", text: $question, axis: .vertical)
+                    .textFieldStyle(.plain).font(.title3).lineLimit(1...4)
+                    .onSubmit { submit(question) }
                     .disabled(!store.analysisAvailable)
                 if store.asking { ProgressView().controlSize(.small) }
-                else { Button("提问") { store.ask(question) }.disabled(question.isEmpty || !store.analysisAvailable) }
+                Button { submit(question) } label: { Image(systemName: "arrow.up").fontWeight(.bold).frame(width: 18, height: 18) }
+                    .buttonStyle(.glassProminent).controlSize(.large)
+                    .disabled(question.trimmingCharacters(in: .whitespaces).isEmpty || !store.analysisAvailable || store.asking)
+                    .help("提问（回车）").accessibilityLabel("提问")
             }
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .panel(radius: 18)
+
             if !store.analysisAvailable {
                 HStack {
                     Text("提问需要先设置分析模型。").font(.callout).foregroundStyle(.secondary)
                     SettingsLink { Text("去设置") }
                 }
+            } else if store.answer == nil, !store.asking {
+                // 还没问过：给几个现成的问题，点一下就问
+                FlowLayout(spacing: 6) {
+                    ForEach(suggestions, id: \.self) { q in
+                        Button { submit(q) } label: {
+                            Text(q).font(.callout).padding(.horizontal, 12).padding(.vertical, 6)
+                                .background(Theme.amber.opacity(0.12), in: .capsule)
+                                .overlay(Capsule().strokeBorder(Theme.amber.opacity(0.35), lineWidth: 0.5))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
-            if let answer = store.answer {
-                Divider()
-                MarkdownView(text: answer)
-                if !store.answerSources.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("依据").font(.caption).foregroundStyle(.secondary)
-                        ForEach(Array(store.answerSources.enumerated()), id: \.offset) { n, id in
-                            if let r = store.recordings.first(where: { $0.id == id }) {
-                                Button("[\(n + 1)] \(r.displayTitle)") { nav.open(id) }.buttonStyle(.plain).foregroundStyle(Theme.amber).font(.callout)
+
+            if store.asking || store.answer != nil {
+                VStack(alignment: .leading, spacing: 12) {
+                    if !asked.isEmpty { Text(asked).font(.headline) }
+                    if store.asking {
+                        HStack(spacing: 8) { ProgressView().controlSize(.small); Text("正在翻你的录音…").foregroundStyle(.secondary) }
+                    } else if let answer = store.answer {
+                        MarkdownView(text: answer)
+                        if !store.answerSources.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("依据这几条录音").font(.caption).foregroundStyle(.secondary)
+                                FlowLayout(spacing: 6) {
+                                    ForEach(Array(store.answerSources.enumerated()), id: \.offset) { _, id in
+                                        if let r = store.recordings.first(where: { $0.id == id }) {
+                                            Button { nav.open(id) } label: {
+                                                Label(r.displayTitle, systemImage: (r.scene ?? .other).icon).font(.callout).lineLimit(1)
+                                                    .padding(.horizontal, 10).padding(.vertical, 5)
+                                                    .background(.quaternary.opacity(0.6), in: .capsule)
+                                            }
+                                            .buttonStyle(.plain).help("打开这条录音")
+                                        }
+                                    }
+                                }
                             }
+                        }
+                        HStack {
+                            Text("回答由模型根据上面的录音生成，可能有错，请点开原录音核实。").font(.caption).foregroundStyle(.tertiary)
+                            Spacer()
+                            Button("拷贝") { copy(answer); store.toast("doc.on.doc", "已拷贝") }.buttonStyle(.plain).foregroundStyle(Theme.amber).font(.callout)
+                            Button("清掉") { store.answer = nil; store.answerSources = []; asked = "" }.buttonStyle(.plain).foregroundStyle(.secondary).font(.callout)
                         }
                     }
                 }
-                Text("回答由模型根据上面的录音生成，可能有错，请点开原录音核实。").font(.caption).foregroundStyle(.tertiary)
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .panel(radius: 16)
             }
         }
+    }
+
+    /// 没在找东西的时候：按录音一条一条摆，每条是它的摘要，不是拆碎的要点。
+    @ViewBuilder private var digest: some View {
+        Text("最近整理好的").font(.headline).padding(.top, 4)
+        LazyVStack(spacing: 10) {
+            ForEach(store.recordings.filter(\.isAnalyzed).prefix(12)) { r in
+                recordingCard(r, snippets: [])
+            }
+        }
+    }
+
+    /// 一条录音一张卡：标题、时间、摘要；搜索时再带上命中的那几句原话。
+    private func recordingCard(_ r: Recording, snippets: [BeanStore.SearchHit]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button { nav.open(r.id) } label: {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: (r.scene ?? .other).icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.amber)
+                        .frame(width: 30, height: 30).background(Theme.amber.opacity(0.14), in: .rect(cornerRadius: 8))
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack {
+                            Text(r.displayTitle).font(.body.weight(.semibold)).lineLimit(1)
+                            Spacer()
+                            Text((r.date.map { $0.formatted(.dateTime.month().day().hour().minute()) + " · " } ?? "") + clock(r.duration))
+                                .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
+                        }
+                        if let s = r.summary { Text(s).font(.callout).foregroundStyle(.secondary).lineLimit(2).multilineTextAlignment(.leading) }
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            ForEach(snippets.prefix(3)) { hit in
+                Button {
+                    nav.open(hit.recordingID)
+                    if let t = hit.time { store.play(hit.recordingID, at: t) }
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        if let t = hit.time { Text(clock(t)).font(.caption.monospacedDigit()).foregroundStyle(Theme.amber).frame(width: 40, alignment: .trailing) }
+                        else { Image(systemName: "text.quote").font(.caption).foregroundStyle(.tertiary).frame(width: 40, alignment: .trailing) }
+                        Text(hit.snippet).font(.callout).multilineTextAlignment(.leading).lineLimit(2)
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).help(hit.time == nil ? "打开这条录音" : "从这一句开始听")
+            }
+            if snippets.count > 3 { Text("这条里还有 \(snippets.count - 3) 处").font(.caption).foregroundStyle(.tertiary).padding(.leading, 48) }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .panel(radius: 14)
     }
 
     /// 搜索时的收窄条件：时间、场景、人物。
@@ -126,18 +222,6 @@ struct KnowledgeView: View {
         .labelsHidden().fixedSize(horizontal: false, vertical: true)
     }
 
-    private var filters: some View {
-        FlowLayout(spacing: 6) {
-            chip("全部", selected: tag == nil && scene == nil) { tag = nil; scene = nil }
-            ForEach(Scene.allCases.filter { s in store.knowledge.contains { $0.scene == s } }) { s in
-                chip(s.name, selected: scene == s) { scene = scene == s ? nil : s }
-            }
-            ForEach(store.allTags.prefix(16), id: \.tag) { item in
-                chip("# \(item.tag)", selected: tag == item.tag) { tag = tag == item.tag ? nil : item.tag }
-            }
-        }
-    }
-
     private func chip(_ text: String, selected: Bool, color: Color = Theme.amber, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(text).font(.callout)
@@ -148,28 +232,29 @@ struct KnowledgeView: View {
         .buttonStyle(.plain)
     }
 
+    /// 搜索结果：命中的句子按录音归到一起，一条录音一张卡。
     @ViewBuilder private var results: some View {
         let hits = store.search(query, filter: filter)
         if hits.isEmpty {
-            ContentUnavailableView("没有符合条件的录音", systemImage: "magnifyingglass", description: Text("换个关键词，或者放宽时间、场景、人物的筛选。"))
-        }
-        ForEach(hits.prefix(80)) { hit in
-            Button {
-                nav.open(hit.recordingID)
-                if let t = hit.time { store.play(hit.recordingID, at: t) }
-            } label: {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(hit.snippet).multilineTextAlignment(.leading)
-                    HStack(spacing: 8) {
-                        ScenePill(scene: hit.scene)
-                        Text(hit.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        if let t = hit.time { Label(clock(t), systemImage: "play.fill").font(.caption).foregroundStyle(Theme.amber) }
+            ContentUnavailableView("没有符合条件的录音", systemImage: "magnifyingglass", description: Text("换个关键词，或者放宽时间、场景、人物的筛选。也可以直接在上面提问。"))
+        } else {
+            let order = hits.reduce(into: [UInt32]()) { if !$0.contains($1.recordingID) { $0.append($1.recordingID) } }
+            HStack {
+                Text(query.isEmpty ? "符合条件的 \(order.count) 条录音" : "「\(query)」出现在 \(order.count) 条录音里").font(.headline)
+                Spacer()
+                if !query.isEmpty, store.analysisAvailable {
+                    Button("让 AI 总结这些") { submit("关于「\(query)」都说过什么？") }.buttonStyle(.plain).foregroundStyle(Theme.amber)
+                }
+                if !query.isEmpty { Button("清除") { query = "" }.buttonStyle(.plain).foregroundStyle(.secondary) }
+            }
+            .padding(.top, 4)
+            LazyVStack(spacing: 10) {
+                ForEach(order.prefix(30), id: \.self) { id in
+                    if let r = store.recordings.first(where: { $0.id == id }) {
+                        recordingCard(r, snippets: query.isEmpty ? [] : hits.filter { $0.recordingID == id })
                     }
                 }
-                .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                .panel(radius: 14).contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
         }
     }
 }

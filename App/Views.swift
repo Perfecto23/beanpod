@@ -894,7 +894,7 @@ struct RecordDock: View {
     /// 没在录的时候，首页和录音页自己有开始按钮和播放条，就不再多摆一颗。
     private var hiddenWhenIdle: Bool {
         switch nav.route {
-        case .dashboard, .all, .starred, .scene: true
+        case .dashboard, .all, .starred, .scene, .knowledge: true
         default: false
         }
     }

@@ -393,15 +393,22 @@ extension BeanStore {
                         r.tags.joined(separator: " "), r.transcript ?? ""].joined(separator: " ")
             return (r, grams.reduce(0) { $0 + (body.contains($1) ? 1 : 0) })
         }.filter { $0.1 > 0 }.sorted { $0.1 > $1.1 }.prefix(6)
-        guard !ranked.isEmpty else { answer = "记录里没有找到和这个问题相关的内容。"; answerSources = []; return }
+        // 「最近聊了什么」「还有哪些没做的事」这类问题不带具体的词，按字面找不到：把最近的几条也带上
+        let general = ["最近", "这几天", "这周", "本周", "今天", "昨天", "哪些", "总结", "待办", "没做", "答应"].contains { q.contains($0) }
+        var picked = ranked.map(\.0)
+        if general || picked.isEmpty {
+            for r in recordings.filter(\.isAnalyzed).prefix(8) where !picked.contains(where: { $0.id == r.id }) && picked.count < 8 { picked.append(r) }
+        }
+        guard !picked.isEmpty else { answer = "记录里没有找到和这个问题相关的内容。"; answerSources = []; return }
 
         asking = true; answer = nil
-        let context = ranked.map { r, _ in
+        let context = picked.map { r in
             (title: r.displayTitle + (r.date.map { "（" + $0.formatted(date: .abbreviated, time: .omitted) + "）" } ?? ""),
              text: [r.summary ?? "", r.sections.map { "\($0.heading)：" + $0.items.joined(separator: "；") }.joined(separator: "\n"),
+                    r.todos.isEmpty ? "" : "待办：" + r.todos.map { ($0.done ? "（已完成）" : "（未完成）") + $0.text }.joined(separator: "；"),
                     String((r.transcript ?? "").prefix(1500))].joined(separator: "\n"))
         }
-        answerSources = ranked.map(\.0.id)
+        answerSources = picked.map(\.id)
         Task {
             defer { asking = false }
             do { answer = try await withLLM { config in try await Analyzer.answer(question: q, context: context, config: config) } }
