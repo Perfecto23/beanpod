@@ -536,7 +536,7 @@ struct DeviceChip: View {
         case .ready:
             if store.recState == .recording { return "录音中" }
             if store.recState == .paused { return "录音已暂停" }
-            return store.info.map { "已连接 • \($0.micBattery)%" } ?? "已连接"
+            return "已连接"
         case .connecting: return "正在连接…"
         case .scanning: return "正在搜索…"
         case .off: return "蓝牙未打开"
