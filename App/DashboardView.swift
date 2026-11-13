@@ -191,6 +191,7 @@ struct DashboardView: View {
                     HStack {
                         Label("录音豆里有 \(toDownload) 条录音还没下载", systemImage: "icloud.and.arrow.down")
                         Spacer()
+                        if store.wifiSyncWorthOffering { Button("Wi‑Fi 快传…") { nav.confirmWiFiSync = true } }
                         Button("全部下载") { store.downloadAll() }.disabled(store.pull != nil || !store.encryptionReady)
                     }
                 }
@@ -292,6 +293,7 @@ struct Hero: View {
             if case .transcribing = stage { return .writing }
             return .thinking
         }
+        if store.wifi != nil { return .writing }
         if store.link != .ready { return .sleeping }
         return .idle
     }
@@ -307,6 +309,8 @@ struct Hero: View {
 
     private var line: String {
         if store.isRecording { return store.recordingOnMac ? "在听，录的是这台 Mac 的\(store.macSource.name)。" : "在听，你说。" }
+        // Wi‑Fi 快传时蓝牙是自己主动断开的，别说「没连上」
+        if store.wifi != nil { return "正在用 Wi‑Fi 把录音搬回来，这一分钟电脑上不了网，马上就好。" }
         if store.link != .ready, store.stages.isEmpty, store.recState == .idle { return "录音豆没连上。把它拿出来我就醒；想现在就录，用这台 Mac 也行。" }
         if store.recState == .paused { return "先歇一下。想接着录就点继续，录完了点结束。" }
         if cheering, store.stages.isEmpty { return "连上啦，随时可以开始。" }
@@ -340,7 +344,7 @@ struct Hero: View {
                     .contentTransition(.opacity).animation(.easeInOut(duration: 0.3), value: line)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
-                    if store.link != .ready {
+                    if store.link != .ready, store.wifi == nil {
                         Button { nav.route = .device } label: { Label("连接录音豆", systemImage: "antenna.radiowaves.left.and.right").fixedSize() }
                     }
                     Button { store.chooseFilesToImport() } label: { Label("导入录音", systemImage: "square.and.arrow.down").fixedSize() }

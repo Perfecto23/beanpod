@@ -94,6 +94,11 @@ func le32(_ v: UInt32) -> [UInt8] {
     [UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF), UInt8((v >> 16) & 0xFF), UInt8((v >> 24) & 0xFF)]
 }
 
+public extension Array where Element == UInt8 {
+    /// 从第 offset 个字节起读一个小端的 32 位数。
+    func u32le(_ offset: Int) -> UInt32 { u32(offset) }
+}
+
 public extension Sequence where Element == UInt8 {
     var hex: String { map { String(format: "%02X", $0) }.joined(separator: " ") }
 }

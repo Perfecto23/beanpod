@@ -63,6 +63,9 @@ struct BeanPodApp: App {
                     .disabled(chosen?.downloaded != true || store.recState != .idle)
                 Button("从录音豆删除选中的录音…") { nav.confirmDeviceDelete = true }
                     .disabled(chosen?.onDevice != true || store.link != .ready || store.recState != .idle)
+                Divider()
+                Button("用 Wi‑Fi 快传还没下载的录音…") { nav.confirmWiFiSync = true }
+                    .disabled(!store.canWiFiSync)
             }
             CommandMenu("回听") {
                 let current = nav.selection ?? store.playingID
@@ -96,9 +99,6 @@ struct BeanPodApp: App {
                     .keyboardShortcut("d", modifiers: [.command, .shift])
             }
             CommandMenu("小豆") {
-                Button("Wi‑Fi 快传试验（电脑会断网约一分钟）") { store.startWifiTrial() }
-                    .disabled(store.link != .ready || store.wifiTrialRunning)
-                Divider()
                 Button("跟着真实状态") { store.mascotPreview = nil }
                 Divider()
                 Button("看看：待命") { store.mascotPreview = (.idle, .mid) }

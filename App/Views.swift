@@ -17,6 +17,7 @@ final class Navigator {
     var welcomeOpen = false
     /// 正在问「真的要删吗」。放在这里，工具栏按钮和菜单栏命令都能触发同一个确认框。
     var confirmDeviceDelete = false
+    var confirmWiFiSync = false
     var confirmLocalDelete = false
 
     func open(_ id: UInt32) { route = .all; selection = id }
@@ -69,6 +70,33 @@ struct RootView: View {
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.banner)
+        .overlay(alignment: .top) {
+            // Wi‑Fi 快传期间一直挂着：这一分钟电脑不在原来的网络上，得让人随时知道进行到哪了
+            if let wifi = store.wifi {
+                HStack(spacing: 10) {
+                    Image(systemName: "wifi").foregroundStyle(Theme.amber).symbolEffect(.variableColor.iterative, options: .repeating)
+                    Text(wifi.text).font(.callout.weight(.medium)).monospacedDigit()
+                    if wifi.phase == .transferring, let pull = store.pull {
+                        ProgressView(value: pull.fraction).frame(width: 90).tint(Theme.amber)
+                        Text("\(Int(pull.fraction * 100))%").font(.callout).monospacedDigit().foregroundStyle(.secondary)
+                    } else {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .glassEffect(.regular, in: .capsule)
+                .padding(.top, store.banner == nil ? 10 : 56)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: store.wifi?.phase)
+        .alert("用 Wi‑Fi 快传？", isPresented: Bindable(nav).confirmWiFiSync) {
+            Button("开始快传") { store.startWiFiSync() }
+            Button("还是用蓝牙", role: .cancel) {}
+        } message: {
+            Text(store.wifiSyncEstimate + "\n\n快传时这台 Mac 会离开现在的 Wi‑Fi、连到录音豆上，大约一分钟上不了网，传完自动连回来。")
+        }
         .alert(store.problem?.title ?? "", isPresented: Binding(get: { store.problem != nil }, set: { if !$0 { store.problem = nil } }), presenting: store.problem) { p in
             if let action = p.action {
                 Button(action.label) {
@@ -354,6 +382,7 @@ struct DeviceChip: View {
     }
 
     private var status: String {
+        if store.wifi != nil { return "Wi‑Fi 快传中" }
         switch store.link {
         case .ready:
             if store.recState == .recording { return "录音中" }
@@ -368,6 +397,7 @@ struct DeviceChip: View {
     }
 
     private var statusColor: Color {
+        if store.wifi != nil { return Theme.amber }
         if store.link == .ready { return store.info?.recording == true ? Theme.rec : Theme.ok }
         return .secondary.opacity(0.5)
     }
@@ -651,7 +681,13 @@ struct RecordingsView: View {
                     }
                 }
                 .help("按场景筛选")
-                if store.pull != nil || !store.queue.isEmpty {
+                if store.wifiSyncWorthOffering {
+                    Button("Wi‑Fi 快传", systemImage: "wifi") { nav.confirmWiFiSync = true }
+                        .help("让录音豆开一个 Wi‑Fi，把长录音一口气拉下来，比蓝牙快十倍左右")
+                }
+                if store.wifi != nil {
+                    // 快传自己会收尾，不给取消，免得网络停在半路
+                } else if store.pull != nil || !store.queue.isEmpty {
                     Button("取消下载", systemImage: "xmark.circle") { store.cancelDownloads() }
                 } else if store.recordings.contains(where: { $0.onDevice && !$0.downloaded && !$0.inProgress }) {
                     // 只有录音豆里真有没下载的，才摆出这个按钮
@@ -727,7 +763,7 @@ struct RecordingRow: View {
             Image(systemName: "record.circle").foregroundStyle(Theme.rec).help("正在录音")
         } else if let pull = store.pull, pull.id == recording.id {
             ProgressView(value: pull.fraction).progressViewStyle(.circular).controlSize(.small)
-        } else if store.queue.contains(recording.id) {
+        } else if store.isQueued(recording.id) {
             Image(systemName: "clock").foregroundStyle(.secondary).help("排队下载")
         } else if let stage = store.stages[recording.id] {
             StageBadge(stage: stage)
@@ -903,10 +939,17 @@ struct RecordingDetail: View {
             if recording.inProgress {
                 Label("这条还在录。暂停录音后才能下载完整的。", systemImage: "record.circle").foregroundStyle(.secondary)
             } else if let pull = store.pull, pull.id == recording.id {
-                ProgressView(value: pull.fraction) { Text("正在通过蓝牙下载 \(Int(pull.fraction * 100))%") }
-                Text("蓝牙比较慢，长录音要等几分钟。期间请让录音豆留在电脑旁边。").font(.callout).foregroundStyle(.secondary)
-                Button("取消") { store.cancelDownloads() }
-            } else if store.queue.contains(recording.id) {
+                if store.wifi != nil {
+                    ProgressView(value: pull.fraction) { Text("正在通过 Wi‑Fi 快传 \(Int(pull.fraction * 100))%") }
+                } else {
+                    ProgressView(value: pull.fraction) { Text("正在通过蓝牙下载 \(Int(pull.fraction * 100))%") }
+                    Text("蓝牙比较慢，长录音要等几分钟。期间请让录音豆留在电脑旁边。").font(.callout).foregroundStyle(.secondary)
+                    HStack {
+                        Button("取消") { store.cancelDownloads() }
+                        if store.wifiSyncWorthOffering { Button("改用 Wi‑Fi 快传…") { nav.confirmWiFiSync = true } }
+                    }
+                }
+            } else if store.isQueued(recording.id) {
                 Label("排队中，等前面的下载完", systemImage: "clock").foregroundStyle(.secondary)
             } else {
                 Text("这条录音还在录音豆里。下载后会自动转写并整理。").foregroundStyle(.secondary)
@@ -1458,6 +1501,7 @@ struct SegmentEditor: View {
 
 struct DeviceView: View {
     @Environment(BeanStore.self) private var store
+    @Environment(Navigator.self) private var nav
     @Environment(\.openWindow) private var openWindow
     @State private var justPaired = false
 
@@ -1603,6 +1647,7 @@ struct DeviceView: View {
                         HStack {
                             Text("有 \(waiting) 条录音还在录音豆里。").foregroundStyle(.secondary)
                             Spacer()
+                            if store.wifiSyncWorthOffering { Button("Wi‑Fi 快传…") { nav.confirmWiFiSync = true } }
                             Button("全部下载") { store.downloadAll() }.disabled(store.pull != nil || !store.encryptionReady)
                         }
                     }

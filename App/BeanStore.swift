@@ -18,9 +18,11 @@ final class BeanStore {
     /// 设备上有一条开着的录音（正在录，或暂停着还没结束）。
     var sessionOpen = false
     @ObservationIgnored var pullWhenListed = false
-    /// Wi‑Fi 快传试验用：录音豆对「开热点」命令的回包，以及试验是否在跑。
+    /// Wi‑Fi 快传：正在进行的那一次（没有就是 nil），以及录音豆对「开热点」命令的回包。
+    var wifi: WiFiSync?
     @ObservationIgnored var wifiReply: Packet?
-    var wifiTrialRunning = false
+    /// 快传没传完的，等蓝牙连回来后接着用蓝牙下。
+    @ObservationIgnored var wifiFallback = false
     /// 刚连上录音豆，还没把「在外面录的」同步下来。列表和密钥都到位后才动手。
     @ObservationIgnored var syncOnConnect = false
 
@@ -253,11 +255,21 @@ final class BeanStore {
     }
     func stopScan() { ble.stopScan() }
 
-    // Wi‑Fi 快传试验要用到的几样（见 WiFiTrial.swift）
+    // Wi‑Fi 快传要用到的几样（见 WiFiSync.swift）
     var sessionCrypto: CryptoSession { crypto }
-    var transferBusy: Bool { job != nil || !queue.isEmpty || loadingList }
     func dropBLEForWiFi() { autoConnectAllowed = false; ble.disconnect(forget: false) }
     func resumeBLEAfterWiFi() { autoConnectAllowed = true; ble.reconnect() }
+    /// 停下正在进行的蓝牙下载，并告诉录音豆别再传了。返回刚才是不是真有一条在传。
+    func haltBLEDownloads() -> Bool {
+        let active = job != nil
+        cancelDownloads()
+        if active { ble.send(Command.stopTransfer()) }
+        return active
+    }
+    /// 这条录音是不是在排队等下载（蓝牙的队列，或者这一次快传里还没轮到的）。
+    func isQueued(_ id: UInt32) -> Bool {
+        queue.contains(id) || (wifi.map { $0.waiting.contains(id) } ?? false)
+    }
     func connect(_ device: FoundDevice) { deviceName = device.name; ble.connect(device.id) }
     func disconnect(forget: Bool = true) { autoConnectAllowed = false; ble.disconnect(forget: forget) }
     var waitingForKnownDevice: Bool { link == .connecting && ble.hasRememberedDevice }
@@ -266,20 +278,23 @@ final class BeanStore {
         let old = link
         link = new
         if new == .ready, old != .ready { toast("checkmark.circle.fill", "录音豆已连接"); NSSound(named: "Glass")?.play() }
-        if old == .ready, new != .ready { toast("wifi.slash", "录音豆已断开") }
+        if old == .ready, new != .ready, wifi == nil { toast("wifi.slash", "录音豆已断开") }
         poller?.cancel()
         guard new == .ready else {
             if let job { failPull(job.id, "连接断开，下载中断") }
             queue.removeAll()
             info = nil; encryptionReady = false; loadingList = false
             syncOnConnect = false
+            // Wi‑Fi 快传是自己主动断开蓝牙的：还没下载的那几条正要传，不能从列表里清掉
+            if wifi != nil { return }
             for i in recordings.indices { recordings[i].onDevice = false }
             recordings.removeAll { !$0.downloaded }
             return
         }
         if let name = ble.connectedName, !name.isEmpty { deviceName = name }
         crypto = CryptoSession()
-        syncOnConnect = settings.autoDownload
+        syncOnConnect = settings.autoDownload || wifiFallback
+        wifiFallback = false
         scratchTried = []
         currentDeviceFile = 0
         sessionOpen = false; elapsedBase = 0; recordingSince = nil
@@ -746,17 +761,26 @@ final class BeanStore {
             problem = Problem(title: "这条录音没传完整", detail: "蓝牙中途断了一下，只收到 \(j.expected > 0 ? j.data.count * 100 / j.expected : 0)%。录音还在录音豆里，没有丢。", action: .download(j.id))
             return
         }
-        let packets = OggOpus.frames(fromRaw: j.data.prefix(usable))
+        storeAudio(id: j.id, data: j.data, sliceMarks: j.marks)
+    }
+
+    /// 把收齐的音频存成文件、记进录音库。蓝牙下载和 Wi‑Fi 快传共用。
+    /// `processNow` 为 false 时先不转写整理（快传期间电脑不在原来的网络上，云端模型连不到）。
+    @discardableResult
+    func storeAudio(id: UInt32, data: Data, sliceMarks: Set<UInt32>, processNow: Bool = true) -> Bool {
+        let usable = data.count / OggOpus.frameSize * OggOpus.frameSize
+        guard usable > 0 else { return false }
+        let packets = OggOpus.frames(fromRaw: data.prefix(usable))
         do {
-            try OggOpus.mux(packets: packets).write(to: oggURL(j.id), options: .atomic)
-            let seconds = try OpusDecoder.writeWAV(packets: packets, to: wavURL(j.id))
-            if let i = recordings.firstIndex(where: { $0.id == j.id }) {
+            try OggOpus.mux(packets: packets).write(to: oggURL(id), options: .atomic)
+            let seconds = try OpusDecoder.writeWAV(packets: packets, to: wavURL(id))
+            if let i = recordings.firstIndex(where: { $0.id == id }) {
                 recordings[i].downloaded = true
                 recordings[i].duration = seconds
                 // 重点标记：设备上按的（切片里带着）加上在豆仓里点的
-                var marks = j.marks.map { Double($0) * 0.02 }
+                var marks = sliceMarks.map { Double($0) * 0.02 }
                 if let k = pendingMarks.firstIndex(where: { m in
-                    m.file == j.id || recordings[i].date.map { abs($0.timeIntervalSince(m.start)) < 15 } ?? false
+                    m.file == id || recordings[i].date.map { abs($0.timeIntervalSince(m.start)) < 15 } ?? false
                 }) {
                     marks += pendingMarks.remove(at: k).marks
                 }
@@ -764,12 +788,14 @@ final class BeanStore {
                 if !recordings[i].marks.isEmpty { addLog("这条录音有 \(recordings[i].marks.count) 个重点标记") }
             }
             saveLibrary()
-            if settings.autoProcess { process(j.id) }
+            if processNow, settings.autoProcess { process(id) }
+            return true
         } catch {
-            addLog("保存失败，清掉半成品文件 \(j.id)：\(error.localizedDescription)")
-            try? FileManager.default.removeItem(at: oggURL(j.id))
-            try? FileManager.default.removeItem(at: wavURL(j.id))
-            problem = Problem(title: "录音没能存到这台 Mac", detail: "\(error.localizedDescription)\n看看磁盘是不是满了。录音还在录音豆里，腾出空间后可以重新下载。", action: .download(j.id))
+            addLog("保存失败，清掉半成品文件 \(id)：\(error.localizedDescription)")
+            try? FileManager.default.removeItem(at: oggURL(id))
+            try? FileManager.default.removeItem(at: wavURL(id))
+            problem = Problem(title: "录音没能存到这台 Mac", detail: "\(error.localizedDescription)\n看看磁盘是不是满了。录音还在录音豆里，腾出空间后可以重新下载。", action: .download(id))
+            return false
         }
     }
 
