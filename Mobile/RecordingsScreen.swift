@@ -455,7 +455,10 @@ struct RecordingDetailScreen: View {
             }
             .pickerStyle(.menu)
             Text(template.instruction).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            TextField("补充要求（可不填）", text: $extra, axis: .vertical).textFieldStyle(.roundedBorder).lineLimit(1...3)
+            TextField("补充要求（可不填）", text: $extra, axis: .vertical).lineLimit(1...3)
+                .padding(.horizontal, 12).padding(.vertical, 9)
+                .background(Theme.warm100, in: .rect(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.warm200, lineWidth: 1))
             HStack {
                 Button { store.rewrite(id, template: template, extra: extra) } label: { Label("生成", systemImage: "sparkles") }
                     .buttonStyle(.borderedProminent)

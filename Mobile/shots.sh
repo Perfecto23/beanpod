@@ -9,7 +9,8 @@ mkdir -p build-ios/shots
 shot() {
   local name=$1; shift
   xcrun simctl terminate $U com.andyhu.beanpod.mobile >/dev/null 2>&1
-  xcrun simctl launch $U com.andyhu.beanpod.mobile "$@" >/dev/null
+  # SHOT_ARGS 可以给每一页加同样的启动参数，比如 SHOT_ARGS="-appearance dark" 截深色
+  xcrun simctl launch $U com.andyhu.beanpod.mobile "$@" ${=SHOT_ARGS} >/dev/null
   sleep ${WAIT:-4}
   xcrun simctl io $U screenshot "$PWD/build-ios/shots/$name.png" >/dev/null 2>&1
   sips -Z 900 "$PWD/build-ios/shots/$name.png" --out "$PWD/build-ios/shots/$name.png" >/dev/null

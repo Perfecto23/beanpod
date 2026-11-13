@@ -1428,7 +1428,7 @@ struct RecordingDetail: View {
     @ViewBuilder private var notDownloaded: some View {
         VStack(alignment: .leading, spacing: 12) {
             if recording.inProgress {
-                Label("这条还在录。暂停录音后才能下载完整的。", systemImage: "record.circle").foregroundStyle(.secondary)
+                Label("这条还在录。在录音豆上按一下停止，或者点「结束录音」；录完会自动下载、转成文字。", systemImage: "record.circle").foregroundStyle(.secondary)
             } else if let pull = store.pull, pull.id == recording.id {
                 if store.wifi != nil {
                     ProgressView(value: pull.fraction) { Text("正在通过 Wi‑Fi 快传 \(Int(pull.fraction * 100))%") }

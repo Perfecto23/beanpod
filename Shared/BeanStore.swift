@@ -458,6 +458,27 @@ final class BeanStore {
         }
     }
 
+    /// 在录音豆上按键停下了录音（不是豆仓让它停的）。
+    /// 以前只把状态改成「没在录」，列表里那条还挂着「正在录 · 还在录音豆里」，要手动刷新、手动下载。
+    /// 现在：收掉实时出字，按设置问一句留不留，然后重新列一遍、把它下载下来转写整理。
+    func deviceStopped(file: UInt32, finished: Bool, seconds: TimeInterval = 0) {
+        addLog("录音豆自己停止了录音（\(finished ? "结束" : "停下")）：\(file)")
+        liveFlush = true
+        if !liveMarks.isEmpty, let since = sessionStart {
+            pendingMarks.append((since, file, liveMarks))
+            liveMarks = []
+        }
+        Task { await endLiveTranscript() }
+        let ask = finished && settings.askKeep && file != 0 && !scratchFiles.contains(file)
+        if ask { offerKeep(id: file, seconds: seconds, from: displayDeviceName, onMac: false) }
+        else { syncOnConnect = syncOnConnect || settings.autoDownload; pullWhenListed = settings.autoDownload }
+        // 稍等一下再列：设备刚停下时，列表里那条的结束时间还没写好
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            if !loadingList, job == nil { refreshFiles() }
+        }
+    }
+
     /// 在现在这个时刻打一个重点标记。
     func markNow() {
         guard recState == .recording else { return }
@@ -537,10 +558,7 @@ final class BeanStore {
                 // 它刚才在录、现在停了，而且不是豆仓让它停的（豆仓点暂停或结束时会先把状态改掉，走不到这里）：
                 // 是在录音豆上按的键。让实时出字把最后一句收掉，再重新列一遍，该同步的拉下来
                 if wasRecording, !parsed.recording, macRec == .off {
-                    addLog("录音豆自己停止了录音")
-                    liveFlush = true
-                    syncOnConnect = syncOnConnect || settings.autoDownload
-                    if !loadingList, job == nil { refreshFiles() }
+                    deviceStopped(file: currentDeviceFile, finished: false)
                 }
                 // 正在用 Mac 录音时，计时归 Mac 那边管，录音豆报的状态不去动它
                 if macRec == .off {
@@ -565,6 +583,9 @@ final class BeanStore {
             // 设备会把指令原样回显：01 是开始了，02 是暂停了。以它为准更新状态，
             // 否则语音输入松手后界面还以为在录，下一次按键会被当成「设备正忙」
             if p.isSuccess, let op = p.payload.first {
+                // 豆仓自己点暂停、结束时会先把状态改掉；这里还当它在录，说明是在录音豆上按的键
+                let fromDevice = macRec == .off && (info?.recording == true || sessionOpen)
+                let file = currentDeviceFile
                 switch op {
                 case 1:
                     info?.recording = true; sessionOpen = true
@@ -573,8 +594,11 @@ final class BeanStore {
                     if let since = recordingSince { elapsedBase += Date.now.timeIntervalSince(since) }
                     info?.recording = false; recordingSince = nil
                 case 0:
+                    let seconds = elapsed()
                     info?.recording = false; recordingSince = nil; elapsedBase = 0
                     sessionOpen = false; currentDeviceFile = 0
+                    // 在录音豆上按键结束了这一条：和在豆仓里点「结束」一样，问留不留、然后下载转写
+                    if fromDevice { deviceStopped(file: file, finished: true, seconds: seconds) }
                 default: break
                 }
             } else if live == nil {
