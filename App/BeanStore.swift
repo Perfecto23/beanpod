@@ -18,6 +18,8 @@ final class BeanStore {
     /// 设备上有一条开着的录音（正在录，或暂停着还没结束）。
     var sessionOpen = false
     @ObservationIgnored var pullWhenListed = false
+    /// 刚连上录音豆，还没把「在外面录的」同步下来。列表和密钥都到位后才动手。
+    @ObservationIgnored var syncOnConnect = false
 
     /// 语音输入时的实时收音：录音豆边录边把音频传过来。
     struct LiveCapture {
@@ -193,6 +195,8 @@ final class BeanStore {
         var sizeAtResume = 0
         /// 带标记的切片序号：录音时在录音豆上按过标记键的位置。
         var marks: Set<UInt32> = []
+        /// 没等到数据时已经重新要过一次了。
+        var retried = false
     }
 
     let folder: URL = {
@@ -259,12 +263,14 @@ final class BeanStore {
             if let job { failPull(job.id, "连接断开，下载中断") }
             queue.removeAll()
             info = nil; encryptionReady = false; loadingList = false
+            syncOnConnect = false
             for i in recordings.indices { recordings[i].onDevice = false }
             recordings.removeAll { !$0.downloaded }
             return
         }
         if let name = ble.connectedName, !name.isEmpty { deviceName = name }
         crypto = CryptoSession()
+        syncOnConnect = settings.autoDownload
         scratchTried = []
         currentDeviceFile = 0
         sessionOpen = false; elapsedBase = 0; recordingSince = nil
@@ -458,8 +464,11 @@ final class BeanStore {
         case (0x01, 0x01):
             if let parsed = DeviceInfo(packet: p) {
                 let wasInCase = info?.micCharging
+                let wasRecording = info?.recording == true
                 info = parsed
                 caseChanged(from: wasInCase, to: parsed.micCharging)
+                // 连上时它正在录，现在停了：重新列一遍，把该同步的拉下来
+                if wasRecording, !parsed.recording, syncOnConnect, macRec == .off, !loadingList, job == nil { refreshFiles() }
                 // 正在用 Mac 录音时，计时归 Mac 那边管，录音豆报的状态不去动它
                 if macRec == .off {
                     if parsed.recording, recordingSince == nil { recordingSince = .now; sessionOpen = true }
@@ -501,6 +510,7 @@ final class BeanStore {
         case (0x2E, 0x01):
             encryptionReady = crypto.completeHandshake(p)
             addLog(encryptionReady ? "密钥协商成功" : "密钥协商失败")
+            syncAfterConnect()
         case (0x1B, 0x0E), (0x1A, 0x0E):
             guard loadingList, let page = FileListPage(packet: p) else { return }
             listPages += page.files
@@ -633,8 +643,27 @@ final class BeanStore {
         saveLibrary()
         recordings = merged.sorted { ($0.date ?? .distantPast, $0.id) > ($1.date ?? .distantPast, $1.id) }
         // 正在录的那条，开始时间就是它的 id
-        if pullWhenListed { pullWhenListed = false; downloadAll() }
+        if pullWhenListed { pullWhenListed = false; syncOnConnect = false; downloadAll() }
+        syncAfterConnect()
         sweepScratch(remote: Set(remote.keys))
+    }
+
+    /// 刚连上录音豆：把在外面录的、还没下载过的录音自动拉下来。
+    /// 要等列表和密钥都到位；录音豆正在录的时候不抢它的蓝牙，等它停了再同步。
+    private func syncAfterConnect() {
+        guard syncOnConnect, link == .ready, encryptionReady, !loadingList, job == nil else { return }
+        guard info?.recording != true else { return }
+        syncOnConnect = false
+        // 还没结束的那条（暂停中）设备不让下载，等用户点了「结束」再同步
+        let open = sessionOpen ? currentDeviceFile : 0
+        let pending = recordings.filter { $0.onDevice && !$0.downloaded && !$0.inProgress && $0.id != open }
+        if !pending.isEmpty {
+            addLog("刚连上，自动同步 \(pending.count) 条还没下载的录音")
+            toast("arrow.down.circle.fill", "录音豆里有 \(pending.count) 条新录音，开始同步")
+            pending.forEach { download($0.id) }
+        } else if open != 0, recordings.contains(where: { $0.id == open && !$0.downloaded }) {
+            toast("pause.circle.fill", "录音豆里有一条还没结束的录音，点「结束」后会同步过来")
+        }
     }
 
     /// 清掉语音输入留在设备上的临时录音。每条每次连接只试一回，避免删不掉时反复重试。
@@ -678,7 +707,14 @@ final class BeanStore {
                     self.finishPull()
                     return
                 }
-                if Date.now.timeIntervalSince(j.lastActivity) > 20 {
+                // 设备刚传完上一条，紧接着要下一条时常常只回一个文件头就没下文，隔几秒再要一次就正常
+                if j.data.isEmpty, !j.retried, Date.now.timeIntervalSince(j.lastActivity) > 5 {
+                    var again = j
+                    again.retried = true; again.lastActivity = .now
+                    self.job = again
+                    self.addLog("没等到数据，再要一次：\(id)")
+                    self.ble.send(Command.pullFile(id))
+                } else if Date.now.timeIntervalSince(j.lastActivity) > 20 {
                     self.failPull(id, j.data.isEmpty ? "设备没有回传数据。把录音豆靠近电脑再试一次。" : "传输中途停了，请重试。")
                     return
                 }
@@ -690,7 +726,8 @@ final class BeanStore {
     private func finishPull() {
         guard let j = job else { return }
         job = nil; pull = nil
-        defer { startNextPull() }
+        // 还有下一条要下：让设备歇一秒半再要，不然它容易只回文件头
+        defer { if !queue.isEmpty { Task { try? await Task.sleep(for: .seconds(1.5)); startNextPull() } } }
         let usable = j.data.count / OggOpus.frameSize * OggOpus.frameSize
         guard usable > 0 else { problem = Problem(title: "这条录音是空的", detail: "录音豆里这一条没有声音数据，可能刚开始就结束了。"); return }
         addLog("下载结束：\(j.packets) 个切片包，\(j.data.count) / \(j.expected) 字节")

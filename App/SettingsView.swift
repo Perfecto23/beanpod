@@ -164,7 +164,7 @@ private struct GeneralPane: View {
                 SettingRow(icon: "captions.bubble", title: "边录边出字", detail: "录音时在舞台上实时显示文字。") {
                     Toggle("边录边出字", isOn: $settings.liveTranscribe).labelsHidden().toggleStyle(.switch)
                 }
-                SettingRow(icon: "arrow.down.circle", title: "自动从录音豆下载", detail: "录完一条，就把它拉到这台 Mac 上。") {
+                SettingRow(icon: "arrow.down.circle", title: "自动从录音豆下载", detail: "录完一条、或者重新连上录音豆时，把还没下载的拉到这台 Mac 上。") {
                     Toggle("自动从录音豆下载", isOn: $settings.autoDownload).labelsHidden().toggleStyle(.switch)
                 }
                 SettingRow(icon: "wand.and.sparkles", title: "自动转写并整理", detail: "下载后直接出文字稿、纪要和待办。") {
