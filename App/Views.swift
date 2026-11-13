@@ -1788,11 +1788,11 @@ struct RewriteView: View {
                         Spacer()
                         Button {
                             makingVideo = true
-                            Task { await maker.prepare(text: item.text, recording: recording.id, title: recording.displayTitle) }
+                            maker.prepare(text: item.text, recording: recording.id, title: recording.displayTitle, template: item.name)
                         } label: { Label("做成视频", systemImage: "play.rectangle.on.rectangle") }
                             .buttonStyle(.glass).tint(Theme.accent)
-                            .disabled(maker.phase == .running || maker.phase == .joining)
-                            .help("用 Renoise 把这篇稿子做成数字人口播。会先报价，确认了才开始")
+                            .disabled(maker.busy && maker.recording != recording.id)
+                            .help("按「数字人口播」skill 做成带包装的成片。会先报价，确认了才开始")
                         Button("拷贝", systemImage: "doc.on.doc") { copy(item.text); store.toast("doc.on.doc", "已拷贝") }
                             .labelStyle(.iconOnly).buttonStyle(.borderless)
                         Button("删除", systemImage: "trash") { store.deleteRewrite(recording.id, item.id) }
@@ -1801,10 +1801,11 @@ struct RewriteView: View {
                     MarkdownView(text: item.text)
                 }
             }
-            if maker.recording == recording.id, maker.phase == .running || maker.phase == .joining {
+            if maker.recording == recording.id, maker.busy {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("正在做视频，做好 \(maker.done) / \(maker.segments.count) 段…").foregroundStyle(.secondary)
+                    Text(maker.phase == .planning ? "正在规划和报价…" : "正在做视频：\(maker.stepIndex > 0 ? VideoMaker.steps[min(maker.stepIndex, 7) - 1] : "准备")…")
+                        .foregroundStyle(.secondary)
                     Spacer()
                     Button("看进度") { makingVideo = true }
                 }
