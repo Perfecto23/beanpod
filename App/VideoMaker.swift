@@ -281,7 +281,13 @@ final class VideoMaker {
             case "result":
                 if let id = event["session_id"] as? String { session = id }
                 success = (event["subtype"] as? String) == "success" && (event["is_error"] as? Bool) != true
-                if !success { activity = String((event["result"] as? String ?? "Claude 报错").prefix(160)) }
+                if !success || (event["result"] as? String ?? "").contains("API Error") {
+                    let raw = event["result"] as? String ?? "Claude 报错"
+                    success = false
+                    activity = raw.contains("401") || raw.contains("authenticate")
+                        ? "后台的 Claude Code 没登录上（~/.claude/settings.json 里配的模型接口返回 401，密钥可能过期了）。豆仓本身没事，换个能用的登录方式就能接着做。"
+                        : String(raw.prefix(160))
+                }
             default: break
             }
         }
