@@ -1,3 +1,4 @@
+import BeanKit
 import Charts
 import SwiftUI
 
@@ -37,6 +38,8 @@ struct DashboardView: View {
                 pending
 
                 recentAndTodos
+
+                LinkModule()
 
                 // 数字和图表收在最下面，想看再展开：首页先回答「现在该做什么」
                 if !store.recordings.isEmpty {
@@ -372,5 +375,75 @@ struct Hero: View {
             cheering = true
             Task { try? await Task.sleep(for: .seconds(2.2)); cheering = false }
         }
+    }
+}
+
+/// 首页的「从链接导入」：贴一条视频链接就开始下载、转成文字稿；下面是最近导入的三条素材。
+struct LinkModule: View {
+    @Environment(BeanStore.self) private var store
+    @Environment(Navigator.self) private var nav
+    @State private var text = ""
+
+    private var ready: Bool { !LinkTools.urls(in: text).isEmpty }
+
+    var body: some View {
+        let recent = Array(store.recordings.filter(\.isMaterial).prefix(3))
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "link").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accent)
+                Text("从链接导入").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.warm900)
+                Spacer()
+                Button("查看全部素材") { nav.route = .materials }
+                    .buttonStyle(.plain).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.warm500)
+            }
+            HStack(spacing: 8) {
+                TextField("粘贴视频链接或分享口令，下载声音、转成文字稿", text: $text).textFieldStyle(.plain).font(.system(size: 13))
+                    .onSubmit(go)
+                Button(action: go) {
+                    Text("导入").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 6)
+                        .background(ready ? Theme.accent : Theme.warm400, in: .rect(cornerRadius: 8))
+                }
+                .buttonStyle(.plain).disabled(!ready)
+            }
+            .padding(.leading, 12).padding(.trailing, 6).padding(.vertical, 6)
+            .background(Theme.warm100.opacity(0.7), in: .rect(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.warm200.opacity(0.8), lineWidth: 1))
+            Text("支持抖音、B 站、YouTube、TikTok、X 等公开内容。导入后和录音放在一起，可以拆解写法、照结构仿写。")
+                .font(.system(size: 11)).foregroundStyle(Theme.warm500)
+            if !recent.isEmpty {
+                HStack(spacing: 10) {
+                    ForEach(recent) { r in
+                        Button { nav.route = .materials; nav.selection = r.id } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "play.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.amber)
+                                    .frame(width: 26, height: 26).background(Theme.amber.opacity(0.12), in: .rect(cornerRadius: 7))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(r.displayTitle).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.warm900).lineLimit(1)
+                                    Text("\(RecordingsView.platform(of: r)) • \(clock(r.duration))").font(.system(size: 11)).foregroundStyle(Theme.warm500)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(10)
+                            .frame(maxWidth: .infinity)
+                            .background(Theme.surface, in: .rect(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.warm200.opacity(0.6), lineWidth: 1))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    ForEach(0..<(3 - recent.count), id: \.self) { _ in Color.clear.frame(maxWidth: .infinity, maxHeight: 1) }
+                }
+            }
+        }
+        .padding(20)
+        .background(Theme.warm50, in: .rect(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.warm200.opacity(0.8), lineWidth: 1))
+    }
+
+    private func go() {
+        guard ready else { return }
+        store.importLinks(text)
+        text = ""
     }
 }

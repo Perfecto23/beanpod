@@ -105,7 +105,7 @@ struct RootView: View {
 
 extension View {
     /// 放内容的底板：和 Mac 版一样，浅色是白纸加很轻的影子，深色是比底色亮一级的石墨。
-    func card(radius: CGFloat = 18, padding: CGFloat = 16) -> some View {
+    func card(radius: CGFloat = 16, padding: CGFloat = 18) -> some View {
         modifier(CardStyle(radius: radius, padding: padding))
     }
 
@@ -122,32 +122,21 @@ private struct CardStyle: ViewModifier {
         content
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(scheme == .dark ? Color.white.opacity(0.06) : Color.white.opacity(0.9), in: .rect(cornerRadius: radius))
-            .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(scheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5))
-            .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.04), radius: 8, y: 3)
+            .background(Theme.warm50, in: .rect(cornerRadius: radius))
+            .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.warm200.opacity(0.8), lineWidth: 1))
+            .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.02), radius: 2, y: 1)
     }
 }
 
 struct Backdrop: View {
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        ZStack {
-            if scheme == .dark {
-                LinearGradient(colors: [Color(red: 0.085, green: 0.083, blue: 0.082), Color(red: 0.05, green: 0.05, blue: 0.055)], startPoint: .top, endPoint: .bottom)
-            } else {
-                LinearGradient(colors: [Color(red: 0.975, green: 0.965, blue: 0.945), Color(red: 0.945, green: 0.93, blue: 0.905)], startPoint: .top, endPoint: .bottom)
-            }
-            RadialGradient(colors: [Theme.accent.opacity(scheme == .dark ? 0.12 : 0.14), .clear], center: .init(x: 0.1, y: 0), startRadius: 0, endRadius: 420)
-        }
-    }
+    var body: some View { Theme.dynamic(light: (0.976, 0.969, 0.961), dark: (0.110, 0.098, 0.090)) }
 }
 
 /// 一组内容的小标题。
 struct SectionTitle: View {
     var text: String
     init(_ text: String) { self.text = text }
-    var body: some View { Text(text).font(.title3.weight(.bold)) }
+    var body: some View { Text(text).font(.system(size: 17, weight: .bold)).foregroundStyle(Theme.warm900) }
 }
 
 /// 底栏：左右各两个页签，正中间是红色的录音键——哪一页都在同一个位置，拇指一伸就到。
@@ -165,8 +154,9 @@ struct BottomBar: View {
             item(.device, "设备", "headphones")
         }
         .padding(.horizontal, 8).padding(.top, 8).padding(.bottom, 2)
+        .background(Theme.surface.opacity(0.92))
         .background(.bar)
-        .overlay(alignment: .top) { Divider().opacity(0.6) }
+        .overlay(alignment: .top) { Divider().overlay(Theme.warm200) }
     }
 
     private func item(_ value: RootView.Tab, _ title: String, _ icon: String) -> some View {
@@ -175,7 +165,7 @@ struct BottomBar: View {
                 Image(systemName: icon).font(.system(size: 21, weight: tab == value ? .semibold : .regular)).frame(height: 26)
                 Text(title).font(.system(size: 10, weight: .medium))
             }
-            .foregroundStyle(tab == value ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.secondary))
+            .foregroundStyle(tab == value ? Theme.accent : Theme.warm500)
             .frame(maxWidth: .infinity).contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -188,7 +178,7 @@ struct BottomBar: View {
             if store.recState == .idle { store.startRecording() } else { stageOpen = true }
         } label: {
             ZStack {
-                Circle().fill(Theme.rec).frame(width: 60, height: 60)
+                Circle().fill(LinearGradient(colors: [Theme.rec, Theme.recDeep], startPoint: .topLeading, endPoint: .bottomTrailing)).frame(width: 60, height: 60)
                     .shadow(color: Theme.rec.opacity(0.35), radius: 10, y: 4)
                 if store.recState == .idle {
                     Circle().fill(.white).frame(width: 20, height: 20)
@@ -262,51 +252,62 @@ struct KeepCard: View {
     }
 }
 
-/// 列表里的一行录音：和 Mac 版同一个样子。标题下面只放小信息，不放正文。
+/// 列表里的一行录音：和 Mac 版同一个样子——白色圆角卡片，标题下面一行小信息，右边灰色关键词或项目名。
 struct RecordingRow: View {
     @Environment(BeanStore.self) private var store
     let recording: Recording
+    var showProject = true
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: (recording.scene ?? .other).icon)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(recording.isAnalyzed ? Theme.accent : Color.secondary)
-                .frame(width: 40, height: 40)
-                .background((recording.isAnalyzed ? Theme.accent : Color.secondary).opacity(0.14), in: .rect(cornerRadius: 11))
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 5) {
-                    Text(recording.displayTitle).font(.body.weight(.semibold)).lineLimit(1)
-                    if store.retitling.contains(recording.id) { ProgressView().controlSize(.mini) }
-                    Spacer(minLength: 4)
-                    if recording.starred { Image(systemName: "star.fill").font(.caption).foregroundStyle(Theme.accent) }
-                    status
-                }
-                HStack(spacing: 6) {
-                    ViewThatFits(in: .horizontal) {
-                        info(tags: 2)
-                        info(tags: 1)
-                        info(tags: 0)
-                    }
-                    Spacer(minLength: 2)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: recording.isMaterial ? "play.fill" : (recording.scene ?? .other).icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 30, height: 30)
+                    .background(tint.opacity(0.12), in: .rect(cornerRadius: 8))
+                Text(recording.displayTitle).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.warm900)
+                    .lineLimit(2).multilineTextAlignment(.leading).padding(.top, 5)
+                if store.retitling.contains(recording.id) { ProgressView().controlSize(.mini).padding(.top, 7) }
+                Spacer(minLength: 4)
+                HStack(spacing: 7) {
+                    if recording.starred { Image(systemName: "star.fill").foregroundStyle(Theme.accent) }
                     let todo = recording.todos.filter { !$0.done }.count
                     if todo > 0 { Label("\(todo)", systemImage: "square").labelStyle(.titleAndIcon) }
-                    if !recording.marks.isEmpty { Label("\(recording.marks.count)", systemImage: "flag").labelStyle(.titleAndIcon) }
+                    status
                 }
-                .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                .font(.caption).foregroundStyle(Theme.warm400).monospacedDigit().padding(.top, 7)
             }
+            HStack(spacing: 6) {
+                Text(meta).lineLimit(1).monospacedDigit()
+                Spacer(minLength: 4)
+                if showProject, let p = store.project(recording.project) {
+                    Label(p.name, systemImage: "folder").labelStyle(.titleAndIcon).lineLimit(1)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .foregroundStyle(Theme.warm700).background(Theme.warm200.opacity(0.7), in: .rect(cornerRadius: 4)).fixedSize()
+                } else {
+                    ViewThatFits(in: .horizontal) { tags(2); tags(1); EmptyView() }
+                }
+            }
+            .font(.system(size: 11.5)).foregroundStyle(Theme.warm500)
+            .padding(.leading, 40)
         }
-        .padding(.vertical, 4)
+        .padding(14)
+        .background(Theme.surface, in: .rect(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.warm200.opacity(0.6), lineWidth: 1))
     }
 
-    private func info(tags count: Int) -> some View {
+    private var tint: Color {
+        if recording.isMaterial { return Theme.accent }
+        return recording.isAnalyzed ? Theme.amber : Theme.warm400
+    }
+
+    private func tags(_ count: Int) -> some View {
         HStack(spacing: 6) {
-            Text(meta).lineLimit(1).fixedSize()
             ForEach(Array(shortTags.prefix(count)), id: \.self) { tag in
                 Text(tag).lineLimit(1).fixedSize()
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .foregroundStyle(Theme.accent)
-                    .background(Theme.accent.opacity(0.14), in: .capsule)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .foregroundStyle(Theme.warm600).background(Theme.warm100, in: .rect(cornerRadius: 4))
             }
         }
     }
@@ -316,6 +317,7 @@ struct RecordingRow: View {
     }
 
     private var meta: String {
+        if recording.isMaterial { return [recording.origin ?? "素材", clock(recording.duration)].joined(separator: " • ") }
         var parts: [String] = []
         if let d = recording.date { parts.append(d.formatted(.dateTime.hour().minute())) }
         parts.append(recording.textOnly ? "文字" : clock(recording.duration))
@@ -323,7 +325,7 @@ struct RecordingRow: View {
         else if !recording.downloaded { parts.append("还在录音豆里") }
         else if recording.transcript == nil { parts.append("还没转成文字") }
         else if !recording.isAnalyzed { parts.append("还没整理") }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: " • ")
     }
 
     @ViewBuilder private var status: some View {

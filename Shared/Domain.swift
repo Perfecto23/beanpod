@@ -233,6 +233,13 @@ nonisolated enum RewriteTemplate: String, CaseIterable, Identifiable {
     }
 }
 
+/// 项目：把几条录音、素材放在一起管。一条录音只归一个项目。
+nonisolated struct Project: Codable, Identifiable, Equatable, Hashable {
+    var id = UUID()
+    var name: String
+    var created = Date()
+}
+
 /// 一条链接要登录才能下：等用户在登录窗口里登录好，再接着导入。
 nonisolated struct LinkLoginRequest: Identifiable, Equatable {
     let id = UUID()
@@ -299,6 +306,10 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
     var origin: String?
     /// 从链接导入的：原来的网址。
     var source: String?
+    /// 归在哪个项目里（没归就是 nil）。
+    var project: UUID?
+    /// 是从链接导入的素材，不是自己录的。
+    var isMaterial: Bool { source != nil }
     var textOnly = false
     /// 重点标记：录音时在录音豆上按过标记键、或在豆仓里点过「标重点」的时刻（秒）。
     var marks: [TimeInterval] = []
@@ -319,7 +330,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
 
     private enum CodingKeys: String, CodingKey {
         case id, size, date, duration, title, titleEdited, downloaded, onDevice, transcript, segments, transcribedBy, speakers, rewrites
-        case scene, sceneLocked, summary, sections, todos, tags, people, analyzedBy, starred, origin, source, textOnly, marks, videos
+        case scene, sceneLocked, summary, sections, todos, tags, people, analyzedBy, starred, origin, source, project, textOnly, marks, videos
     }
 
     /// 每个字段都容错读取：以后加字段，旧的记录文件照样能打开。
@@ -349,6 +360,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
         starred = try c.decodeIfPresent(Bool.self, forKey: .starred) ?? false
         origin = try c.decodeIfPresent(String.self, forKey: .origin)
         source = try c.decodeIfPresent(String.self, forKey: .source)
+        project = try? c.decodeIfPresent(UUID.self, forKey: .project)
         textOnly = try c.decodeIfPresent(Bool.self, forKey: .textOnly) ?? false
         marks = (try? c.decodeIfPresent([TimeInterval].self, forKey: .marks)) ?? []
         videos = (try? c.decodeIfPresent([VideoClip].self, forKey: .videos)) ?? []

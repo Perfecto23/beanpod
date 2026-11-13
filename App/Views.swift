@@ -5,6 +5,18 @@ import SwiftUI
 
 enum Route: Hashable {
     case dashboard, all, starred, scene(Scene), knowledge, device
+    /// 从链接导入的素材。
+    case materials
+    /// 一个项目里的录音和素材。
+    case project(UUID)
+
+    /// 是不是录音列表那一类页面（全部、素材、项目、场景）。
+    var isList: Bool {
+        switch self {
+        case .all, .starred, .scene, .materials, .project: true
+        default: false
+        }
+    }
 }
 
 @Observable
@@ -23,6 +35,11 @@ final class Navigator {
     /// 正在给哪条录音改名（弹窗挂在录音页上）。
     var renaming: UInt32?
     var confirmLocalDelete = false
+    /// 新建项目的弹窗；建好之后要放进去的录音。
+    var newProject = false
+    var pendingMove: Set<UInt32> = []
+    var renamingProject: UUID?
+    var deletingProject: UUID?
 
     func open(_ id: UInt32) { route = .all; selection = id }
 }
@@ -42,7 +59,7 @@ struct RootView: View {
             case .dashboard: DashboardView().background(Backdrop())
             case .knowledge: KnowledgeView().background(Backdrop())
             case .device: DeviceView().background(Backdrop())
-            case .all, .starred, .scene: RecordingsView().background(Backdrop())
+            case .all, .starred, .scene, .materials, .project: RecordingsView().background(Backdrop())
             }
         }
         .accessibilityHidden(nav.stageOpen && store.recState != .idle)
@@ -151,6 +168,7 @@ struct RootView: View {
             Text(p.detail)
         }
         .sheet(isPresented: $nav.welcomeOpen) { WelcomeView() }
+        .modifier(ProjectDialogs())
         .onAppear {
             if !UserDefaults.standard.bool(forKey: "welcomed"), store.recordings.isEmpty { nav.welcomeOpen = true }
         }
@@ -272,7 +290,8 @@ struct Sidebar: View {
         case .dashboard: 0
         case .all, .starred, .scene: 1
         case .knowledge: 2
-        case .device: -1
+        case .materials: 3
+        case .device, .project: -1
         }
     }
 
@@ -301,13 +320,64 @@ struct Sidebar: View {
             VStack(spacing: 4) {
                 item("总览", "house.fill", 0) { nav.route = .dashboard }
                 item("录音", "waveform", 1, count: store.recordings.count) { nav.route = .all }
+                item("素材", "play.rectangle.fill", 3, count: store.recordings.filter(\.isMaterial).count) { nav.route = .materials }
                 item("知识库", "book.closed.fill", 2) { nav.route = .knowledge }
             }
+            projectList.padding(.top, 20)
             Spacer(minLength: 0)
             Divider().overlay(Theme.warm200.opacity(0.6)).padding(.horizontal, -16).padding(.bottom, 14)
             DeviceChip()
         }
         .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 16)
+    }
+
+    /// 项目：小标题、加号，下面一个个项目。右键可以改名、删掉。
+    private var projectList: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text("项目").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.warm500)
+                Spacer()
+                Button { nav.pendingMove = []; nav.newProject = true } label: {
+                    Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.warm500)
+                        .frame(width: 22, height: 22).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).help("新建项目").accessibilityLabel("新建项目")
+            }
+            .padding(.horizontal, 12).padding(.bottom, 4)
+            if store.projects.isEmpty {
+                Text("把相关的录音和素材放在一起")
+                    .font(.system(size: 11)).foregroundStyle(Theme.warm400).lineLimit(2)
+                    .padding(.horizontal, 12)
+            }
+            ScrollView {
+                VStack(spacing: 2) {
+                    ForEach(store.projects) { p in
+                        let on = nav.route == .project(p.id)
+                        Button { nav.route = .project(p.id) } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: on ? "folder.fill" : "folder").font(.system(size: 13)).frame(width: 20)
+                                    .foregroundStyle(on ? Theme.accent : Theme.warm500)
+                                Text(p.name).font(.system(size: 13, weight: on ? .semibold : .regular))
+                                    .foregroundStyle(on ? Theme.warm900 : Theme.warm700).lineLimit(1)
+                                Spacer()
+                                Text("\(store.count(in: p.id))").font(.system(size: 11)).monospacedDigit().foregroundStyle(Theme.warm400)
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(on ? Theme.warm300.opacity(0.4) : .clear, in: .rect(cornerRadius: 10))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("重命名…") { nav.renamingProject = p.id }
+                            Button("删除项目…", role: .destructive) { nav.deletingProject = p.id }
+                        }
+                    }
+                }
+            }
+            // 只占项目实际需要的高度，多了才滚；不然空着也会把侧栏顶上的东西挤出窗口
+            .frame(height: min(204, CGFloat(store.projects.count) * 34))
+            .scrollBounceBehavior(.basedOnSize)
+        }
     }
 
     private func item(_ title: String, _ icon: String, _ index: Int, count: Int = 0, action: @escaping () -> Void) -> some View {
@@ -589,6 +659,13 @@ struct RecordingsView: View {
     @State private var renameText = ""
     @FocusState private var searching: Bool
     @FocusState private var listFocused: Bool
+    /// 多选：开着的时候点一张卡片是勾选，不是打开。
+    @State private var selecting = false
+    @State private var picked: Set<UInt32> = []
+    @State private var confirmBatchDelete = false
+    /// 素材库里按平台筛。
+    @State private var platform: String?
+    @State private var linkText = ""
 
     /// 列表头上的快速筛选。星标以前是侧栏里单独的一页，没有星标时整页是空的，所以收进这里。
     enum Quick: String, CaseIterable, Identifiable {
@@ -609,6 +686,10 @@ struct RecordingsView: View {
         switch nav.route {
         case .starred: base = store.recordings.filter(\.starred)
         case .scene(let s): base = store.recordings.filter { $0.scene == s }
+        case .materials:
+            base = store.recordings.filter(\.isMaterial)
+            if let platform { base = base.filter { Self.platform(of: $0) == platform } }
+        case .project(let id): base = store.recordings.filter { $0.project == id }
         default: base = store.recordings
         }
         switch quick {
@@ -654,8 +735,62 @@ struct RecordingsView: View {
         switch nav.route {
         case .starred: "星标"
         case .scene(let s): s.name
+        case .materials: "素材库"
+        case .project(let id): store.project(id)?.name ?? "项目"
         default: "全部录音"
         }
+    }
+
+    /// 素材的平台：来源写成「抖音 · @某某」，取点号前面那段。
+    static func platform(of r: Recording) -> String {
+        (r.origin ?? "").components(separatedBy: " · ").first ?? ""
+    }
+
+    private var platforms: [String] {
+        var seen: [String] = []
+        for r in store.recordings where r.isMaterial {
+            let p = Self.platform(of: r)
+            if !p.isEmpty, !seen.contains(p) { seen.append(p) }
+        }
+        return seen
+    }
+
+    private var isProjectPage: Bool { if case .project = nav.route { return true }; return false }
+
+    /// 一个小筛选块：选中的是深色，其他是浅灰。
+    private func chip(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text).font(.system(size: 12, weight: on ? .medium : .regular))
+                .padding(.horizontal, 12).padding(.vertical, 4)
+                .foregroundStyle(on ? Theme.warm50 : Theme.warm700)
+                .background(on ? Theme.warm900 : Theme.warm200.opacity(0.7), in: .rect(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    /// 素材库顶上的粘贴框：贴进来就导入。
+    private var pasteBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "link").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.warm400)
+            TextField("粘贴视频链接或分享口令", text: $linkText).textFieldStyle(.plain).font(.system(size: 13))
+                .onSubmit(importPasted)
+            Button(action: importPasted) {
+                Text("导入").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 12).padding(.vertical, 5)
+                    .background(LinkTools.urls(in: linkText).isEmpty ? Theme.warm400 : Theme.accent, in: .rect(cornerRadius: 8))
+            }
+            .buttonStyle(.plain).disabled(LinkTools.urls(in: linkText).isEmpty)
+        }
+        .padding(.leading, 12).padding(.trailing, 6).padding(.vertical, 6)
+        .background(Theme.warm100.opacity(0.7), in: .rect(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.warm200.opacity(0.8), lineWidth: 1))
+    }
+
+    private func importPasted() {
+        guard !LinkTools.urls(in: linkText).isEmpty else { return }
+        store.importLinks(linkText)
+        linkText = ""
     }
 
     var body: some View {
@@ -667,8 +802,16 @@ struct RecordingsView: View {
                         Text(title).font(.system(size: 18, weight: .bold)).foregroundStyle(Theme.warm900)
                         Spacer()
                         Text("\(items.count) 条").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.warm500).monospacedDigit()
+                        Button(selecting ? "完成" : "选择") {
+                            selecting.toggle(); picked = []
+                        }
+                        .buttonStyle(.plain).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.accent)
+                        .padding(.leading, 4)
+                        .disabled(items.isEmpty && !selecting)
+                        .help("选几条一起移到项目、打星或删除")
                         listMenu
                     }
+                    if nav.route == .materials { pasteBar }
                     // 搜索就放在列表头上：在哪找，就在哪输
                     HStack(spacing: 8) {
                         Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(Theme.warm400)
@@ -682,17 +825,15 @@ struct RecordingsView: View {
                     .background(Theme.warm100.opacity(0.7), in: .rect(cornerRadius: 12))
                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(searching ? Theme.accent : Theme.warm200.opacity(0.8), lineWidth: searching ? 1.5 : 1))
                     .focused($searching)
-                    // 快速筛选：选中的是深色，其他是浅灰
-                    HStack(spacing: 6) {
-                        ForEach(Quick.allCases) { q in
-                            Button { quick = q } label: {
-                                Text(q.rawValue).font(.system(size: 12, weight: quick == q ? .medium : .regular))
-                                    .padding(.horizontal, 12).padding(.vertical, 4)
-                                    .foregroundStyle(quick == q ? Theme.warm50 : Theme.warm700)
-                                    .background(quick == q ? Theme.warm900 : Theme.warm200.opacity(0.7), in: .rect(cornerRadius: 8))
+                    // 快速筛选：素材库按平台，其他页按星标、待办、重点
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            if nav.route == .materials {
+                                chip("全部", on: platform == nil) { platform = nil }
+                                ForEach(platforms, id: \.self) { p in chip(p, on: platform == p) { platform = p } }
+                            } else {
+                                ForEach(Quick.allCases) { q in chip(q.rawValue, on: quick == q) { quick = q } }
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityAddTraits(quick == q ? .isSelected : [])
                         }
                     }
                 }
@@ -711,9 +852,12 @@ struct RecordingsView: View {
                                 .font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.warm500)
                                 .padding(.horizontal, 8).padding(.top, n == 0 ? 4 : 12).padding(.bottom, 2)
                                 ForEach(day.items) { rec in
-                                    RecordingRow(recording: rec, selected: nav.selection == rec.id)
+                                    RecordingRow(recording: rec, selected: selecting ? picked.contains(rec.id) : nav.selection == rec.id,
+                                                 checked: selecting ? picked.contains(rec.id) : nil, showProject: !isProjectPage)
                                         .id(rec.id)
-                                        .onTapGesture { nav.selection = rec.id; listFocused = true }
+                                        .onTapGesture { tap(rec.id) }
+                                        // 读屏和辅助功能点按走同一个动作
+                                        .accessibilityAction { tap(rec.id) }
                                         .contextMenu { rowMenu(rec) }
                                         .accessibilityAddTraits(.isButton)
                                         .accessibilityAddTraits(nav.selection == rec.id ? .isSelected : [])
@@ -721,6 +865,7 @@ struct RecordingsView: View {
                             }
                         }
                         .padding(12)
+                        .padding(.bottom, selecting ? 64 : 0)
                     }
                     // 上下键换一条：列表不是系统的列表了，键盘照样能用
                     .focusable().focused($listFocused).focusEffectDisabled()
@@ -731,9 +876,10 @@ struct RecordingsView: View {
                     // 列表空的时候这里只留一句小字；要说的话放在右边，一个页面只出现一个空状态
                     if items.isEmpty {
                         if store.loadingList { ProgressView("正在读取录音列表…") }
-                        else { Text(store.recordings.isEmpty ? "还没有录音" : "这个条件下没有录音").font(.callout).foregroundStyle(Theme.warm400) }
+                        else { Text(emptyLine).font(.callout).foregroundStyle(Theme.warm400).multilineTextAlignment(.center).padding(24) }
                     }
                 }
+                .overlay(alignment: .bottom) { if selecting { batchBar.padding(12) } }
             }
             .frame(width: 368)
             .background(Theme.surface.opacity(0.5))
@@ -745,11 +891,12 @@ struct RecordingsView: View {
                 } else if !store.recordings.isEmpty {
                     // 有录音，只是这个筛选条件下没有：说清为什么，给一个回去的按钮
                     VStack(spacing: 12) {
-                        Image(systemName: quick == .starred ? "star" : "line.3.horizontal.decrease.circle").font(.system(size: 34)).foregroundStyle(.tertiary)
-                        Text(!query.isEmpty ? "没找到「\(query)」" : quick != .all ? "「\(quick.rawValue)」里现在是空的" : "这个场景下还没有录音").font(.title3.weight(.semibold))
-                        Text(!query.isEmpty ? "换个词试试，或者到知识库里直接提问。" : quick != .all ? quick.emptyHint : "整理过的录音会自动归到对应的场景。")
-                            .foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 380)
-                        Button("看全部录音") { showAll() }.buttonStyle(.glass).controlSize(.large).padding(.top, 4)
+                        Image(systemName: emptyIcon).font(.system(size: 34)).foregroundStyle(Theme.warm400)
+                        Text(emptyTitle).font(.title3.weight(.semibold)).foregroundStyle(Theme.warm900)
+                        Text(emptyDetail).foregroundStyle(Theme.warm500).multilineTextAlignment(.center).frame(maxWidth: 380)
+                        if !(nav.route == .materials && query.isEmpty && quick == .all) {
+                            Button("看全部录音") { showAll() }.buttonStyle(.glass).controlSize(.large).padding(.top, 4)
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -779,8 +926,84 @@ struct RecordingsView: View {
         } message: {
             Text("留空的话，下次整理时会让 AI 重新起一个。")
         }
-        .onChange(of: items.map(\.id)) { pickFirstIfNeeded() }
+        .onChange(of: items.map(\.id)) { pickFirstIfNeeded(); picked.formIntersection(Set(items.map(\.id))) }
+        .onChange(of: nav.route) { selecting = false; picked = []; platform = nil }
+        .confirmationDialog("从这台 Mac 删除这 \(picked.count) 条？", isPresented: $confirmBatchDelete) {
+            Button("删除", role: .destructive) {
+                for id in picked where store.recordings.first(where: { $0.id == id })?.downloaded == true { store.removeLocal(id) }
+                picked = []; selecting = false
+            }
+        } message: {
+            Text("文字稿和纪要会一起删除。还在录音豆里的原件不受影响，可以再下载。")
+        }
         .onChange(of: nav.route) { if nav.route == .starred { nav.route = .all; quick = .starred } }
+    }
+
+    private var emptyIcon: String {
+        if !query.isEmpty { return "magnifyingglass" }
+        if quick == .starred { return "star" }
+        switch nav.route {
+        case .materials: return "play.rectangle"
+        case .project: return "folder"
+        default: return "line.3.horizontal.decrease.circle"
+        }
+    }
+
+    private var emptyTitle: String {
+        if !query.isEmpty { return "没找到「\(query)」" }
+        if quick != .all { return "「\(quick.rawValue)」里现在是空的" }
+        switch nav.route {
+        case .materials: return "还没有素材"
+        case .project: return "「\(title)」里还没有东西"
+        default: return "这个场景下还没有录音"
+        }
+    }
+
+    private var emptyDetail: String {
+        if !query.isEmpty { return "换个词试试，或者到知识库里直接提问。" }
+        if quick != .all { return quick.emptyHint }
+        switch nav.route {
+        case .materials: return "把抖音、B 站、YouTube 这些视频链接贴到左边的框里，豆仓会下载声音、转成文字稿，再整理成纪要。"
+        case .project: return "在任意一条录音上右键「移到项目」，或者在「全部录音」里点「选择」，一次放好几条进来。"
+        default: return "整理过的录音会自动归到对应的场景。"
+        }
+    }
+
+    private var emptyLine: String {
+        switch nav.route {
+        // 素材库、项目空着时，右边已经有完整的说明，这里不再重复一遍
+        case .materials, .project: ""
+        default: store.recordings.isEmpty ? "还没有录音" : "这个条件下没有录音"
+        }
+    }
+
+    /// 多选时浮在列表底部的一条：已选几条、移到项目、星标、删除。
+    private var batchBar: some View {
+        HStack(spacing: 10) {
+            Text(picked.isEmpty ? "点卡片来选" : "已选 \(picked.count) 条").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.warm700)
+            Spacer(minLength: 4)
+            Menu {
+                ProjectMenuItems(ids: picked)
+            } label: {
+                Label("移到项目", systemImage: "folder").font(.system(size: 12, weight: .medium))
+            }
+            .menuStyle(.button).buttonStyle(.plain).fixedSize()
+            Button { store.setStar(picked, !picked.allSatisfy { id in store.recordings.first { $0.id == id }?.starred == true }) } label: {
+                Label("星标", systemImage: "star").font(.system(size: 12, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            Button { confirmBatchDelete = true } label: {
+                Label("删除", systemImage: "trash").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.accent)
+            }
+            .buttonStyle(.plain)
+            .disabled(!picked.contains { id in store.recordings.first { $0.id == id }?.downloaded == true })
+        }
+        .disabled(picked.isEmpty)
+        .foregroundStyle(Theme.warm700)
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(Theme.surface, in: .rect(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.warm200, lineWidth: 1))
+        .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
     }
 
     /// 列表头上的「…」：导入、录音豆、按场景筛选。不常用，收在一起。
@@ -814,6 +1037,15 @@ struct RecordingsView: View {
         .help("导入、录音豆、按场景看")
     }
 
+    /// 点一张卡片：多选时是勾选，平时是打开。
+    private func tap(_ id: UInt32) {
+        if selecting {
+            if picked.contains(id) { picked.remove(id) } else { picked.insert(id) }
+        } else {
+            nav.selection = id; listFocused = true
+        }
+    }
+
     private func move(_ step: Int, _ proxy: ScrollViewProxy) {
         let ids = items.map(\.id)
         guard !ids.isEmpty else { return }
@@ -831,6 +1063,7 @@ struct RecordingsView: View {
                 .disabled(!store.analysisAvailable || store.retitling.contains(rec.id))
         }
         Button(rec.starred ? "取消星标" : "标为星标") { store.toggleStar(rec.id) }
+        Menu("移到项目") { ProjectMenuItems(ids: [rec.id]) }
         if let text = rec.transcript, !text.isEmpty {
             Button("拷贝文字稿") { copy(text) }
         }
@@ -857,18 +1090,28 @@ struct RecordingRow: View {
     @Environment(BeanStore.self) private var store
     let recording: Recording
     var selected = false
+    /// 多选时：勾了没有（不在多选就是 nil）。
+    var checked: Bool? = nil
+    /// 小信息里要不要带项目名（在项目页里就不用了）。
+    var showProject = true
     @State private var hover = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 10) {
                 // 场景：一个小方块，扫一眼就知道这条是什么场合。选中的那条换成强调色
-                Image(systemName: recording.source != nil ? "play.fill" : (recording.scene ?? .other).icon)
+                if let checked {
+                    Image(systemName: checked ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 20)).foregroundStyle(checked ? Theme.accent : Theme.warm300)
+                        .frame(width: 24, height: 28)
+                        .accessibilityLabel(checked ? "已选" : "未选")
+                }
+                Image(systemName: recording.isMaterial ? "play.fill" : (recording.scene ?? .other).icon)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(tint)
                     .frame(width: 28, height: 28)
                     .background(tint.opacity(selected ? 0.1 : 0.12), in: .rect(cornerRadius: 8))
-                    .help((recording.scene ?? .other).name)
+                    .help(recording.isMaterial ? "从链接导入的素材" : (recording.scene ?? .other).name)
                 Text(recording.displayTitle)
                     .font(.system(size: 14, weight: selected ? .bold : .medium))
                     .foregroundStyle(selected || hover ? Theme.warm900 : Theme.warm800)
@@ -892,14 +1135,22 @@ struct RecordingRow: View {
             HStack(spacing: 6) {
                 Text(meta).lineLimit(1).monospacedDigit()
                 Spacer(minLength: 4)
+                // 归了项目的：先写项目名，再放关键词
+                if showProject, let p = store.project(recording.project) {
+                    Label(p.name, systemImage: "folder").labelStyle(.titleAndIcon).lineLimit(1)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .foregroundStyle(Theme.warm700)
+                        .background(Theme.warm200.opacity(0.7), in: .rect(cornerRadius: 4))
+                        .fixedSize()
+                }
                 ViewThatFits(in: .horizontal) {
-                    tags(2)
+                    tags(showProject && recording.project != nil ? 1 : 2)
                     tags(1)
                     EmptyView()
                 }
             }
             .font(.system(size: 11)).foregroundStyle(Theme.warm500)
-            .padding(.leading, 38)
+            .padding(.leading, checked == nil ? 38 : 72)
         }
         .padding(14)
         .background(Theme.surface.opacity(selected || hover ? 1 : 0.6), in: .rect(cornerRadius: 12))
@@ -912,7 +1163,7 @@ struct RecordingRow: View {
     }
 
     private var tint: Color {
-        if selected { return Theme.accent }
+        if selected || recording.isMaterial { return Theme.accent }     // 素材一律是红色的播放块，和自己的录音分开
         return recording.isAnalyzed ? Theme.amber : Theme.warm400
     }
 
@@ -935,10 +1186,13 @@ struct RecordingRow: View {
     /// 日期已经写在分组标题上了，这里只写几点、多长、什么场合。
     private var meta: String {
         var parts: [String] = []
+        // 从链接来的：先写平台和作者，再写多长
+        if recording.isMaterial {
+            return [recording.origin ?? "素材", clock(recording.duration)].joined(separator: " • ")
+        }
         if let d = recording.date { parts.append(d.formatted(.dateTime.hour().minute())) }
         parts.append(recording.textOnly ? "文字" : clock(recording.duration))
-        if recording.source != nil, let origin = recording.origin { parts.append(origin) }   // 从链接来的：写平台和作者
-        else if let scene = recording.scene { parts.append(scene.name) }
+        if let scene = recording.scene { parts.append(scene.name) }
         else if !recording.downloaded { parts.append("还在录音豆里") }
         else if recording.transcript == nil { parts.append("还没转成文字") }
         else if !recording.isAnalyzed { parts.append("还没整理") }
@@ -1098,6 +1352,8 @@ struct RecordingDetail: View {
             }
             if recording.downloaded {
                 IconMenu("ellipsis", help: "更多") {
+                    Menu("移到项目") { ProjectMenuItems(ids: [recording.id]) }
+                    Divider()
                     Button("重新整理纪要") { store.process(recording.id) }.disabled(recording.transcript == nil)
                     Button("重新转写") { store.process(recording.id, retranscribe: true) }.disabled(recording.textOnly)
                     Divider()
@@ -1118,6 +1374,7 @@ struct RecordingDetail: View {
 
     private var subtitle: String {
         var parts: [String] = []
+        if let p = store.project(recording.project) { parts.append("项目「\(p.name)」") }
         if let o = recording.origin { parts.append(o) }
         if let d = recording.date {
             // 今年的不写年份，省地方
@@ -2143,5 +2400,68 @@ struct KeepCard: View {
         .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
         .shadow(color: .black.opacity(0.18), radius: 24, y: 10)
         .animation(.spring(response: 0.35, dampingFraction: 0.9), value: just.discardAt != nil)
+    }
+}
+
+// MARK: - 项目
+
+/// 「移到项目」菜单里的几项。
+struct ProjectMenuItems: View {
+    @Environment(BeanStore.self) private var store
+    @Environment(Navigator.self) private var nav
+    let ids: Set<UInt32>
+
+    var body: some View {
+        ForEach(store.projects) { p in
+            Button(p.name) { store.move(ids, to: p.id) }
+        }
+        if !store.projects.isEmpty { Divider() }
+        Button("新建项目…") { nav.pendingMove = ids; nav.newProject = true }
+        if ids.contains(where: { id in store.recordings.first { $0.id == id }?.project != nil }) {
+            Button("移出项目") { store.move(ids, to: nil) }
+        }
+    }
+}
+
+/// 新建、改名、删除项目的弹窗。挂在窗口上，侧栏和列表都能叫出来。
+struct ProjectDialogs: ViewModifier {
+    @Environment(BeanStore.self) private var store
+    @Environment(Navigator.self) private var nav
+    @State private var name = ""
+
+    func body(content: Content) -> some View {
+        @Bindable var nav = nav
+        content
+            .alert("新建项目", isPresented: $nav.newProject) {
+                TextField("项目名", text: $name)
+                Button("新建") {
+                    if let id = store.createProject(name) {
+                        if !nav.pendingMove.isEmpty { store.move(nav.pendingMove, to: id) }
+                        else { nav.route = .project(id) }
+                    }
+                    nav.pendingMove = []; name = ""
+                }
+                Button("取消", role: .cancel) { nav.pendingMove = []; name = "" }
+            } message: {
+                Text(nav.pendingMove.isEmpty ? "把相关的录音和素材放在一起，比如一个客户、一次发布、一组选题。" : "建好之后，选中的 \(nav.pendingMove.count) 条会放进去。")
+            }
+            .alert("重命名项目", isPresented: Binding(get: { nav.renamingProject != nil }, set: { if !$0 { nav.renamingProject = nil } })) {
+                TextField("项目名", text: $name)
+                Button("好") { if let id = nav.renamingProject { store.renameProject(id, to: name) }; nav.renamingProject = nil; name = "" }
+                Button("取消", role: .cancel) { nav.renamingProject = nil; name = "" }
+            }
+            .onChange(of: nav.renamingProject) { _, id in if let id { name = store.project(id)?.name ?? "" } }
+            .confirmationDialog("删除项目「\(store.project(nav.deletingProject)?.name ?? "")」？",
+                                isPresented: Binding(get: { nav.deletingProject != nil }, set: { if !$0 { nav.deletingProject = nil } })) {
+                Button("删除项目", role: .destructive) {
+                    if let id = nav.deletingProject {
+                        if nav.route == .project(id) { nav.route = .all }
+                        store.deleteProject(id)
+                    }
+                    nav.deletingProject = nil
+                }
+            } message: {
+                Text("里面的录音和素材都会留着，只是不再归这个项目。")
+            }
     }
 }

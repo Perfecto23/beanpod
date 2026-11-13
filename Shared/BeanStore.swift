@@ -22,6 +22,8 @@ final class BeanStore {
     /// 设备上有一条开着的录音（正在录，或暂停着还没结束）。
     var sessionOpen = false
     @ObservationIgnored var pullWhenListed = false
+    /// 项目（见 Projects.swift）。存在录音库旁边的 projects.json。
+    var projects: [Project] = []
     /// 正在从链接导入的内容（见 App/LinkImport.swift，目前只有 Mac 上有）。
     var linkJobs: [LinkJob] = []
     @ObservationIgnored var linkWorker: Task<Void, Never>?
@@ -232,6 +234,7 @@ final class BeanStore {
 
     init() {
         loadLibrary()
+        loadProjects()
         refreshASRAvailability()
         watchInbox()
         #if os(macOS)

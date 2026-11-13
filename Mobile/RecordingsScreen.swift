@@ -13,6 +13,11 @@ struct RecordingsScreen: View {
     @State private var renameText = ""
     @State private var deleting: Recording?
     @State private var importing = false
+    /// 只看某个项目（nil 是全部）。
+    @State private var projectFilter: UUID?
+    @State private var newProject = false
+    @State private var newProjectName = ""
+    @State private var pendingMove: Set<UInt32> = []
 
     enum Quick: String, CaseIterable, Identifiable {
         case all = "全部", starred = "星标", todos = "有待办", marked = "有重点"
@@ -21,7 +26,7 @@ struct RecordingsScreen: View {
 
     private var items: [Recording] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        return store.recordings.filter { r in
+        return store.recordings.filter { r in projectFilter == nil || r.project == projectFilter }.filter { r in
             switch quick {
             case .all: true
             case .starred: r.starred
@@ -55,13 +60,11 @@ struct RecordingsScreen: View {
                 Section {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            ForEach(Quick.allCases) { q in
-                                Button(q.rawValue) { quick = q }
-                                    .font(.subheadline.weight(.medium))
-                                    .padding(.horizontal, 14).padding(.vertical, 7)
-                                    .foregroundStyle(quick == q ? Color.white : Color.primary)
-                                    .background(quick == q ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.quaternary.opacity(0.6)), in: .capsule)
-                                    .buttonStyle(.plain)
+                            ForEach(Quick.allCases) { q in chip(q.rawValue, on: quick == q) { quick = q } }
+                            if !store.projects.isEmpty {
+                                Divider().frame(height: 18).padding(.horizontal, 2)
+                                // 项目：点一下只看这个项目，再点一下回到全部
+                                ForEach(store.projects) { p in projectChip(p) }
                             }
                         }
                     }
@@ -76,29 +79,29 @@ struct RecordingsScreen: View {
                     }
                 }
                 ForEach(days, id: \.label) { day in
-                    Section(day.label) {
+                    Section {
                         ForEach(day.items) { rec in
-                            NavigationLink(value: rec.id) { RecordingRow(recording: rec) }
-                                .swipeActions(edge: .leading) {
-                                    Button { store.toggleStar(rec.id) } label: { Label(rec.starred ? "取消星标" : "星标", systemImage: rec.starred ? "star.slash" : "star") }
-                                        .tint(Theme.accent)
-                                }
-                                .swipeActions(edge: .trailing) {
-                                    Button { deleting = rec } label: { Label("删除", systemImage: "trash") }.tint(Theme.rec)
-                                }
-                                .contextMenu { menu(rec) }
+                            row(rec)
                         }
+                    } header: {
+                        HStack {
+                            Text(day.label)
+                            Spacer()
+                            Text("\(day.items.count) 条 • \(spokenDuration(day.items.reduce(0) { $0 + $1.duration }))").monospacedDigit()
+                        }
+                        .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.warm500).textCase(nil)
                     }
                 }
             }
-            .listStyle(.insetGrouped)
+            .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .paper()
-            .navigationTitle("录音")
+            .navigationTitle(projectFilter.flatMap { store.project($0)?.name } ?? "录音")
             .searchable(text: $query, prompt: "搜标题、内容、话题")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Button("新建项目", systemImage: "folder.badge.plus") { pendingMove = []; newProject = true }
                         Button("导入录音或文字文件", systemImage: "square.and.arrow.down") { importing = true }
                         if store.link == .ready {
                             Button("重新读取录音豆", systemImage: "arrow.clockwise") { store.refreshFiles() }
@@ -117,6 +120,18 @@ struct RecordingsScreen: View {
                     store.importFile(url, consume: false)
                     if scoped { url.stopAccessingSecurityScopedResource() }
                 }
+            }
+            .alert("新建项目", isPresented: $newProject) {
+                TextField("项目名", text: $newProjectName)
+                Button("新建") {
+                    if let id = store.createProject(newProjectName) {
+                        if pendingMove.isEmpty { projectFilter = id } else { store.move(pendingMove, to: id) }
+                    }
+                    newProjectName = ""; pendingMove = []
+                }
+                Button("取消", role: .cancel) { newProjectName = ""; pendingMove = [] }
+            } message: {
+                Text("把相关的录音放在一起，比如一个客户、一次发布。")
             }
             .alert("重命名", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
                 TextField("标题", text: $renameText)
@@ -141,12 +156,60 @@ struct RecordingsScreen: View {
         }
     }
 
+    /// 一个小筛选块：选中的是深色，其他是浅灰（和 Mac 版一样）。
+    private func chip(_ text: String, icon: String? = nil, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let icon { Image(systemName: icon).font(.system(size: 11)) }
+                Text(text).font(.system(size: 13, weight: on ? .semibold : .regular)).lineLimit(1)
+            }
+            .padding(.horizontal, 13).padding(.vertical, 6)
+            .foregroundStyle(on ? Theme.warm50 : Theme.warm700)
+            .background(on ? Theme.warm900 : Theme.warm200.opacity(0.7), in: .rect(cornerRadius: 9))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 一行是一张卡片：系统的行底和分隔线都去掉，卡片自己有底和边。左滑打星，右滑删除。
+    private func row(_ rec: Recording) -> some View {
+        NavigationLink(value: rec.id) { RecordingRow(recording: rec, showProject: projectFilter == nil) }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+            .swipeActions(edge: .leading) { starButton(rec) }
+            .swipeActions(edge: .trailing) { deleteButton(rec) }
+            .contextMenu { menu(rec) }
+    }
+
+    private func starButton(_ rec: Recording) -> some View {
+        Button { store.toggleStar(rec.id) } label: { Label(rec.starred ? "取消星标" : "星标", systemImage: rec.starred ? "star.slash" : "star") }
+            .tint(Theme.accent)
+    }
+
+    private func deleteButton(_ rec: Recording) -> some View {
+        Button { deleting = rec } label: { Label("删除", systemImage: "trash") }.tint(Theme.rec)
+    }
+
+    private func projectChip(_ p: Project) -> some View {
+        let on: Bool = projectFilter == p.id
+        return chip(p.name, icon: "folder", on: on) { toggleProject(p.id) }
+    }
+
+    private func toggleProject(_ id: UUID) {
+        projectFilter = projectFilter == id ? nil : id
+    }
+
     @ViewBuilder private func menu(_ rec: Recording) -> some View {
         Button("重命名…", systemImage: "pencil") { renameText = rec.title ?? ""; renaming = rec.id }
         if rec.transcript != nil {
             Button("让 AI 重新起标题", systemImage: "sparkles") { store.retitle(rec.id) }.disabled(!store.analysisAvailable)
         }
         Button(rec.starred ? "取消星标" : "标为星标", systemImage: rec.starred ? "star.slash" : "star") { store.toggleStar(rec.id) }
+        Menu("移到项目", systemImage: "folder") {
+            ForEach(store.projects) { p in Button(p.name) { store.move([rec.id], to: p.id) } }
+            Button("新建项目…") { pendingMove = [rec.id]; newProject = true }
+            if rec.project != nil { Button("移出项目") { store.move([rec.id], to: nil) } }
+        }
         if let text = rec.transcript, !text.isEmpty {
             Button("拷贝文字稿", systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
         }

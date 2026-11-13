@@ -59,13 +59,13 @@ struct BeanPodApp: App {
                 // 删除选中的那条录音。都会先问一句，不会直接删
                 let chosen = store.recordings.first { $0.id == nav.selection }
                 Button("从链接导入…") {
-                    if case .all = nav.route {} else { nav.route = .all }
+                    if !nav.route.isList { nav.route = .all }
                     nav.linkSheet = true
                 }
                 .keyboardShortcut("i", modifiers: [.command, .shift])
                 Divider()
                 Button("重命名选中的录音…") {
-                    if case .all = nav.route {} else { nav.route = .all }
+                    if !nav.route.isList { nav.route = .all }
                     nav.renaming = chosen?.id
                 }
                 .disabled(chosen == nil)
