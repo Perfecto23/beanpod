@@ -254,7 +254,7 @@ struct ConnectView: View {
 
                 if !connector.cliInstalled {
                     Label("豆仓的命令行工具还没装好（应该在 ~/.local/bin/beanpod），下面的连接暂时都用不了。", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(Theme.amber).padding(12).frame(maxWidth: .infinity, alignment: .leading).panel(radius: 12)
+                        .foregroundStyle(Theme.accent).padding(12).frame(maxWidth: .infinity, alignment: .leading).panel(radius: 12)
                 }
 
                 ForEach(Assistant.allCases) { card($0) }
@@ -280,7 +280,7 @@ struct ConnectView: View {
         .background(Backdrop())
         .task { await connector.refresh() }
         .preferredColorScheme(store.settings.appearance.scheme)
-        .tint(Theme.amber)
+        .tint(Theme.accent)
     }
 
     private func copyRow(_ text: String) -> some View {
@@ -299,9 +299,9 @@ struct ConnectView: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 Image(systemName: a.icon).font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(state.installed ? Theme.amber : Color.secondary)
+                    .foregroundStyle(state.installed ? Theme.accent : Color.secondary)
                     .frame(width: 40, height: 40)
-                    .background((state.installed ? Theme.amber : Color.secondary).opacity(0.14), in: .rect(cornerRadius: 11))
+                    .background((state.installed ? Theme.accent : Color.secondary).opacity(0.14), in: .rect(cornerRadius: 11))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(a.name).font(.title3.weight(.semibold))
                     HStack(spacing: 6) {
@@ -327,7 +327,7 @@ struct ConnectView: View {
             if state.installed {
                 if let note = connector.notes[a] {
                     Label(note.text, systemImage: note.ok ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                        .font(.callout).foregroundStyle(note.ok ? Theme.ok : Theme.amber)
+                        .font(.callout).foregroundStyle(note.ok ? Theme.ok : Theme.accent)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if state.connected == true || a == .grok {
@@ -354,6 +354,6 @@ struct ConnectView: View {
 
     private func dot(_ s: Connector.State) -> Color {
         guard s.installed else { return .secondary.opacity(0.4) }
-        return s.connected == true ? Theme.ok : s.connected == nil ? Theme.amber : .secondary.opacity(0.5)
+        return s.connected == true ? Theme.ok : s.connected == nil ? Theme.accent : .secondary.opacity(0.5)
     }
 }

@@ -114,7 +114,7 @@ struct SettingsScreen: View {
                 models = await Analyzer.listModels(baseURL: settings.llmBaseURL, key: settings.llmKey)
             }
         }
-        .tint(Theme.amber)
+        .tint(Theme.accent)
     }
 
     private func testASR() {

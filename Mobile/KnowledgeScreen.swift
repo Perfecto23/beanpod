@@ -19,13 +19,13 @@ struct KnowledgeScreen: View {
                 .padding(.top, 8)
 
                 HStack(alignment: .bottom, spacing: 10) {
-                    Image(systemName: "sparkles").foregroundStyle(Theme.amber).padding(.bottom, 4)
+                    Image(systemName: "sparkles").foregroundStyle(Theme.accent).padding(.bottom, 4)
                     TextField("比如：上周和王总谈的价格是多少", text: $question, axis: .vertical)
                         .lineLimit(1...4).focused($typing).submitLabel(.send)
                         .onSubmit(ask)
                     Button(action: ask) {
                         Image(systemName: "arrow.up").font(.headline).foregroundStyle(.white)
-                            .frame(width: 34, height: 34).background(canAsk ? Theme.amber : Color.secondary.opacity(0.4), in: .circle)
+                            .frame(width: 34, height: 34).background(canAsk ? Theme.accent : Color.secondary.opacity(0.4), in: .circle)
                     }
                     .disabled(!canAsk)
                 }
@@ -39,9 +39,9 @@ struct KnowledgeScreen: View {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(suggestions, id: \.self) { s in
                             Button { question = s; ask() } label: {
-                                Text(s).font(.subheadline).foregroundStyle(Theme.amber)
+                                Text(s).font(.subheadline).foregroundStyle(Theme.accent)
                                     .padding(.horizontal, 14).padding(.vertical, 8)
-                                    .background(Theme.amber.opacity(0.12), in: .capsule)
+                                    .background(Theme.accent.opacity(0.12), in: .capsule)
                             }
                             .buttonStyle(.plain).disabled(!store.analysisAvailable)
                         }
@@ -52,7 +52,7 @@ struct KnowledgeScreen: View {
                     HStack(spacing: 10) { ProgressView(); Text("小豆在翻你的录音…").foregroundStyle(.secondary) }.card()
                 } else if let answer = store.answer {
                     VStack(alignment: .leading, spacing: 12) {
-                        Label("小豆帮你整理好了", systemImage: "sparkles").font(.headline).foregroundStyle(Theme.amber)
+                        Label("小豆帮你整理好了", systemImage: "sparkles").font(.headline).foregroundStyle(Theme.accent)
                         MarkdownView(text: answer)
                         if !store.answerSources.isEmpty {
                             Divider()
@@ -62,7 +62,7 @@ struct KnowledgeScreen: View {
                                     Button { open(id) } label: {
                                         HStack(spacing: 8) {
                                             Text("\(n + 1)").font(.caption.weight(.bold)).foregroundStyle(.white)
-                                                .frame(width: 20, height: 20).background(Theme.amber, in: .circle)
+                                                .frame(width: 20, height: 20).background(Theme.accent, in: .circle)
                                             Text(rec.displayTitle).font(.subheadline).lineLimit(1)
                                             Spacer()
                                             Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)

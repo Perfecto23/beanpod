@@ -43,7 +43,7 @@ nonisolated enum Scene: String, CaseIterable, Codable, Identifiable {
     /// 这里给的是同一色相下的深浅，只在图表里用来区分相邻的条。
     var color: Color {
         let order = Scene.allCases.firstIndex(of: self) ?? 0
-        return Theme.amber.opacity(1.0 - Double(order) * 0.07)
+        return Theme.accent.opacity(1.0 - Double(order) * 0.07)
     }
 
     /// 给模型看的一句话定义。

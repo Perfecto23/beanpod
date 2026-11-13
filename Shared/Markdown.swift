@@ -40,7 +40,7 @@ struct MarkdownView: View {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Circle().fill(Theme.amber).frame(width: 5, height: 5).offset(y: -3)
+                        Circle().fill(Theme.accent).frame(width: 5, height: 5).offset(y: -3)
                         Text(Self.inline(item)).lineSpacing(4)
                     }
                 }
@@ -57,7 +57,7 @@ struct MarkdownView: View {
         case .quote(let s):
             Text(Self.inline(s)).lineSpacing(5).foregroundStyle(.secondary)
                 .padding(.leading, 12)
-                .overlay(alignment: .leading) { Rectangle().fill(Theme.amber.opacity(0.7)).frame(width: 3) }
+                .overlay(alignment: .leading) { Rectangle().fill(Theme.accent.opacity(0.7)).frame(width: 3) }
         case .code(let s):
             Text(s).font(.callout.monospaced()).lineSpacing(3)
                 .padding(10).frame(maxWidth: .infinity, alignment: .leading)
@@ -84,7 +84,7 @@ struct MarkdownView: View {
                         .fixedSize(horizontal: narrow[c], vertical: false)
                 }
             }
-            .background(Theme.amber.opacity(0.14))
+            .background(Theme.accent.opacity(0.14))
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 Divider()
                 GridRow {

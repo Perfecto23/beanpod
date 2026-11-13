@@ -12,7 +12,7 @@ struct BeanPodMobileApp: App {
         WindowGroup {
             RootView()
                 .environment(store)
-                .tint(Theme.amber)
+                .tint(Theme.accent)
                 .preferredColorScheme(store.settings.appearance.scheme)
         }
     }
@@ -138,7 +138,7 @@ struct Backdrop: View {
             } else {
                 LinearGradient(colors: [Color(red: 0.975, green: 0.965, blue: 0.945), Color(red: 0.945, green: 0.93, blue: 0.905)], startPoint: .top, endPoint: .bottom)
             }
-            RadialGradient(colors: [Theme.amber.opacity(scheme == .dark ? 0.12 : 0.14), .clear], center: .init(x: 0.1, y: 0), startRadius: 0, endRadius: 420)
+            RadialGradient(colors: [Theme.accent.opacity(scheme == .dark ? 0.12 : 0.14), .clear], center: .init(x: 0.1, y: 0), startRadius: 0, endRadius: 420)
         }
     }
 }
@@ -175,7 +175,7 @@ struct BottomBar: View {
                 Image(systemName: icon).font(.system(size: 21, weight: tab == value ? .semibold : .regular)).frame(height: 26)
                 Text(title).font(.system(size: 10, weight: .medium))
             }
-            .foregroundStyle(tab == value ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(.secondary))
+            .foregroundStyle(tab == value ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.secondary))
             .frame(maxWidth: .infinity).contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -217,9 +217,9 @@ struct KeepCard: View {
             HStack(spacing: 12) {
                 Image(systemName: discarding ? "trash" : "waveform")
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(discarding ? Theme.rec : Theme.amber)
+                    .foregroundStyle(discarding ? Theme.rec : Theme.accent)
                     .frame(width: 46, height: 46)
-                    .background((discarding ? Theme.rec : Theme.amber).opacity(0.14), in: .rect(cornerRadius: 12))
+                    .background((discarding ? Theme.rec : Theme.accent).opacity(0.14), in: .rect(cornerRadius: 12))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(discarding ? "这条不要了" : "录好了").font(.title3.weight(.semibold))
                     Text("\(clock(just.seconds)) · 来自 \(just.from)").font(.callout).foregroundStyle(.secondary).monospacedDigit()
@@ -249,7 +249,7 @@ struct KeepCard: View {
                     GeometryReader { geo in
                         Capsule().fill(.quaternary)
                             .overlay(alignment: .leading) {
-                                Capsule().fill(discarding ? Theme.rec : Theme.amber).frame(width: geo.size.width * left / total)
+                                Capsule().fill(discarding ? Theme.rec : Theme.accent).frame(width: geo.size.width * left / total)
                             }
                     }
                     .frame(height: 3)
@@ -271,15 +271,15 @@ struct RecordingRow: View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: (recording.scene ?? .other).icon)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(recording.isAnalyzed ? Theme.amber : Color.secondary)
+                .foregroundStyle(recording.isAnalyzed ? Theme.accent : Color.secondary)
                 .frame(width: 40, height: 40)
-                .background((recording.isAnalyzed ? Theme.amber : Color.secondary).opacity(0.14), in: .rect(cornerRadius: 11))
+                .background((recording.isAnalyzed ? Theme.accent : Color.secondary).opacity(0.14), in: .rect(cornerRadius: 11))
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 5) {
                     Text(recording.displayTitle).font(.body.weight(.semibold)).lineLimit(1)
                     if store.retitling.contains(recording.id) { ProgressView().controlSize(.mini) }
                     Spacer(minLength: 4)
-                    if recording.starred { Image(systemName: "star.fill").font(.caption).foregroundStyle(Theme.amber) }
+                    if recording.starred { Image(systemName: "star.fill").font(.caption).foregroundStyle(Theme.accent) }
                     status
                 }
                 HStack(spacing: 6) {
@@ -305,8 +305,8 @@ struct RecordingRow: View {
             ForEach(Array(shortTags.prefix(count)), id: \.self) { tag in
                 Text(tag).lineLimit(1).fixedSize()
                     .padding(.horizontal, 7).padding(.vertical, 2)
-                    .foregroundStyle(Theme.amber)
-                    .background(Theme.amber.opacity(0.14), in: .capsule)
+                    .foregroundStyle(Theme.accent)
+                    .background(Theme.accent.opacity(0.14), in: .capsule)
             }
         }
     }

@@ -79,7 +79,7 @@ struct KnowledgeView: View {
                 }
             }
             HStack(spacing: 10) {
-                Image(systemName: "sparkles").font(.title3).foregroundStyle(Theme.amber)
+                Image(systemName: "sparkles").font(.title3).foregroundStyle(Theme.accent)
                 TextField("比如「上周和王总谈的价格是多少」", text: $question, axis: .vertical)
                     .textFieldStyle(.plain).font(.title3).lineLimit(1...4)
                     .onSubmit { submit(question) }
@@ -104,8 +104,8 @@ struct KnowledgeView: View {
                     ForEach(suggestions, id: \.self) { q in
                         Button { submit(q) } label: {
                             Text(q).font(.callout).padding(.horizontal, 12).padding(.vertical, 6)
-                                .background(Theme.amber.opacity(0.12), in: .capsule)
-                                .overlay(Capsule().strokeBorder(Theme.amber.opacity(0.35), lineWidth: 0.5))
+                                .background(Theme.accent.opacity(0.12), in: .capsule)
+                                .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.35), lineWidth: 0.5))
                         }
                         .buttonStyle(.plain)
                     }
@@ -118,7 +118,7 @@ struct KnowledgeView: View {
                     if store.asking {
                         HStack(spacing: 8) { ProgressView().controlSize(.small); Text("正在翻你的录音…").foregroundStyle(.secondary) }
                     } else if let answer = store.answer {
-                        Label("小豆帮你整理好了", systemImage: "sparkles").font(.callout).foregroundStyle(Theme.amber)
+                        Label("小豆帮你整理好了", systemImage: "sparkles").font(.callout).foregroundStyle(Theme.accent)
                         MarkdownView(text: answer)
                         if !store.answerSources.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
@@ -128,7 +128,7 @@ struct KnowledgeView: View {
                                         if let r = store.recordings.first(where: { $0.id == id }) {
                                             Button { nav.open(id) } label: {
                                                 // 前面的编号对应回答里的 [1] [2]
-                                                (Text("\(n + 1)  ").foregroundStyle(Theme.amber).fontWeight(.semibold) + Text(r.displayTitle)).font(.callout).lineLimit(1)
+                                                (Text("\(n + 1)  ").foregroundStyle(Theme.accent).fontWeight(.semibold) + Text(r.displayTitle)).font(.callout).lineLimit(1)
                                                     .padding(.horizontal, 10).padding(.vertical, 5)
                                                     .background(.quaternary.opacity(0.6), in: .capsule)
                                             }
@@ -141,7 +141,7 @@ struct KnowledgeView: View {
                         HStack {
                             Text("回答由模型根据上面的录音生成，可能有错，请点开原录音核实。").font(.caption).foregroundStyle(.tertiary)
                             Spacer()
-                            Button("拷贝") { copy(answer); store.toast("doc.on.doc", "已拷贝") }.buttonStyle(.plain).foregroundStyle(Theme.amber).font(.callout)
+                            Button("拷贝") { copy(answer); store.toast("doc.on.doc", "已拷贝") }.buttonStyle(.plain).foregroundStyle(Theme.accent).font(.callout)
                             Button("清掉") { store.answer = nil; store.answerSources = []; asked = "" }.buttonStyle(.plain).foregroundStyle(.secondary).font(.callout)
                         }
                     }
@@ -162,7 +162,7 @@ struct KnowledgeView: View {
                 Button { nav.open(r.id) } label: {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 7) {
-                            Image(systemName: (r.scene ?? .other).icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.amber)
+                            Image(systemName: (r.scene ?? .other).icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accent)
                             Text(r.displayTitle).font(.body.weight(.semibold)).lineLimit(1)
                         }
                         Text((r.date.map { $0.formatted(.dateTime.month().day()) + " · " } ?? "") + spokenDuration(r.duration))
@@ -183,8 +183,8 @@ struct KnowledgeView: View {
         VStack(alignment: .leading, spacing: 8) {
             Button { nav.open(r.id) } label: {
                 HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: (r.scene ?? .other).icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.amber)
-                        .frame(width: 30, height: 30).background(Theme.amber.opacity(0.14), in: .rect(cornerRadius: 8))
+                    Image(systemName: (r.scene ?? .other).icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accent)
+                        .frame(width: 30, height: 30).background(Theme.accent.opacity(0.14), in: .rect(cornerRadius: 8))
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
                             Text(r.displayTitle).font(.body.weight(.semibold)).lineLimit(1)
@@ -204,7 +204,7 @@ struct KnowledgeView: View {
                     if let t = hit.time { store.play(hit.recordingID, at: t) }
                 } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        if let t = hit.time { Text(clock(t)).font(.caption.monospacedDigit()).foregroundStyle(Theme.amber).frame(width: 40, alignment: .trailing) }
+                        if let t = hit.time { Text(clock(t)).font(.caption.monospacedDigit()).foregroundStyle(Theme.accent).frame(width: 40, alignment: .trailing) }
                         else { Image(systemName: "text.quote").font(.caption).foregroundStyle(.tertiary).frame(width: 40, alignment: .trailing) }
                         Text(hit.snippet).font(.callout).multilineTextAlignment(.leading).lineLimit(2)
                         Spacer(minLength: 0)
@@ -239,13 +239,13 @@ struct KnowledgeView: View {
                 ForEach(store.allPeople, id: \.self) { Text($0).tag(String?.some($0)) }
             }
             .disabled(store.allPeople.isEmpty)
-            if !filter.isEmpty { Button("清除") { filter = .init() }.buttonStyle(.plain).foregroundStyle(Theme.amber) }
+            if !filter.isEmpty { Button("清除") { filter = .init() }.buttonStyle(.plain).foregroundStyle(Theme.accent) }
             Spacer()
         }
         .labelsHidden().fixedSize(horizontal: false, vertical: true)
     }
 
-    private func chip(_ text: String, selected: Bool, color: Color = Theme.amber, action: @escaping () -> Void) -> some View {
+    private func chip(_ text: String, selected: Bool, color: Color = Theme.accent, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(text).font(.callout)
                 .padding(.horizontal, 10).padding(.vertical, 5)
@@ -266,7 +266,7 @@ struct KnowledgeView: View {
                 Text(query.isEmpty ? "符合条件的 \(order.count) 条录音" : "「\(query)」出现在 \(order.count) 条录音里").font(.headline)
                 Spacer()
                 if !query.isEmpty, store.analysisAvailable {
-                    Button("让 AI 总结这些") { submit("关于「\(query)」都说过什么？") }.buttonStyle(.plain).foregroundStyle(Theme.amber)
+                    Button("让 AI 总结这些") { submit("关于「\(query)」都说过什么？") }.buttonStyle(.plain).foregroundStyle(Theme.accent)
                 }
                 if !query.isEmpty { Button("清除") { query = "" }.buttonStyle(.plain).foregroundStyle(.secondary) }
             }

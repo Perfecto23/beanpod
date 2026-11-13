@@ -146,12 +146,12 @@ struct RenoiseCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                Image(systemName: "play.rectangle.on.rectangle").font(.system(size: 17, weight: .medium)).foregroundStyle(Theme.amber)
-                    .frame(width: 40, height: 40).background(Theme.amber.opacity(0.14), in: .rect(cornerRadius: 11))
+                Image(systemName: "play.rectangle.on.rectangle").font(.system(size: 17, weight: .medium)).foregroundStyle(Theme.accent)
+                    .frame(width: 40, height: 40).background(Theme.accent.opacity(0.14), in: .rect(cornerRadius: 11))
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Renoise · 做视频").font(.title3.weight(.semibold))
                     HStack(spacing: 6) {
-                        Circle().fill(renoise.ready ? Theme.ok : Theme.amber).frame(width: 7, height: 7)
+                        Circle().fill(renoise.ready ? Theme.ok : Theme.accent).frame(width: 7, height: 7)
                         Text(renoise.ready ? "可以用了" : renoise.installed ? "装好了，还没登录" : "还没安装").font(.callout).foregroundStyle(.secondary)
                     }
                 }
@@ -193,7 +193,7 @@ struct RenoiseCard: View {
             if let busy = renoise.busy { Text(busy).font(.callout).foregroundStyle(.secondary) }
             if let note = renoise.note {
                 Label(note.text, systemImage: note.ok ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                    .font(.callout).foregroundStyle(note.ok ? Theme.ok : Theme.amber).fixedSize(horizontal: false, vertical: true)
+                    .font(.callout).foregroundStyle(note.ok ? Theme.ok : Theme.accent).fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(16)
@@ -206,7 +206,7 @@ struct RenoiseCard: View {
     private func step<Trailing: View>(_ n: Int, _ title: String, _ detail: String, done: Bool, @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(alignment: .center, spacing: 12) {
             ZStack {
-                Circle().fill(done ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(.quaternary)).frame(width: 26, height: 26)
+                Circle().fill(done ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.quaternary)).frame(width: 26, height: 26)
                 if done { Image(systemName: "checkmark").font(.caption.weight(.bold)).foregroundStyle(.white) }
                 else { Text("\(n)").font(.caption.weight(.semibold)).foregroundStyle(.secondary) }
             }

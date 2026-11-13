@@ -128,9 +128,9 @@ private struct StatusPill: View {
     var body: some View {
         Label(text, systemImage: ok ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
             .font(.callout.weight(.medium))
-            .foregroundStyle(ok ? Theme.ok : Theme.amber)
+            .foregroundStyle(ok ? Theme.ok : Theme.accent)
             .padding(.horizontal, 9).padding(.vertical, 3)
-            .background((ok ? Theme.ok : Theme.amber).opacity(0.14), in: .capsule)
+            .background((ok ? Theme.ok : Theme.accent).opacity(0.14), in: .capsule)
     }
 }
 
@@ -193,7 +193,7 @@ private struct AppearanceTile: View {
                     .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(.black.opacity(0.1), lineWidth: 0.5))
                 HStack(spacing: 5) {
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(selected ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(.tertiary))
+                        .foregroundStyle(selected ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.tertiary))
                     Text(mode.name).fontWeight(selected ? .semibold : .regular)
                 }
                 .font(.callout)
@@ -201,7 +201,7 @@ private struct AppearanceTile: View {
             .padding(10)
             .frame(maxWidth: .infinity)
             .background(.background.opacity(selected ? 0.9 : 0.4), in: .rect(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(.separator), lineWidth: selected ? 2 : 0.5))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.separator), lineWidth: selected ? 2 : 0.5))
             .contentShape(.rect(cornerRadius: 12))
         }
         .buttonStyle(.plain)
@@ -243,7 +243,7 @@ private struct MiniWindow: View {
             VStack(alignment: .leading, spacing: 6) {
                 Capsule().fill(ink.opacity(0.75)).frame(width: 52, height: 6)
                 RoundedRectangle(cornerRadius: 4).fill(ink.opacity(0.1)).frame(height: 16)
-                RoundedRectangle(cornerRadius: 4).fill(Theme.amber.opacity(0.55)).frame(width: 60, height: 16)
+                RoundedRectangle(cornerRadius: 4).fill(Theme.accent.opacity(0.55)).frame(width: 60, height: 16)
                 Spacer(minLength: 0)
             }
             .padding(9)
@@ -371,7 +371,7 @@ private struct ModelsPane: View {
                         }
                     }
                     if !store.asrAvailable {
-                        Text("还没准备好之前，暂时用系统语音识别顶上。").font(.callout).foregroundStyle(Theme.amber)
+                        Text("还没准备好之前，暂时用系统语音识别顶上。").font(.callout).foregroundStyle(Theme.accent)
                     }
                 } else {
                     line("语言") {

@@ -215,7 +215,7 @@ struct LinkImportSheet: View {
                 .padding(8)
                 .frame(height: 110)
                 .background(.background.opacity(0.6), in: .rect(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(typing ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(.separator), lineWidth: typing ? 1.5 : 0.5))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(typing ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.separator), lineWidth: typing ? 1.5 : 0.5))
                 .overlay(alignment: .topLeading) {
                     if text.isEmpty {
                         Text(verbatim: "比如：https://www.bilibili.com/video/BV…").foregroundStyle(.tertiary).padding(.horizontal, 13).padding(.vertical, 8).allowsHitTesting(false)
@@ -225,8 +225,8 @@ struct LinkImportSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(urls, id: \.self) { url in
                         HStack(spacing: 10) {
-                            Image(systemName: "play.fill").font(.caption).foregroundStyle(Theme.amber)
-                                .frame(width: 24, height: 24).background(Theme.amber.opacity(0.14), in: .rect(cornerRadius: 7))
+                            Image(systemName: "play.fill").font(.caption).foregroundStyle(Theme.accent)
+                                .frame(width: 24, height: 24).background(Theme.accent.opacity(0.14), in: .rect(cornerRadius: 7))
                             Text(LinkTools.platform(of: url)).fontWeight(.medium)
                             Text(url.replacingOccurrences(of: #"^https?://(www\.)?"#, with: "", options: .regularExpression))
                                 .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
@@ -341,11 +341,11 @@ struct LinkLoginSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Image(systemName: "person.badge.key").font(.title2).foregroundStyle(Theme.amber)
+                Image(systemName: "person.badge.key").font(.title2).foregroundStyle(Theme.accent)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("在\(request.platform)登录一下").font(.headline)
                     Text(note ?? "这条内容要登录之后才给看。在下面扫码或输入账号登录，登好了点右边的按钮，豆仓会接着导入。")
-                        .font(.callout).foregroundStyle(note == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.amber))
+                        .font(.callout).foregroundStyle(note == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.accent))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 12)

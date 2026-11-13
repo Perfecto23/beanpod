@@ -299,7 +299,7 @@ struct DictationHUD: View {
                 Image(systemName: dictation.accessibilityGranted ? "checkmark.circle.fill" : "doc.on.clipboard").foregroundStyle(Theme.ok)
                 Text(text).lineLimit(1)
             case .failed(let why):
-                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.amber)
+                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.accent)
                 Text(why).lineLimit(1)
             case .idle:
                 EmptyView()

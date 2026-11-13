@@ -78,10 +78,10 @@ struct RootView: View {
             // Wi‑Fi 快传期间一直挂着：这一分钟电脑不在原来的网络上，得让人随时知道进行到哪了
             if let wifi = store.wifi {
                 HStack(spacing: 10) {
-                    Image(systemName: "wifi").foregroundStyle(Theme.amber).symbolEffect(.variableColor.iterative, options: .repeating)
+                    Image(systemName: "wifi").foregroundStyle(Theme.accent).symbolEffect(.variableColor.iterative, options: .repeating)
                     Text(wifi.text).font(.callout.weight(.medium)).monospacedDigit()
                     if wifi.phase == .transferring, let pull = store.pull {
-                        ProgressView(value: pull.fraction).frame(width: 90).tint(Theme.amber)
+                        ProgressView(value: pull.fraction).frame(width: 90).tint(Theme.accent)
                         Text("\(Int(pull.fraction * 100))%").font(.callout).monospacedDigit().foregroundStyle(.secondary)
                     } else {
                         ProgressView().controlSize(.small)
@@ -99,14 +99,14 @@ struct RootView: View {
             // 正在从链接导入：下载要等一会儿，一直挂着让人知道进行到哪了
             if let job = store.linkJobs.first, store.wifi == nil {
                 HStack(spacing: 12) {
-                    Image(systemName: "arrow.down.to.line").font(.title3).foregroundStyle(Theme.amber)
+                    Image(systemName: "arrow.down.to.line").font(.title3).foregroundStyle(Theme.accent)
                     VStack(alignment: .leading, spacing: 5) {
                         HStack(spacing: 8) {
                             Text(job.title.map { "正在导入「\($0.prefix(16))」" } ?? "正在下载\(job.platform)的内容…").font(.callout.weight(.medium)).lineLimit(1)
                             if let p = job.progress { Text("\(Int(p * 100))%").font(.callout).monospacedDigit().foregroundStyle(.secondary) }
                             if store.linkJobs.count > 1 { Text("后面还有 \(store.linkJobs.count - 1) 条").font(.caption).foregroundStyle(.tertiary) }
                         }
-                        if let p = job.progress { ProgressView(value: p).tint(Theme.amber) } else { ProgressView().progressViewStyle(.linear).tint(Theme.amber) }
+                        if let p = job.progress { ProgressView(value: p).tint(Theme.accent) } else { ProgressView().progressViewStyle(.linear).tint(Theme.accent) }
                     }
                     .frame(width: 260, alignment: .leading)
                 }
@@ -189,7 +189,7 @@ struct RecordControls: View {
             let paused = store.recState == .paused
             HStack(spacing: size == .regular ? 6 : 10) {
                 HStack(spacing: 6) {
-                    Circle().fill(paused ? Theme.amber : Theme.rec).frame(width: 8, height: 8)
+                    Circle().fill(paused ? Theme.accent : Theme.rec).frame(width: 8, height: 8)
                         .opacity(paused ? 1 : 0.9)
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         Text(clock(store.elapsed(at: context.date))).monospacedDigit()
@@ -277,38 +277,57 @@ struct Sidebar: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // 品牌：图标和名字
-            HStack(spacing: 9) {
-                Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 30, height: 30)
-                Text("豆仓").font(.system(size: 19, weight: .semibold, design: .rounded))
+        VStack(alignment: .leading, spacing: 0) {
+            // 品牌卡：图标、名字、一行小字
+            HStack(spacing: 11) {
+                Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 40, height: 40)
+                    .clipShape(.rect(cornerRadius: 9))
+                    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.warm300.opacity(0.5), lineWidth: 2))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("豆仓").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.warm900)
+                    Text("语音工作台").font(.system(size: 11)).foregroundStyle(Theme.warm500)
+                }
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 14).padding(.top, 6).padding(.bottom, 12)
+            .padding(8)
+            .background(Theme.surface.opacity(0.6), in: .rect(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.warm200.opacity(0.5), lineWidth: 1))
+            .shadow(color: .black.opacity(0.03), radius: 2, y: 1)
             .accessibilityElement(children: .combine)
+            .padding(.bottom, 20)
 
-            SidebarRecord().padding(.bottom, 12)
+            SidebarRecord().padding(.bottom, 20)
 
-            item("总览", "house", 0) { nav.route = .dashboard }
-            item("录音", "waveform", 1, count: store.recordings.count) { nav.route = .all }
-            item("知识库", "square.stack.3d.up", 2) { nav.route = .knowledge }
+            VStack(spacing: 4) {
+                item("总览", "house.fill", 0) { nav.route = .dashboard }
+                item("录音", "waveform", 1, count: store.recordings.count) { nav.route = .all }
+                item("知识库", "book.closed.fill", 2) { nav.route = .knowledge }
+            }
             Spacer(minLength: 0)
+            Divider().overlay(Theme.warm200.opacity(0.6)).padding(.horizontal, -16).padding(.bottom, 14)
             DeviceChip()
         }
-        .padding(.horizontal, 10).padding(.bottom, 10)
+        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 16)
     }
 
     private func item(_ title: String, _ icon: String, _ index: Int, count: Int = 0, action: @escaping () -> Void) -> some View {
         let on = section == index
         return Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: icon).font(.system(size: 15, weight: on ? .semibold : .regular)).frame(width: 22)
-                Text(title).font(.system(size: 14.5, weight: on ? .semibold : .regular))
+            HStack(spacing: 12) {
+                Image(systemName: icon).font(.system(size: 14)).frame(width: 20)
+                    .foregroundStyle(on ? Theme.accent : Theme.warm500)
+                Text(title).font(.system(size: 14, weight: on ? .semibold : .medium))
+                    .foregroundStyle(on ? Theme.warm900 : Theme.warm700)
                 Spacer()
-                if count > 0 { Text("\(count)").font(.callout).foregroundStyle(.tertiary).monospacedDigit() }
+                if count > 0 {
+                    Text("\(count)").font(.system(size: 12, weight: .bold)).monospacedDigit()
+                        .foregroundStyle(on ? Theme.accent : Theme.warm500)
+                        .padding(.horizontal, 8).padding(.vertical, 2)
+                        .background((on ? Theme.accent : Theme.warm400).opacity(0.12), in: .capsule)
+                }
             }
-            .foregroundStyle(on ? Theme.amber : Color.primary)
-            .padding(.horizontal, 12).padding(.vertical, 9)
-            .background(on ? Theme.amber.opacity(0.16) : .clear, in: .rect(cornerRadius: 10))
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(on ? Theme.warm300.opacity(0.4) : .clear, in: .rect(cornerRadius: 12))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -325,13 +344,17 @@ struct SidebarRecord: View {
         VStack(spacing: 6) {
             if store.recState == .idle {
                 Button { store.startRecording() } label: {
-                    Label("开始录音", systemImage: "record.circle.fill").font(.callout.weight(.semibold))
-                        .frame(maxWidth: .infinity).frame(height: 34)
-                        .foregroundStyle(.white)
-                        .background(Theme.rec, in: .capsule)
-                        .contentShape(Capsule())
+                    HStack(spacing: 8) {
+                        PulsingDot()
+                        Text("开始录音").font(.system(size: 14, weight: .medium)).tracking(0.5)
+                    }
+                    .frame(maxWidth: .infinity).frame(height: 44)
+                    .foregroundStyle(.white)
+                    .background(LinearGradient(colors: [Theme.rec, Theme.recDeep], startPoint: .leading, endPoint: .trailing), in: .rect(cornerRadius: 12))
+                    .shadow(color: Theme.rec.opacity(0.25), radius: 10, y: 5)
+                    .contentShape(.rect(cornerRadius: 12))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressScale())
                 .help("开始录音，声音来自：\(store.sourceName)（⌘R）")
                 SourceLine()
             } else {
@@ -339,15 +362,16 @@ struct SidebarRecord: View {
                 // 录音中：同一个位置换成计时，点一下回到录音舞台
                 Button { nav.stageOpen = true } label: {
                     HStack(spacing: 7) {
-                        Circle().fill(paused ? Theme.amber : Theme.rec).frame(width: 8, height: 8)
+                        Circle().fill(paused ? Theme.accent : Theme.rec).frame(width: 8, height: 8)
                         TimelineView(.periodic(from: .now, by: 1)) { context in
                             Text(clock(store.elapsed(at: context.date))).font(.callout.weight(.semibold)).monospacedDigit()
                         }
                         Text(paused ? "已暂停" : "录音中").font(.callout).foregroundStyle(.secondary)
                     }
-                    .frame(maxWidth: .infinity).frame(height: 34)
-                    .background(Theme.rec.opacity(0.12), in: .capsule)
-                    .contentShape(Capsule())
+                    .frame(maxWidth: .infinity).frame(height: 44)
+                    .background(Theme.rec.opacity(0.12), in: .rect(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.rec.opacity(0.35), lineWidth: 1))
+                    .contentShape(.rect(cornerRadius: 12))
                 }
                 .buttonStyle(.plain).help("回到录音舞台（⌘L）")
             }
@@ -395,23 +419,25 @@ struct DeviceChip: View {
     var body: some View {
         let on = nav.route == .device
         Button { nav.route = .device } label: {
-            HStack(spacing: 10) {
-                Image(systemName: store.link == .ready ? "earbuds" : "earbuds.case")
-                    .font(.system(size: 17)).foregroundStyle(store.link == .ready ? Theme.amber : .secondary)
-                    .frame(width: 34, height: 34).background(Theme.amber.opacity(store.link == .ready ? 0.14 : 0.05), in: .rect(cornerRadius: 10))
+            HStack(spacing: 12) {
+                Image(systemName: "headphones")
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(store.link == .ready ? Theme.amber : Theme.warm500)
+                    .frame(width: 32, height: 32).background((store.link == .ready ? Theme.amber : Theme.warm400).opacity(0.16), in: .rect(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(store.link == .ready ? store.displayDeviceName : "录音豆").font(.callout.weight(.semibold)).lineLimit(1)
-                    HStack(spacing: 5) {
+                    Text(store.link == .ready ? store.displayDeviceName : "录音豆").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.warm900).lineLimit(1)
+                    HStack(spacing: 4) {
                         Circle().fill(statusColor).frame(width: 6, height: 6)
-                        Text(status).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Text(status).font(.system(size: 10.5)).foregroundStyle(store.link == .ready && store.wifi == nil && store.recState == .idle ? Theme.ok : Theme.warm500).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)
                 if let pull = store.pull { ProgressView(value: pull.fraction).progressViewStyle(.circular).controlSize(.small) }
+                else { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.warm400) }
             }
-            .padding(10)
-            .panel(radius: 14)
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.amber.opacity(on ? 0.7 : 0), lineWidth: 1.5))
+            .padding(12)
+            .background(Theme.surface.opacity(0.7), in: .rect(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(on ? Theme.accent.opacity(0.6) : Theme.warm200.opacity(0.6), lineWidth: on ? 1.5 : 1))
+            .shadow(color: .black.opacity(0.03), radius: 2, y: 1)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -424,7 +450,7 @@ struct DeviceChip: View {
         case .ready:
             if store.recState == .recording { return "录音中" }
             if store.recState == .paused { return "录音已暂停" }
-            return store.info.map { "已连接 · \($0.micBattery)%" } ?? "已连接"
+            return store.info.map { "已连接 • \($0.micBattery)%" } ?? "已连接"
         case .connecting: return "正在连接…"
         case .scanning: return "正在搜索…"
         case .off: return "蓝牙未打开"
@@ -434,7 +460,7 @@ struct DeviceChip: View {
     }
 
     private var statusColor: Color {
-        if store.wifi != nil { return Theme.amber }
+        if store.wifi != nil { return Theme.accent }
         if store.link == .ready { return store.info?.recording == true ? Theme.rec : Theme.ok }
         return .secondary.opacity(0.5)
     }
@@ -459,18 +485,20 @@ struct Card<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             if let title {
                 HStack(spacing: 8) {
-                    if let icon { Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.amber) }
-                    Text(title).font(.headline)
+                    if let icon { Image(systemName: icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accent) }
+                    Text(title).font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.warm900)
                 }
             }
             content
         }
-        .padding(16)
+        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .panel()
+        .background(Theme.warm50, in: .rect(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.warm200.opacity(0.8), lineWidth: 1))
+        .shadow(color: .black.opacity(0.02), radius: 2, y: 1)
     }
 }
 
@@ -489,31 +517,35 @@ struct Panel: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background(scheme == .dark ? Color.white.opacity(0.055) : Color.white.opacity(0.86), in: .rect(cornerRadius: radius))
-            .overlay(RoundedRectangle(cornerRadius: radius)
-                .strokeBorder(LinearGradient(colors: scheme == .dark ? [.white.opacity(0.14), .white.opacity(0.03)] : [.black.opacity(0.05), .black.opacity(0.09)],
-                                             startPoint: .top, endPoint: .bottom), lineWidth: 0.5))
-            .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.05), radius: 8, y: 3)
+            .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.warm200.opacity(scheme == .dark ? 0.9 : 0.8), lineWidth: 1))
+            .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.03), radius: 3, y: 1)
     }
 }
 
-/// 内容区的底。深色是石墨黑，浅色是暖白纸；左上角一团很淡的琥珀色光，像仪器面板上的一盏灯。
+/// 内容区的底：暖灰，平的，不加光晕。深色是暖黑。
 /// 不透出桌面：桌面是什么颜色，豆仓就跟着变灰变花，没有自己的样子。
 struct Backdrop: View {
-    @Environment(\.colorScheme) private var scheme
-
     var body: some View {
-        ZStack {
-            if scheme == .dark {
-                LinearGradient(colors: [Color(red: 0.085, green: 0.083, blue: 0.082), Color(red: 0.05, green: 0.05, blue: 0.055)],
-                               startPoint: .top, endPoint: .bottom)
-            } else {
-                LinearGradient(colors: [Color(red: 0.975, green: 0.965, blue: 0.945), Color(red: 0.945, green: 0.93, blue: 0.905)],
-                               startPoint: .top, endPoint: .bottom)
-            }
-            RadialGradient(colors: [Theme.amber.opacity(scheme == .dark ? 0.13 : 0.16), .clear],
-                           center: .init(x: 0.12, y: 0.0), startRadius: 0, endRadius: 620)
-        }
-        .ignoresSafeArea()
+        Theme.dynamic(light: (0.976, 0.969, 0.961), dark: (0.110, 0.098, 0.090)).ignoresSafeArea()
+    }
+}
+
+/// 点下去轻轻缩一下。
+struct PressScale: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.8), value: configuration.isPressed)
+    }
+}
+
+/// 录音键上那个白点：慢慢一明一暗，告诉人这是录音。
+struct PulsingDot: View {
+    @Environment(\.accessibilityReduceMotion) private var still
+    @State private var dim = false
+    var body: some View {
+        Circle().fill(.white).frame(width: 10, height: 10)
+            .opacity(dim ? 0.45 : 1)
+            .onAppear { if !still { withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: true)) { dim = true } } }
     }
 }
 
@@ -555,6 +587,8 @@ struct RecordingsView: View {
     @State private var query = ""
     @State private var quick: Quick = .all
     @State private var renameText = ""
+    @FocusState private var searching: Bool
+    @FocusState private var listFocused: Bool
 
     /// 列表头上的快速筛选。星标以前是侧栏里单独的一页，没有星标时整页是空的，所以收进这里。
     enum Quick: String, CaseIterable, Identifiable {
@@ -628,55 +662,83 @@ struct RecordingsView: View {
         @Bindable var nav = nav
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                // 搜索就放在列表头上：在哪找，就在哪输
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("搜标题、内容、话题", text: $query).textFieldStyle(.plain)
-                    if !query.isEmpty {
-                        Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
-                            .buttonStyle(.plain).help("清空").accessibilityLabel("清空搜索")
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .center, spacing: 6) {
+                        Text(title).font(.system(size: 18, weight: .bold)).foregroundStyle(Theme.warm900)
+                        Spacer()
+                        Text("\(items.count) 条").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.warm500).monospacedDigit()
+                        listMenu
                     }
-                }
-                .padding(.horizontal, 10).padding(.vertical, 7)
-                .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 9))
-                .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 6)
-
-                Picker("筛选", selection: $quick) {
-                    ForEach(Quick.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden().controlSize(.small)
-                .padding(.horizontal, 12).padding(.bottom, 4)
-
-                List(selection: $nav.selection) {
-                    ForEach(days, id: \.label) { day in
-                        Section {
-                            ForEach(day.items) { rec in
-                                RecordingRow(recording: rec).tag(rec.id)
-                                    .contextMenu { rowMenu(rec) }
+                    // 搜索就放在列表头上：在哪找，就在哪输
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(Theme.warm400)
+                        TextField("搜标题、内容、话题", text: $query).textFieldStyle(.plain).font(.system(size: 13))
+                        if !query.isEmpty {
+                            Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.warm400) }
+                                .buttonStyle(.plain).help("清空").accessibilityLabel("清空搜索")
+                        }
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(Theme.warm100.opacity(0.7), in: .rect(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(searching ? Theme.accent : Theme.warm200.opacity(0.8), lineWidth: searching ? 1.5 : 1))
+                    .focused($searching)
+                    // 快速筛选：选中的是深色，其他是浅灰
+                    HStack(spacing: 6) {
+                        ForEach(Quick.allCases) { q in
+                            Button { quick = q } label: {
+                                Text(q.rawValue).font(.system(size: 12, weight: quick == q ? .medium : .regular))
+                                    .padding(.horizontal, 12).padding(.vertical, 4)
+                                    .foregroundStyle(quick == q ? Theme.warm50 : Theme.warm700)
+                                    .background(quick == q ? Theme.warm900 : Theme.warm200.opacity(0.7), in: .rect(cornerRadius: 8))
                             }
-                        } header: {
-                            HStack {
-                                Text(day.label)
-                                Spacer()
-                                Text("\(day.items.count) 条 · \(spokenDuration(day.items.reduce(0) { $0 + $1.duration }))").monospacedDigit()
-                            }
-                            .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(quick == q ? .isSelected : [])
                         }
                     }
                 }
-                .scrollContentBackground(.hidden)
-                .listStyle(.sidebar)
+                .padding(16)
+                Divider().overlay(Theme.warm200.opacity(0.6))
+
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 10) {
+                            ForEach(Array(days.enumerated()), id: \.element.label) { n, day in
+                                HStack {
+                                    Text(day.label)
+                                    Spacer()
+                                    Text("\(day.items.count) 条 • \(spokenDuration(day.items.reduce(0) { $0 + $1.duration }))").monospacedDigit()
+                                }
+                                .font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.warm500)
+                                .padding(.horizontal, 8).padding(.top, n == 0 ? 4 : 12).padding(.bottom, 2)
+                                ForEach(day.items) { rec in
+                                    RecordingRow(recording: rec, selected: nav.selection == rec.id)
+                                        .id(rec.id)
+                                        .onTapGesture { nav.selection = rec.id; listFocused = true }
+                                        .contextMenu { rowMenu(rec) }
+                                        .accessibilityAddTraits(.isButton)
+                                        .accessibilityAddTraits(nav.selection == rec.id ? .isSelected : [])
+                                }
+                            }
+                        }
+                        .padding(12)
+                    }
+                    // 上下键换一条：列表不是系统的列表了，键盘照样能用
+                    .focusable().focused($listFocused).focusEffectDisabled()
+                    .onKeyPress(.upArrow) { move(-1, proxy); return .handled }
+                    .onKeyPress(.downArrow) { move(1, proxy); return .handled }
+                }
                 .overlay {
                     // 列表空的时候这里只留一句小字；要说的话放在右边，一个页面只出现一个空状态
                     if items.isEmpty {
                         if store.loadingList { ProgressView("正在读取录音列表…") }
-                        else { Text(store.recordings.isEmpty ? "还没有录音" : "这个条件下没有录音").font(.callout).foregroundStyle(.tertiary) }
+                        else { Text(store.recordings.isEmpty ? "还没有录音" : "这个条件下没有录音").font(.callout).foregroundStyle(Theme.warm400) }
                     }
                 }
             }
-            .frame(width: 330)
+            .frame(width: 368)
+            .background(Theme.surface.opacity(0.5))
 
-            Divider()
+            Divider().overlay(Theme.warm200.opacity(0.7))
             Group {
                 if let id = nav.selection, let rec = store.recordings.first(where: { $0.id == id }) {
                     RecordingDetail(recording: rec).id(rec.id)
@@ -701,9 +763,10 @@ struct RecordingsView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Theme.surface.opacity(0.8))
         }
         .navigationTitle(title)
-        .navigationSubtitle(items.isEmpty ? "" : "\(items.count) 条")
+        .toolbar(removing: .title)
         // 不留空白：没选中任何一条时，自动打开最新的那条
         .onAppear { pickFirstIfNeeded() }
         .onChange(of: nav.renaming) { _, id in
@@ -718,40 +781,46 @@ struct RecordingsView: View {
         }
         .onChange(of: items.map(\.id)) { pickFirstIfNeeded() }
         .onChange(of: nav.route) { if nav.route == .starred { nav.route = .all; quick = .starred } }
-        .toolbar {
-            ToolbarItemGroup {
-                Picker("场景", selection: Binding(get: { () -> Scene? in if case .scene(let s) = nav.route { return s }; return nil },
-                                                 set: { nav.route = $0.map { .scene($0) } ?? .all })) {
-                    Text("全部场景").tag(Scene?.none)
-                    ForEach(Scene.allCases.filter { s in store.recordings.contains { $0.scene == s } }) { s in
-                        Label(s.name, systemImage: s.icon).tag(Scene?.some(s))
-                    }
-                }
-                .help("按场景筛选")
-                if store.wifiSyncWorthOffering {
-                    Button("Wi‑Fi 快传", systemImage: "wifi") { nav.confirmWiFiSync = true }
-                        .help("让录音豆开一个 Wi‑Fi，把长录音一口气拉下来，比蓝牙快十倍左右")
-                }
-                if store.wifi != nil {
-                    // 快传自己会收尾，不给取消，免得网络停在半路
-                } else if store.pull != nil || !store.queue.isEmpty {
+    }
+
+    /// 列表头上的「…」：导入、录音豆、按场景筛选。不常用，收在一起。
+    private var listMenu: some View {
+        Menu {
+            Section("导入") {
+                Button("从文件导入…", systemImage: "doc") { store.chooseFilesToImport() }
+                Button("从链接导入…", systemImage: "link") { nav.linkSheet = true }
+            }
+            Section("录音豆") {
+                Button("重新读取录音豆", systemImage: "arrow.clockwise") { store.refreshFiles() }
+                    .disabled(store.link != .ready || store.loadingList || store.pull != nil)
+                if store.wifi == nil, store.pull != nil || !store.queue.isEmpty {
                     Button("取消下载", systemImage: "xmark.circle") { store.cancelDownloads() }
                 } else if store.recordings.contains(where: { $0.onDevice && !$0.downloaded && !$0.inProgress }) {
-                    // 只有录音豆里真有没下载的，才摆出这个按钮
-                    Button("全部下载", systemImage: "arrow.down.circle") { store.downloadAll() }
-                        .disabled(!store.encryptionReady)
-                        .help("把录音豆里还没下载的录音都下到这台 Mac")
+                    Button("全部下载", systemImage: "arrow.down.circle") { store.downloadAll() }.disabled(!store.encryptionReady)
+                    if store.wifiSyncWorthOffering { Button("用 Wi‑Fi 快传…", systemImage: "wifi") { nav.confirmWiFiSync = true } }
                 }
-                Button("刷新", systemImage: "arrow.clockwise") { store.refreshFiles() }
-                    .disabled(store.link != .ready || store.loadingList || store.pull != nil)
-                    .help("重新读取录音豆里的录音列表")
-                Menu("导入", systemImage: "square.and.arrow.down") {
-                    Button("从文件导入…", systemImage: "doc") { store.chooseFilesToImport() }
-                    Button("从链接导入…", systemImage: "link") { nav.linkSheet = true }
-                }
-                .help("导入电脑上的录音、文字文件，或者贴一条视频链接。文件也可以直接拖进窗口")
             }
+            Section("按场景看") {
+                Button("全部场景") { nav.route = .all }
+                ForEach(Scene.allCases.filter { s in store.recordings.contains { $0.scene == s } }) { s in
+                    Button { nav.route = .scene(s) } label: { Label(s.name, systemImage: s.icon) }
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.warm500)
+                .frame(width: 26, height: 26).contentShape(Rectangle())
         }
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        .help("导入、录音豆、按场景看")
+    }
+
+    private func move(_ step: Int, _ proxy: ScrollViewProxy) {
+        let ids = items.map(\.id)
+        guard !ids.isEmpty else { return }
+        let i = nav.selection.flatMap { ids.firstIndex(of: $0) } ?? (step > 0 ? -1 : ids.count)
+        let next = ids[max(0, min(ids.count - 1, i + step))]
+        nav.selection = next
+        withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(next) }
     }
 
     /// 右键一行：不用先点开，就能改名、打星、删掉。
@@ -787,52 +856,73 @@ struct RecordingsView: View {
 struct RecordingRow: View {
     @Environment(BeanStore.self) private var store
     let recording: Recording
+    var selected = false
+    @State private var hover = false
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            // 场景：一个带颜色的小方块，扫一眼就知道这条是什么场合
-            Image(systemName: recording.source != nil ? "play.fill" : (recording.scene ?? .other).icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(recording.isAnalyzed ? Theme.amber : Color.secondary)
-                .frame(width: 34, height: 34)
-                .background((recording.isAnalyzed ? Theme.amber : Color.secondary).opacity(0.14), in: .rect(cornerRadius: 9))
-                .help((recording.scene ?? .other).name)
-            // 标题下面只放小信息：几点、多长、什么场合、两个关键词。不放摘要句子，那是点开之后看的
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 5) {
-                    Text(recording.displayTitle).font(.body.weight(.semibold)).lineLimit(1)
-                    if store.retitling.contains(recording.id) { ProgressView().controlSize(.mini) }
-                    Spacer(minLength: 4)
-                    if recording.starred { Image(systemName: "star.fill").font(.caption).foregroundStyle(Theme.amber).accessibilityLabel("星标") }
-                    trailing
-                }
-                HStack(spacing: 6) {
-                    ViewThatFits(in: .horizontal) {
-                        infoLine(tags: 2)
-                        infoLine(tags: 1)
-                        infoLine(tags: 0)
-                    }
-                    Spacer(minLength: 2)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                // 场景：一个小方块，扫一眼就知道这条是什么场合。选中的那条换成强调色
+                Image(systemName: recording.source != nil ? "play.fill" : (recording.scene ?? .other).icon)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 28, height: 28)
+                    .background(tint.opacity(selected ? 0.1 : 0.12), in: .rect(cornerRadius: 8))
+                    .help((recording.scene ?? .other).name)
+                Text(recording.displayTitle)
+                    .font(.system(size: 14, weight: selected ? .bold : .medium))
+                    .foregroundStyle(selected || hover ? Theme.warm900 : Theme.warm800)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+                if store.retitling.contains(recording.id) { ProgressView().controlSize(.mini).padding(.top, 6) }
+                Spacer(minLength: 4)
+                HStack(spacing: 8) {
+                    if recording.starred { Image(systemName: "star.fill").foregroundStyle(Theme.accent).accessibilityLabel("星标") }
                     let todo = recording.todos.filter { !$0.done }.count
                     if todo > 0 { Label("\(todo)", systemImage: "square").labelStyle(.titleAndIcon).help("\(todo) 件待办没做完") }
                     if !recording.marks.isEmpty {
                         Label("\(recording.marks.count)", systemImage: "flag").labelStyle(.titleAndIcon).help("\(recording.marks.count) 个重点标记")
                     }
+                    trailing
                 }
-                .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                .font(.system(size: 12)).foregroundStyle(Theme.warm400).monospacedDigit()
+                .padding(.top, 6)
             }
+            // 标题下面只放小信息：几点、多长、什么场合，右边两个关键词。不放摘要句子，那是点开之后看的
+            HStack(spacing: 6) {
+                Text(meta).lineLimit(1).monospacedDigit()
+                Spacer(minLength: 4)
+                ViewThatFits(in: .horizontal) {
+                    tags(2)
+                    tags(1)
+                    EmptyView()
+                }
+            }
+            .font(.system(size: 11)).foregroundStyle(Theme.warm500)
+            .padding(.leading, 38)
         }
-        .padding(.vertical, 5)
+        .padding(14)
+        .background(Theme.surface.opacity(selected || hover ? 1 : 0.6), in: .rect(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12)
+            .strokeBorder(selected ? Theme.accent.opacity(0.6) : Theme.warm200.opacity(0.6), lineWidth: selected ? 2 : 1))
+        .shadow(color: .black.opacity(selected ? 0.06 : hover ? 0.05 : 0.02), radius: selected || hover ? 4 : 1.5, y: 1)
+        .contentShape(.rect(cornerRadius: 12))
+        .onHover { hover = $0 }
+        .animation(.easeOut(duration: 0.15), value: hover)
     }
 
-    private func infoLine(tags count: Int) -> some View {
+    private var tint: Color {
+        if selected { return Theme.accent }
+        return recording.isAnalyzed ? Theme.amber : Theme.warm400
+    }
+
+    private func tags(_ count: Int) -> some View {
         HStack(spacing: 6) {
-            Text(meta).lineLimit(1).fixedSize()
             ForEach(Array(shortTags.prefix(count)), id: \.self) { tag in
                 Text(tag).lineLimit(1).fixedSize()
-                    .padding(.horizontal, 6).padding(.vertical, 1.5)
-                    .foregroundStyle(Theme.amber)
-                    .background(Theme.amber.opacity(0.14), in: .capsule)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .foregroundStyle(Theme.warm600)
+                    .background(Theme.warm100, in: .rect(cornerRadius: 4))
             }
         }
     }
@@ -852,7 +942,7 @@ struct RecordingRow: View {
         else if !recording.downloaded { parts.append("还在录音豆里") }
         else if recording.transcript == nil { parts.append("还没转成文字") }
         else if !recording.isAnalyzed { parts.append("还没整理") }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: " • ")
     }
 
     @ViewBuilder private var trailing: some View {
@@ -880,37 +970,31 @@ struct RecordingDetail: View {
     @State private var tab = 0
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                header
-                if recording.downloaded {
-                    if let stage = store.stages[recording.id] { processing(stage) }
-                    if recording.transcript != nil {
-                        Picker("", selection: $tab) {
-                            Text("纪要").tag(0)
-                            Text("文字稿").tag(1)
-                            Text("改写").tag(2)
+        VStack(spacing: 0) {
+            header
+            Divider().overlay(Theme.warm200.opacity(0.6))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    if recording.downloaded {
+                        if let stage = store.stages[recording.id] { processing(stage) }
+                        if recording.transcript != nil {
+                            switch tab {
+                            case 0: NotesView(recording: recording)
+                            case 1: TranscriptView(recording: recording)
+                            default: RewriteView(recording: recording)
+                            }
+                        } else if store.stages[recording.id] == nil {
+                            notProcessed
                         }
-                        .pickerStyle(.segmented).labelsHidden().frame(width: 260)
-                        switch tab {
-                        case 0: NotesView(recording: recording)
-                        case 1: TranscriptView(recording: recording)
-                        default: RewriteView(recording: recording)
-                        }
-                    } else if store.stages[recording.id] == nil {
-                        notProcessed
+                    } else {
+                        notDownloaded
                     }
-                } else {
-                    notDownloaded
                 }
+                .padding(24)
+                .frame(maxWidth: 820, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(24)
-            .frame(maxWidth: 760, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .onAppear { title = recording.title ?? "" }
-        // 播放条浮在内容上面，文字稿从它底下滚过去
-        .safeAreaInset(edge: .bottom) {
+            // 播放条固定在底部，文字稿从它上面滚过去
             if recording.downloaded, !recording.textOnly, store.recState == .idle {
                 VStack(spacing: 8) {
                     if !recording.marks.isEmpty {
@@ -919,58 +1003,27 @@ struct RecordingDetail: View {
                             HStack(spacing: 6) {
                                 ForEach(recording.marks, id: \.self) { m in
                                     Button { store.play(recording.id, at: max(0, m - 2)) } label: {
-                                        Label(clock(m), systemImage: "flag.fill").font(.callout.monospacedDigit())
+                                        Label(clock(m), systemImage: "flag.fill").font(.system(size: 12, weight: .medium).monospacedDigit())
+                                            .padding(.horizontal, 10).padding(.vertical, 4)
+                                            .foregroundStyle(Theme.accent)
+                                            .background(Theme.accent.opacity(0.1), in: .rect(cornerRadius: 8))
                                     }
-                                    .buttonStyle(.glass).tint(Theme.amber)
+                                    .buttonStyle(.plain)
                                     .help("跳到这个重点标记。右键可以删掉")
                                     .accessibilityLabel("重点标记 \(clock(m))")
                                     .contextMenu { Button("删掉这个标记", role: .destructive) { store.removeMark(recording.id, m) } }
                                 }
                             }
-                            .padding(.horizontal, 4)
                         }
-                        .frame(maxWidth: 620)
                     }
-                    PlayerBar(recording: recording).frame(maxWidth: 680)
+                    PlayerBar(recording: recording)
                 }
-                .padding(.horizontal, 24).padding(.bottom, 14)
+                .padding(16)
+                .background(Theme.surface.opacity(0.9))
+                .overlay(alignment: .top) { Divider().overlay(Theme.warm200.opacity(0.6)) }
             }
         }
-        .toolbar {
-            ToolbarItemGroup {
-                Button(recording.starred ? "取消星标" : "星标", systemImage: recording.starred ? "star.fill" : "star") {
-                    store.toggleStar(recording.id)
-                }
-                if recording.downloaded, recording.transcript != nil {
-                    Button("整理", systemImage: "sparkles") { store.process(recording.id) }
-                        .disabled(store.stages[recording.id] != nil)
-                        .help("用分析模型重新判断场景、整理纪要")
-                }
-                if recording.downloaded {
-                    Menu("更多", systemImage: "ellipsis.circle") {
-                        Button("重新整理纪要") { store.process(recording.id) }.disabled(recording.transcript == nil)
-                        Button("重新转写") { store.process(recording.id, retranscribe: true) }.disabled(recording.textOnly)
-                        Divider()
-                        Button("导出为 Markdown…") { store.exportMarkdown([recording]) }.disabled(!recording.isAnalyzed)
-                        if !recording.textOnly {
-                            Button("导出音频（M4A，体积小）…") { store.exportAudio(recording.id, m4a: true) }
-                            Button("导出音频（WAV，无损）…") { store.exportAudio(recording.id, m4a: false) }
-                        }
-                        Button("拷贝文字稿") { copy(recording.transcript ?? "") }.disabled(recording.transcript == nil)
-                        if let source = recording.source, let url = URL(string: source) {
-                            Button("打开原链接") { NSWorkspace.shared.open(url) }
-                            Button("拷贝原链接") { copy(source) }
-                        }
-                        if recording.origin == nil { Button("在访达中显示音频") { store.reveal(recording.id) } }
-                    }
-                    .disabled(store.stages[recording.id] != nil)
-                }
-                Menu("删除", systemImage: "trash") {
-                    if recording.downloaded { Button("从这台 Mac 删除…") { nav.confirmLocalDelete = true } }
-                    if recording.onDevice { Button("从录音豆删除…") { nav.confirmDeviceDelete = true } }
-                }
-            }
-        }
+        .onAppear { title = recording.title ?? "" }
         .confirmationDialog("从录音豆里删除这条录音？", isPresented: Bindable(nav).confirmDeviceDelete) {
             Button("删除", role: .destructive) { store.deleteFromDevice(recording.id) }
         } message: {
@@ -983,34 +1036,96 @@ struct RecordingDetail: View {
         }
     }
 
+    /// 顶上一块：场景、时间、一排工具；下面是标题和三个页签。
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
                 Menu {
                     ForEach(Scene.allCases) { s in
                         Button { store.setScene(recording.id, s) } label: { Label(s.name, systemImage: s.icon) }
                     }
                 } label: {
-                    if let scene = recording.scene { ScenePill(scene: scene) }
-                    else { Label("未分类", systemImage: "tag").font(.caption).foregroundStyle(.secondary) }
+                    Label(recording.scene?.name ?? "未分类", systemImage: recording.scene?.icon ?? "tag")
+                        .font(.system(size: 12, weight: .semibold)).labelStyle(.titleAndIcon)
+                        .foregroundStyle(Theme.warm700)
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(Theme.warm100, in: .rect(cornerRadius: 8))
                 }
-                .menuStyle(.borderlessButton).fixedSize()
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
                 .help("场景是自动判断的，判断错了可以在这里改")
-                Text(subtitle).font(.callout).foregroundStyle(.secondary)
+                Text(subtitle).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.warm500).lineLimit(1)
+                Spacer(minLength: 8)
+                tools
             }
-            TextField("标题", text: $title, prompt: Text(recording.displayTitle))
-                .textFieldStyle(.plain).font(.title.bold())
-                .onSubmit { store.rename(recording.id, to: title) }
-                .disabled(!recording.downloaded)
+            HStack(alignment: .center, spacing: 16) {
+                // 标题长的时候折成两行，不被右边的页签挤掉
+                TextField("标题", text: $title, prompt: Text(recording.displayTitle), axis: .vertical)
+                    .lineLimit(1...2)
+                    .textFieldStyle(.plain).font(.system(size: 24, weight: .bold)).foregroundStyle(Theme.warm900)
+                    .onSubmit { store.rename(recording.id, to: title) }
+                    .disabled(!recording.downloaded)
+                if recording.downloaded, recording.transcript != nil {
+                    PaneSwitch(selection: $tab, titles: ["纪要", "文字稿", "改写"])
+                }
+            }
+        }
+        .padding(24)
+        .background(Theme.surface.opacity(0.9))
+    }
+
+    /// 右上角一排：重新整理、导出、星标、AI 起标题、更多、删除。
+    private var tools: some View {
+        HStack(spacing: 4) {
+            if recording.downloaded, recording.transcript != nil {
+                IconTool("arrow.triangle.2.circlepath", help: "用分析模型重新判断场景、整理纪要") { store.process(recording.id) }
+                    .disabled(store.stages[recording.id] != nil)
+            }
+            if recording.downloaded {
+                IconMenu("square.and.arrow.up", help: "导出") {
+                    Button("导出为 Markdown…") { store.exportMarkdown([recording]) }.disabled(!recording.isAnalyzed)
+                    if !recording.textOnly {
+                        Button("导出音频（M4A，体积小）…") { store.exportAudio(recording.id, m4a: true) }
+                        Button("导出音频（WAV，无损）…") { store.exportAudio(recording.id, m4a: false) }
+                    }
+                    Button("拷贝文字稿") { copy(recording.transcript ?? "") }.disabled(recording.transcript == nil)
+                }
+            }
+            IconTool(recording.starred ? "star.fill" : "star", help: recording.starred ? "取消星标" : "标为星标",
+                     tint: recording.starred ? Theme.accent : nil) { store.toggleStar(recording.id) }
+            if recording.transcript != nil {
+                IconTool("wand.and.sparkles", help: "让 AI 重新起标题") { store.retitle(recording.id) }
+                    .disabled(!store.analysisAvailable || store.retitling.contains(recording.id))
+            }
+            if recording.downloaded {
+                IconMenu("ellipsis", help: "更多") {
+                    Button("重新整理纪要") { store.process(recording.id) }.disabled(recording.transcript == nil)
+                    Button("重新转写") { store.process(recording.id, retranscribe: true) }.disabled(recording.textOnly)
+                    Divider()
+                    if let source = recording.source, let url = URL(string: source) {
+                        Button("打开原链接") { NSWorkspace.shared.open(url) }
+                        Button("拷贝原链接") { copy(source) }
+                    }
+                    if recording.origin == nil { Button("在访达中显示音频") { store.reveal(recording.id) } }
+                }
+                .disabled(store.stages[recording.id] != nil)
+            }
+            IconMenu("trash", help: "删除", danger: true) {
+                if recording.downloaded { Button("从这台 Mac 删除…") { nav.confirmLocalDelete = true } }
+                if recording.onDevice { Button("从录音豆删除…") { nav.confirmDeviceDelete = true } }
+            }
         }
     }
 
     private var subtitle: String {
         var parts: [String] = []
         if let o = recording.origin { parts.append(o) }
-        if let d = recording.date { parts.append(d.formatted(date: .long, time: .shortened)) }
+        if let d = recording.date {
+            // 今年的不写年份，省地方
+            let thisYear = Calendar.current.isDate(d, equalTo: .now, toGranularity: .year)
+            parts.append(thisYear ? d.formatted(.dateTime.month().day().hour().minute()) : d.formatted(.dateTime.year().month().day().hour().minute()))
+        }
         if !recording.textOnly { parts.append(spokenDuration(recording.duration)) }
-        return parts.joined(separator: " · ")
+        return "•  " + parts.joined(separator: "  •  ")
     }
 
     private func processing(_ stage: BeanStore.Stage) -> some View {
@@ -1062,6 +1177,88 @@ struct RecordingDetail: View {
     }
 }
 
+/// 详情页右上角的一个图标按钮：36 见方，悬停时垫一块浅灰。
+struct IconTool: View {
+    let icon: String
+    let help: String
+    var tint: Color?
+    let action: () -> Void
+    @State private var hover = false
+    @Environment(\.isEnabled) private var enabled
+
+    init(_ icon: String, help: String, tint: Color? = nil, action: @escaping () -> Void) {
+        self.icon = icon; self.help = help; self.tint = tint; self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 13, weight: .medium))
+                .foregroundStyle(tint ?? Theme.warm600)
+                .frame(width: 36, height: 36)
+                .background(hover && enabled ? Theme.warm100 : .clear, in: .rect(cornerRadius: 12))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).opacity(enabled ? 1 : 0.4)
+        .onHover { hover = $0 }
+        .help(help).accessibilityLabel(help)
+    }
+}
+
+/// 同上，点开是一个菜单。删除那颗悬停时变成浅红。
+struct IconMenu<Content: View>: View {
+    let icon: String
+    let help: String
+    var danger = false
+    @ViewBuilder let content: Content
+    @State private var hover = false
+
+    init(_ icon: String, help: String, danger: Bool = false, @ViewBuilder content: () -> Content) {
+        self.icon = icon; self.help = help; self.danger = danger; self.content = content()
+    }
+
+    var body: some View {
+        Menu { content } label: {
+            Image(systemName: icon).font(.system(size: 13, weight: .medium))
+                .foregroundStyle(danger && hover ? Theme.accent : Theme.warm600)
+                .frame(width: 36, height: 36)
+                .background(hover ? (danger ? Theme.accent.opacity(0.1) : Theme.warm100) : .clear, in: .rect(cornerRadius: 12))
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        .onHover { hover = $0 }
+        .help(help).accessibilityLabel(help)
+    }
+}
+
+/// 「纪要 / 文字稿 / 改写」：浅灰底，选中的那格是白的。
+struct PaneSwitch: View {
+    @Binding var selection: Int
+    let titles: [String]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(titles.enumerated()), id: \.offset) { i, t in
+                Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { selection = i } } label: {
+                    Text(t).font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(selection == i ? Theme.warm900 : Theme.warm500)
+                        .padding(.horizontal, 16).padding(.vertical, 6)
+                        .background {
+                            if selection == i {
+                                RoundedRectangle(cornerRadius: 8).fill(Theme.surface).shadow(color: .black.opacity(0.06), radius: 1.5, y: 1)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selection == i ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .background(Theme.warm100, in: .rect(cornerRadius: 12))
+        .fixedSize()
+    }
+}
+
 func copy(_ text: String) {
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(text, forType: .string)
@@ -1078,9 +1275,13 @@ struct PlayerBar: View {
         let active = store.playingID == recording.id
         HStack(spacing: compact ? 10 : 14) {
             Button { store.togglePlay(recording.id) } label: {
-                Image(systemName: active && store.isPlaying ? "pause.circle.fill" : "play.circle.fill").font(.system(size: 36))
+                Image(systemName: active && store.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white).offset(x: active && store.isPlaying ? 0 : 1)
+                    .frame(width: 40, height: 40)
+                    .background(Theme.accent, in: .circle)
+                    .shadow(color: Theme.accent.opacity(0.25), radius: 6, y: 3)
             }
-            .buttonStyle(.plain).foregroundStyle(Theme.amber)
+            .buttonStyle(PressScale())
             .keyboardShortcut(.space, modifiers: [])
             .help(active && store.isPlaying ? "暂停（空格）" : "播放（空格）")
             .accessibilityLabel(active && store.isPlaying ? "暂停" : "播放")
@@ -1104,22 +1305,25 @@ struct PlayerBar: View {
                 store.skip(recording.id, by: direction == .increment ? 15 : -15)
             }
             Text(compact ? clock(active ? store.playhead : 0) : "\(clock(active ? store.playhead : 0)) / \(clock(recording.duration))")
-                .font(.callout).monospacedDigit().foregroundStyle(.secondary)
+                .font(.system(size: 12, weight: .semibold)).monospacedDigit().foregroundStyle(Theme.warm700)
             // 点一下换下一档速度
             Button {
                 let i = BeanStore.rates.firstIndex(of: store.playRate) ?? 1
                 store.setRate(BeanStore.rates[(i + 1) % BeanStore.rates.count])
             } label: {
-                Text(rateLabel(store.playRate)).font(.callout.weight(.semibold)).monospacedDigit()
-                    .foregroundStyle(store.playRate == 1 ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.amber))
-                    .frame(width: 44)
+                Text(rateLabel(store.playRate)).font(.system(size: 12, weight: .semibold)).monospacedDigit()
+                    .foregroundStyle(Theme.accent)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Theme.warm200.opacity(0.8), in: .rect(cornerRadius: 8))
             }
             .buttonStyle(.plain).help("播放速度，点一下换一档（⌘] 加快，⌘[ 放慢）")
             .accessibilityLabel("播放速度").accessibilityValue("\(rateLabel(store.playRate).dropLast()) 倍")
         }
-        .padding(.horizontal, 16).padding(.vertical, 10)
-        .glassEffect(.regular.interactive(), in: .capsule)
-        .onGeometryChange(for: Bool.self) { $0.size.width < 520 } action: { compact = $0 }
+        .padding(12)
+        .background(Theme.warm100.opacity(0.8), in: .rect(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.warm200, lineWidth: 1))
+        .shadow(color: .black.opacity(0.03), radius: 2, y: 1)
+        .onGeometryChange(for: Bool.self) { $0.size.width < 560 } action: { compact = $0 }
         .task(id: recording.id) {
             let url = store.wavURL(recording.id)
             bars = await Task.detached { BeanStore.waveform(of: url) }.value
@@ -1152,7 +1356,7 @@ struct Timeline: View {
                     let barH = max(2, CGFloat(level) * size.height)
                     let rect = CGRect(x: x, y: (size.height - barH) / 2, width: max(1.5, (bars.isEmpty ? size.width / 80 : step) * 0.6), height: barH)
                     let played = x <= size.width * progress
-                    context.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(played ? Theme.amber : .secondary.opacity(0.45)))
+                    context.fill(Path(roundedRect: rect, cornerRadius: 1.5), with: .color(played ? Theme.accent.opacity(0.85) : Theme.warm300))
                 }
                 // 每句话开头的刻度
                 if duration > 0 {
@@ -1163,8 +1367,8 @@ struct Timeline: View {
                     // 重点标记：琥珀色的一根线，顶上一个点
                     for f in flags {
                         let x = size.width * CGFloat(min(1, f / duration))
-                        context.fill(Path(CGRect(x: x - 0.75, y: 0, width: 1.5, height: size.height)), with: .color(Theme.amber))
-                        context.fill(Path(ellipseIn: CGRect(x: x - 3, y: 0, width: 6, height: 6)), with: .color(Theme.amber))
+                        context.fill(Path(CGRect(x: x - 0.75, y: 0, width: 1.5, height: size.height)), with: .color(Theme.accent))
+                        context.fill(Path(ellipseIn: CGRect(x: x - 3, y: 0, width: 6, height: 6)), with: .color(Theme.accent))
                     }
                 }
             }
@@ -1210,7 +1414,7 @@ struct RecordDock: View {
         let paused = store.recState == .paused
         return HStack(spacing: 14) {
             HStack(spacing: 8) {
-                Circle().fill(paused ? Theme.amber : Theme.rec).frame(width: 9, height: 9)
+                Circle().fill(paused ? Theme.accent : Theme.rec).frame(width: 9, height: 9)
                     .symbolEffect(.pulse, isActive: !paused)
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(clock(store.elapsed(at: context.date)))
@@ -1286,8 +1490,8 @@ struct RewriteView: View {
             ForEach(recording.videos) { clip in
                 let url = store.folder.appendingPathComponent(clip.file)
                 HStack(spacing: 12) {
-                    Image(systemName: "play.rectangle.fill").font(.title2).foregroundStyle(Theme.amber)
-                        .frame(width: 44, height: 44).background(Theme.amber.opacity(0.14), in: .rect(cornerRadius: 11))
+                    Image(systemName: "play.rectangle.fill").font(.title2).foregroundStyle(Theme.accent)
+                        .frame(width: 44, height: 44).background(Theme.accent.opacity(0.14), in: .rect(cornerRadius: 11))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("数字人口播 · \(clip.host)").font(.body.weight(.semibold))
                         Text(clip.date.formatted(date: .abbreviated, time: .shortened) + (clip.seconds > 0 ? " · 约 \(clip.seconds) 秒" : "") + " · \(clip.credits) 积分")
@@ -1311,7 +1515,7 @@ struct RewriteView: View {
                             makingVideo = true
                             Task { await maker.prepare(text: item.text, recording: recording.id, title: recording.displayTitle) }
                         } label: { Label("做成视频", systemImage: "play.rectangle.on.rectangle") }
-                            .buttonStyle(.glass).tint(Theme.amber)
+                            .buttonStyle(.glass).tint(Theme.accent)
                             .disabled(maker.phase == .running || maker.phase == .joining)
                             .help("用 Renoise 把这篇稿子做成数字人口播。会先报价，确认了才开始")
                         Button("拷贝", systemImage: "doc.on.doc") { copy(item.text); store.toast("doc.on.doc", "已拷贝") }
@@ -1345,29 +1549,33 @@ struct NotesView: View {
     let recording: Recording
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 20) {
             if let summary = recording.summary {
                 Card(title: "摘要", icon: "text.alignleft") {
-                    Text(MarkdownView.inline(summary)).textSelection(.enabled).lineSpacing(4)
+                    Text(MarkdownView.inline(summary)).font(.system(size: 14)).foregroundStyle(Theme.warm700).textSelection(.enabled).lineSpacing(5)
                 }
             }
             ForEach(recording.sections) { section in
-                Card(title: section.heading, icon: "list.bullet") {
+                Card(title: section.heading, icon: "checklist") {
                     ForEach(Array(section.items.enumerated()), id: \.offset) { _, item in
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Circle().fill(Theme.amber).frame(width: 5, height: 5).offset(y: -3)
-                            Text(MarkdownView.inline(item)).textSelection(.enabled).lineSpacing(3)
+                            Circle().fill(Theme.accent).frame(width: 6, height: 6).offset(y: -2)
+                            Text(MarkdownView.inline(item)).font(.system(size: 14)).foregroundStyle(Theme.warm700).textSelection(.enabled).lineSpacing(4)
                         }
                     }
                 }
             }
             if !recording.todos.isEmpty {
-                Card(title: "待办", icon: "checkmark.square") {
+                Card(title: "待办", icon: "checkmark.square.fill") {
                     ForEach(recording.todos) { todo in
                         Toggle(isOn: Binding(get: { todo.done }, set: { _ in store.toggleTodo(recording.id, todo.id) })) {
-                            Text(todo.text).strikethrough(todo.done).foregroundStyle(todo.done ? .secondary : .primary)
+                            Text(todo.text).font(.system(size: 14)).strikethrough(todo.done).foregroundStyle(Theme.warm800)
+                                .opacity(todo.done ? 0.75 : 1).padding(.leading, 4)
                         }
                         .toggleStyle(.checkbox)
+                        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Theme.surface, in: .rect(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.warm200.opacity(0.6), lineWidth: 1))
                     }
                 }
             }
@@ -1390,14 +1598,15 @@ struct NotesView: View {
                     }
                 }
             }
-            Text(credits).font(.caption).foregroundStyle(.tertiary)
+            Text(credits).font(.system(size: 11)).foregroundStyle(Theme.warm500)
         }
     }
 
     private func chip(_ text: String, _ icon: String) -> some View {
-        Label(text, systemImage: icon).font(.caption)
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(.quaternary.opacity(0.6), in: Capsule())
+        Text(icon == "number" ? "# " + text.trimmingCharacters(in: CharacterSet(charactersIn: "# ")) : text)
+            .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.warm700)
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(Theme.warm100, in: .rect(cornerRadius: 8))
     }
 
     private var credits: String {
@@ -1405,7 +1614,7 @@ struct NotesView: View {
         if let t = recording.transcribedBy { parts.append("转写：\(t)") }
         if let a = recording.analyzedBy, a != "—" { parts.append("整理：\(a)") }
         parts.append("内容由模型生成，重要信息请对照录音核实")
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: " • ")
     }
 }
 
@@ -1484,7 +1693,7 @@ struct TranscriptView: View {
 
     private func fixBar(_ fix: BeanStore.PendingFix) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: "sparkles").foregroundStyle(Theme.amber)
+            Image(systemName: "sparkles").foregroundStyle(Theme.accent)
             Text("你把「\(fix.wrong)」改成了「\(fix.right)」。").lineLimit(1)
             Spacer()
             Button("全部替换并记住") {
@@ -1505,11 +1714,11 @@ struct TranscriptView: View {
         let marked = isMarked(seg)
         return HStack(alignment: .firstTextBaseline, spacing: 12) {
             Button(clock(seg.start)) { store.play(recording.id, at: seg.start) }
-                .buttonStyle(.plain).foregroundStyle(Theme.amber).font(.callout.monospacedDigit())
+                .buttonStyle(.plain).foregroundStyle(Theme.accent).font(.callout.monospacedDigit())
                 .frame(width: 46, alignment: .leading)
                 .help("从这里开始播放")
                 .overlay(alignment: .leading) {
-                    if marked { Image(systemName: "flag.fill").font(.caption2).foregroundStyle(Theme.amber).offset(x: -16).help("这句标了重点") }
+                    if marked { Image(systemName: "flag.fill").font(.caption2).foregroundStyle(Theme.accent).offset(x: -16).help("这句标了重点") }
                 }
             speakerMenu(seg)
             if editing {
@@ -1522,7 +1731,7 @@ struct TranscriptView: View {
             }
         }
         .padding(.vertical, marked ? 6 : 0).padding(.horizontal, marked ? 8 : 0)
-        .background(marked ? Theme.amber.opacity(0.12) : .clear, in: .rect(cornerRadius: 8))
+        .background(marked ? Theme.accent.opacity(0.12) : .clear, in: .rect(cornerRadius: 8))
         .padding(.horizontal, marked ? -8 : 0)
         .contextMenu {
             if marked {
@@ -1661,10 +1870,10 @@ struct DeviceView: View {
                 ForEach(beans) { device in
                     Button { store.autoConnectAllowed = true; store.connect(device) } label: {
                         HStack {
-                            Image(systemName: "mic.circle.fill").font(.title2).foregroundStyle(Theme.amber)
+                            Image(systemName: "mic.circle.fill").font(.title2).foregroundStyle(Theme.accent)
                             Text(device.name).fontWeight(.medium)
                             Spacer()
-                            Text("连接").foregroundStyle(Theme.amber)
+                            Text("连接").foregroundStyle(Theme.accent)
                         }
                         .padding(10).glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12)).contentShape(Rectangle())
                     }
@@ -1768,8 +1977,8 @@ struct DeviceView: View {
         .frame(width: 132, height: 132)
         .background {
             ZStack {
-                Circle().stroke(Theme.amber.opacity(0.15), lineWidth: 7)
-                Circle().trim(from: 0, to: min(1, fraction)).stroke(warn ? Theme.rec : Theme.amber, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                Circle().stroke(Theme.accent.opacity(0.15), lineWidth: 7)
+                Circle().trim(from: 0, to: min(1, fraction)).stroke(warn ? Theme.rec : Theme.accent, style: StrokeStyle(lineWidth: 7, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .animation(.spring(response: 0.8, dampingFraction: 1), value: fraction)
             }
@@ -1781,7 +1990,7 @@ struct DeviceView: View {
     private func fact(_ label: String, _ value: String, warn: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.callout.weight(.medium)).foregroundStyle(warn ? Theme.amber : Color.primary).textSelection(.enabled)
+            Text(value).font(.callout.weight(.medium)).foregroundStyle(warn ? Theme.accent : Color.primary).textSelection(.enabled)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -1852,7 +2061,7 @@ struct Radar: View {
                     ZStack {
                         ForEach(0..<3, id: \.self) { i in
                             let phase = (t / 2.4 + Double(i) / 3).truncatingRemainder(dividingBy: 1)
-                            Circle().strokeBorder(Theme.amber.opacity(0.55 * (1 - phase)), lineWidth: 1.5)
+                            Circle().strokeBorder(Theme.accent.opacity(0.55 * (1 - phase)), lineWidth: 1.5)
                                 .scaleEffect(0.35 + phase * 0.65)
                         }
                     }
@@ -1860,7 +2069,7 @@ struct Radar: View {
             }
             Image(systemName: found ? "mic.circle.fill" : "mic.circle")
                 .font(.system(size: 44))
-                .foregroundStyle(found ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(.secondary))
+                .foregroundStyle(found ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.secondary))
                 .symbolEffect(.bounce, value: found)
                 .contentTransition(.symbolEffect(.replace))
         }
@@ -1880,9 +2089,9 @@ struct KeepCard: View {
             HStack(spacing: 12) {
                 Image(systemName: just.discardAt == nil ? "waveform" : "trash")
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(just.discardAt == nil ? Theme.amber : Theme.rec)
+                    .foregroundStyle(just.discardAt == nil ? Theme.accent : Theme.rec)
                     .frame(width: 46, height: 46)
-                    .background((just.discardAt == nil ? Theme.amber : Theme.rec).opacity(0.14), in: .rect(cornerRadius: 12))
+                    .background((just.discardAt == nil ? Theme.accent : Theme.rec).opacity(0.14), in: .rect(cornerRadius: 12))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(just.discardAt == nil ? "录好了" : "这条不要了").font(.title3.weight(.semibold))
@@ -1920,7 +2129,7 @@ struct KeepCard: View {
                     GeometryReader { geo in
                         Capsule().fill(.quaternary)
                             .overlay(alignment: .leading) {
-                                Capsule().fill(just.discardAt == nil ? Theme.amber : Theme.rec)
+                                Capsule().fill(just.discardAt == nil ? Theme.accent : Theme.rec)
                                     .frame(width: geo.size.width * left / total)
                             }
                     }

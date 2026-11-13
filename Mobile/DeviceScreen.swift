@@ -78,7 +78,7 @@ struct DeviceScreen: View {
             VStack(spacing: 12) {
                 ForEach(beans) { device in
                     HStack {
-                        Image(systemName: "earbuds").foregroundStyle(Theme.amber)
+                        Image(systemName: "earbuds").foregroundStyle(Theme.accent)
                         Text(device.name).font(.body.weight(.medium))
                         Spacer()
                         Button("连接") { store.connect(device) }.buttonStyle(.borderedProminent)
@@ -109,8 +109,8 @@ struct DeviceScreen: View {
     private func ring(_ title: String, value: Double, text: String) -> some View {
         VStack(spacing: 8) {
             ZStack {
-                Circle().stroke(Theme.amber.opacity(0.16), lineWidth: 6)
-                Circle().trim(from: 0, to: max(0.001, min(1, value))).stroke(Theme.amber, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                Circle().stroke(Theme.accent.opacity(0.16), lineWidth: 6)
+                Circle().trim(from: 0, to: max(0.001, min(1, value))).stroke(Theme.accent, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 Text(text).font(.subheadline.weight(.bold)).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1).padding(.horizontal, 10)
             }

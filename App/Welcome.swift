@@ -77,7 +77,7 @@ struct WelcomeView: View {
                                       @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(alignment: .center, spacing: 14) {
             ZStack {
-                Circle().fill(done ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(.quaternary)).frame(width: 30, height: 30)
+                Circle().fill(done ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.quaternary)).frame(width: 30, height: 30)
                 if done {
                     Image(systemName: "checkmark").font(.callout.weight(.bold)).foregroundStyle(.white)
                 } else {

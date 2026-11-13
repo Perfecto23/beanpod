@@ -60,7 +60,7 @@ struct DashboardView: View {
                         } else {
                             Chart(days) { d in
                                 BarMark(x: .value("日期", d.date, unit: .day), y: .value("分钟", d.minutes))
-                                    .foregroundStyle(Theme.amber.gradient).cornerRadius(3)
+                                    .foregroundStyle(Theme.accent.gradient).cornerRadius(3)
                             }
                             .chartXAxis { AxisMarks(values: .stride(by: .day, count: 2)) { _ in AxisValueLabel(format: .dateTime.day()); AxisGridLine() } }
                             .chartYAxis { AxisMarks { v in AxisValueLabel { if let m = v.as(Double.self) { Text(m < 10 && m != m.rounded() ? String(format: "%.1f 分", m) : "\(Int(m)) 分") } }; AxisGridLine() } }
@@ -79,7 +79,7 @@ struct DashboardView: View {
                                             Image(systemName: item.scene.icon).foregroundStyle(.secondary).frame(width: 18)
                                             Text(item.scene.name).frame(width: 44, alignment: .leading)
                                             GeometryReader { geo in
-                                                Capsule().fill(Theme.amber.gradient)
+                                                Capsule().fill(Theme.accent.gradient)
                                                     .frame(width: max(4, geo.size.width * CGFloat(item.count) / CGFloat(top)))
                                                     .frame(maxHeight: .infinity, alignment: .center)
                                             }
@@ -158,7 +158,7 @@ struct DashboardView: View {
                 ForEach(store.recordings.prefix(4)) { r in
                     Button { nav.open(r.id) } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: (r.scene ?? .other).icon).font(.system(size: 16, weight: .medium)).foregroundStyle(Theme.amber)
+                            Image(systemName: (r.scene ?? .other).icon).font(.system(size: 16, weight: .medium)).foregroundStyle(Theme.accent)
                                 .frame(width: 36, height: 36)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(r.displayTitle).font(.body.weight(.semibold)).lineLimit(1)

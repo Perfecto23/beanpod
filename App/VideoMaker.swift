@@ -319,7 +319,7 @@ struct VideoSheet: View {
                 // 还没装好 Renoise：说清楚差哪一步，给一个直达安装页面的按钮
                 VStack(alignment: .leading, spacing: 10) {
                     Label(maker.cliMissing ? "做视频要用 Renoise，这台 Mac 上还没装。" : "Renoise 装好了，但还没登录账户。", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(Theme.amber)
+                        .foregroundStyle(Theme.accent)
                     Text("安装和登录各点一下就行，装好回来再点「做成视频」。").font(.callout).foregroundStyle(.secondary)
                     HStack {
                         Spacer()
@@ -330,7 +330,7 @@ struct VideoSheet: View {
                 }
                 .task { await renoise.refresh() }
             } else if maker.segments.isEmpty {
-                Label("这篇稿子里没找到能念出来的句子。", systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.amber)
+                Label("这篇稿子里没找到能念出来的句子。", systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.accent)
             } else {
                 // 谁出镜
                 VStack(alignment: .leading, spacing: 8) {
@@ -375,7 +375,7 @@ struct VideoSheet: View {
 
                 if maker.placeholders, maker.phase == .ready {
                     Label("稿子里还留着「待核实」这样的占位，数字人会照着念出来。建议先回去把稿子改好再做。", systemImage: "exclamationmark.triangle.fill")
-                        .font(.callout).foregroundStyle(Theme.amber).fixedSize(horizontal: false, vertical: true)
+                        .font(.callout).foregroundStyle(Theme.accent).fixedSize(horizontal: false, vertical: true)
                 }
 
                 footer
@@ -394,7 +394,7 @@ struct VideoSheet: View {
             HStack(spacing: 8) { ProgressView().controlSize(.small); Text("正在问价…").foregroundStyle(.secondary); Spacer(); Button("取消") { dismiss() } }
         case .failed(let why):
             HStack {
-                Label(why, systemImage: "exclamationmark.circle.fill").foregroundStyle(Theme.amber).fixedSize(horizontal: false, vertical: true)
+                Label(why, systemImage: "exclamationmark.circle.fill").foregroundStyle(Theme.accent).fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 Button("关闭") { dismiss() }
             }

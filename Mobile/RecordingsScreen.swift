@@ -60,7 +60,7 @@ struct RecordingsScreen: View {
                                     .font(.subheadline.weight(.medium))
                                     .padding(.horizontal, 14).padding(.vertical, 7)
                                     .foregroundStyle(quick == q ? Color.white : Color.primary)
-                                    .background(quick == q ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(.quaternary.opacity(0.6)), in: .capsule)
+                                    .background(quick == q ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.quaternary.opacity(0.6)), in: .capsule)
                                     .buttonStyle(.plain)
                             }
                         }
@@ -81,7 +81,7 @@ struct RecordingsScreen: View {
                             NavigationLink(value: rec.id) { RecordingRow(recording: rec) }
                                 .swipeActions(edge: .leading) {
                                     Button { store.toggleStar(rec.id) } label: { Label(rec.starred ? "取消星标" : "星标", systemImage: rec.starred ? "star.slash" : "star") }
-                                        .tint(Theme.amber)
+                                        .tint(Theme.accent)
                                 }
                                 .swipeActions(edge: .trailing) {
                                     Button { deleting = rec } label: { Label("删除", systemImage: "trash") }.tint(Theme.rec)
@@ -243,7 +243,7 @@ struct RecordingDetailScreen: View {
                 Text("·")
                 Text(r.textOnly ? "文字" : clock(r.duration))
                 if let scene = r.scene { Text("·"); Text(scene.name) }
-                if r.starred { Image(systemName: "star.fill").foregroundStyle(Theme.amber) }
+                if r.starred { Image(systemName: "star.fill").foregroundStyle(Theme.accent) }
             }
             .font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
         }
@@ -274,7 +274,7 @@ struct RecordingDetailScreen: View {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(section.items, id: \.self) { item in
                             HStack(alignment: .firstTextBaseline, spacing: 9) {
-                                Circle().fill(Theme.amber).frame(width: 6, height: 6).offset(y: -2)
+                                Circle().fill(Theme.accent).frame(width: 6, height: 6).offset(y: -2)
                                 Text(MarkdownView.inline(item)).lineSpacing(3)
                             }
                         }
@@ -288,7 +288,7 @@ struct RecordingDetailScreen: View {
                             Button { store.toggleTodo(id, todo.id) } label: {
                                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                                     Image(systemName: todo.done ? "checkmark.square.fill" : "square")
-                                        .foregroundStyle(todo.done ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(.secondary))
+                                        .foregroundStyle(todo.done ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.secondary))
                                     Text(todo.text).strikethrough(todo.done).foregroundStyle(todo.done ? .secondary : .primary)
                                         .multilineTextAlignment(.leading)
                                 }
@@ -369,7 +369,7 @@ struct RecordingDetailScreen: View {
                     let marked = r.marks.contains { $0 >= seg.start - 0.5 && $0 < seg.start + 8 }
                     Button { if r.downloaded, !r.textOnly { store.play(id, at: seg.start) } } label: {
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            Text(clock(seg.start)).font(.caption).monospacedDigit().foregroundStyle(marked ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(.tertiary))
+                            Text(clock(seg.start)).font(.caption).monospacedDigit().foregroundStyle(marked ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.tertiary))
                                 .frame(width: 40, alignment: .leading)
                             Text(seg.clean ?? seg.text).lineSpacing(4).multilineTextAlignment(.leading)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -429,7 +429,7 @@ struct PlayerBar: View {
         HStack(spacing: 10) {
             Button { store.togglePlay(recording.id) } label: {
                 Image(systemName: mine && store.isPlaying ? "pause.fill" : "play.fill").font(.headline).foregroundStyle(.white)
-                    .frame(width: 40, height: 40).background(Theme.amber, in: .circle)
+                    .frame(width: 40, height: 40).background(Theme.accent, in: .circle)
             }
             Slider(value: Binding(get: { position }, set: { t in
                 if !mine { store.togglePlay(recording.id) }
