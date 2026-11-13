@@ -1792,7 +1792,7 @@ struct RewriteView: View {
                         } label: { Label("做成视频", systemImage: "play.rectangle.on.rectangle") }
                             .buttonStyle(.glass).tint(Theme.accent)
                             .disabled(maker.busy && maker.recording != recording.id)
-                            .help("按「数字人口播」skill 做成带包装的成片。会先报价，确认了才开始")
+                            .help("交给 Claude 桌面版，用 Renoise 的数字人和口播剪辑 skill 做成带包装的成片。会先报价，确认了才开始")
                         Button("拷贝", systemImage: "doc.on.doc") { copy(item.text); store.toast("doc.on.doc", "已拷贝") }
                             .labelStyle(.iconOnly).buttonStyle(.borderless)
                         Button("删除", systemImage: "trash") { store.deleteRewrite(recording.id, item.id) }
@@ -1804,7 +1804,7 @@ struct RewriteView: View {
             if maker.recording == recording.id, maker.busy {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text(maker.phase == .planning ? "正在规划和报价…" : "正在做视频：\(maker.stepIndex > 0 ? VideoMaker.steps[min(maker.stepIndex, 7) - 1] : "准备")…")
+                    Text(maker.statusLine)
                         .foregroundStyle(.secondary)
                     Spacer()
                     Button("看进度") { makingVideo = true }

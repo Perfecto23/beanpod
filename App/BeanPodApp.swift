@@ -16,6 +16,7 @@ struct BeanPodApp: App {
             RootView()
                 .environment(store).environment(nav).environment(dictation).environment(connector).environment(maker).environment(renoise).environment(clipboard)
                 .task { dictation.attach(store) }
+                .task { await maker.watch(store) }   // 接着跟上次交给 Claude 还没做完的视频
                 .frame(minWidth: 980, minHeight: 600)
                 .containerBackground(.clear, for: .window)
         }

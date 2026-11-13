@@ -3,12 +3,11 @@ import SwiftUI
 
 /// 把一篇口播稿做成带完整包装的数字人口播视频。
 ///
-/// 豆仓自己不剪：整条片子交给 Renoise MCP 上托管的两个 skill——
+/// 豆仓自己不剪，也不在后台跑模型：整条片子交给 Claude 桌面版——在里面新开一个 Claude Code 会话（工作目录就是这条视频的
+/// 工程文件夹，提示词已经填好），由它按 Renoise MCP 上托管的两个 skill 做：
 /// ai-avatar（写稿、分镜、生成数字人出镜段、检查、拼成 A-roll）→ talking-head-editor（在 Renoise 云端沙盒里
-/// 粗剪、字幕花字、信息卡、画中画、B-roll、音效音乐、渲染质检）。按这两个 skill 一步步执行的是后台的 Claude Code（用户的 Claude 账号），
-/// 它通过 Renoise 命令行已登录的凭据连 Renoise MCP。
-/// 豆仓负责三件事：让用户选风格和主播、把报价摆出来等用户点头、把进度和成片接回来。
-/// 分两轮跑：第一轮只规划和报价，不花积分；用户确认后接着同一个会话跑第二轮出片。
+/// 粗剪、字幕花字、信息卡、画中画、B-roll、音效音乐、渲染质检）。报价和确认都在 Claude 对话里，用的是用户桌面版的账号。
+/// 豆仓负责三件事：让用户选风格和主播、把任务交过去、盯着工程文件夹里的 quote/progress/result 把进度和成片接回来。
 @Observable
 final class VideoMaker {
     /// 出镜的人：存在 Renoise 里的人像素材（编号来自数字人形象配置 persona.json）。
@@ -58,12 +57,14 @@ final class VideoMaker {
         struct Item: Equatable { var name: String; var detail: String }
     }
 
-    /// 出片这一轮的几步，和提示词里约定的步骤名一致。
+    /// 出片这一轮的几步，和 TASK.md 里约定的步骤名一致。
     static let steps = ["生成口播", "检查拼接", "剪辑规划", "包装配乐", "渲染质检", "下载交付"]
 
-    enum Phase: Equatable { case idle, choosing, planning, quoted, producing, finished(URL), failed(String) }
+    /// waiting：已交给 Claude 桌面版，等它规划报价；quoted：报价出来了，等用户在 Claude 里确认；producing：确认后在出片。
+    enum Phase: Equatable { case idle, choosing, waiting, quoted, producing, finished(URL), failed(String) }
 
     static let persona = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/skills/digital-human-koubo/persona.json")
+    static let renoiseMCP = "https://renoise.ai/api/public/mcp"
 
     var hosts: [Host] = []
     var host: Host?
@@ -74,36 +75,48 @@ final class VideoMaker {
     var quote: Quote?
     var stepIndex = 0
     var stepDetail = ""
-    /// 后台正在做的事（取自它最近一次调用工具时写的说明）
-    var activity = ""
     var started: Date?
-    var claudeMissing = false
-    var renoiseMissing = false
+    var claudeAppMissing = false
+    var renoiseMCPMissing = false
+    var setupNote = ""
 
     var recording: UInt32 = 0
     var title = ""
     private var script = ""
-    private var job: URL?
-    private var session: String?
-    private var process: Process?
+    private(set) var job: URL?
+    private var watching = false
 
-    var busy: Bool { phase == .planning || phase == .producing }
+    var busy: Bool { phase == .waiting || phase == .quoted || phase == .producing }
+
+    /// 录音页上那一行的说明
+    var statusLine: String {
+        switch phase {
+        case .waiting: "已交给 Claude 桌面版，等它规划报价…"
+        case .quoted: "报价出来了，在 Claude 里回复确认就开始"
+        case .producing: "正在做视频：\(stepIndex > 0 ? Self.steps[min(stepIndex, Self.steps.count) - 1] : "准备")…"
+        default: ""
+        }
+    }
 
     // MARK: 准备
 
-    /// 打开「做成视频」时调用：读主播、按稿子推荐风格。不花积分，也还不调后台。
+    /// 打开「做成视频」时调用：读主播、按稿子推荐风格、看看 Claude 桌面版和 Renoise MCP 在不在。
     func prepare(text: String, recording: UInt32, title: String, template: String) {
         guard !busy else { return }
         self.recording = recording
         self.title = title
         script = text
-        quote = nil; session = nil; job = nil; activity = ""; stepIndex = 0; stepDetail = ""
+        quote = nil; job = nil; stepIndex = 0; stepDetail = ""; setupNote = ""
         loadHosts()
-        claudeMissing = Self.claudePath == nil
-        renoiseMissing = Self.renoisePath == nil
+        checkSetup()
         style = template.contains("吐槽") ? .variety : .premium
         ratio = "9:16"
         phase = .choosing
+    }
+
+    func checkSetup() {
+        claudeAppMissing = Self.claudeApp == nil
+        renoiseMCPMissing = !Self.renoiseMCPConfigured
     }
 
     private func loadHosts() {
@@ -126,108 +139,193 @@ final class VideoMaker {
         if host == nil || !out.contains(where: { $0.id == host?.id }) { host = out.first }
     }
 
-    // MARK: 第一轮：规划和报价（不花积分）
+    // MARK: 交给 Claude 桌面版
 
-    func plan(store: BeanStore) async {
+    /// 建工程文件夹、写好任务说明，然后在 Claude 桌面版里新开一个会话。不花积分：报价出来后要用户在 Claude 里点头才生成。
+    func start(store: BeanStore) {
         guard let host, !busy else { return }
+        checkSetup()
+        guard !claudeAppMissing else { return }
         let stamp = Int(Date.now.timeIntervalSince1970)
-        let folder = store.folder.deletingLastPathComponent().appendingPathComponent("Videos/\(recording)-\(stamp)", isDirectory: true)
+        let folder = Self.jobsRoot(store).appendingPathComponent("\(recording)-\(stamp)", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         job = folder
-        session = nil
         try? script.write(to: folder.appendingPathComponent("source.md"), atomically: true, encoding: .utf8)
-        let day = Date.now.formatted(.iso8601.year().month().day())
+        let day = Date.now.formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())
         let brief: [String: Any] = [
             "deliverable": "finished MP4 with full packaging", "edit_style": style.brief, "aspect_ratio": ratio,
             "model": model, "host": ["name": host.name, "reference": "material:\(host.material)", "native_ratio": host.ratio],
             "language": "zh", "market": "China", "platform": ratio == "9:16" ? "抖音 / 视频号 / 小红书" : "B 站",
             "title": title, "music": "pick a royalty-free track that fits; no audition round",
             "sandbox_project": "~/projects/\(day)-beanpod-\(recording)",
-            "notes": "Started from the BeanPod app. The user already chose every option above in the app and cannot answer questions mid-run.",
         ]
-        if let data = try? JSONSerialization.data(withJSONObject: brief, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: folder.appendingPathComponent("brief.json"))
-        }
-        let mcp = #"{"mcpServers":{"renoise":{"type":"http","url":"https://renoise.ai/api/public/mcp","headers":{"Authorization":"Bearer ${RENOISE_API_KEY}"}}}}"#
-        try? mcp.write(to: folder.appendingPathComponent("mcp.json"), atomically: true, encoding: .utf8)
-        store.addLog("做视频：开始规划报价（\(style.name) · \(ratio) · \(host.name) · \(model)），工程在 \(folder.path)")
-        phase = .planning
+        Self.write(brief, to: folder.appendingPathComponent("brief.json"))
+        Self.write(["recording": Int(recording), "title": title, "style": style.name, "host": host.name, "ratio": ratio, "model": model, "started": stamp],
+                   to: folder.appendingPathComponent("job.json"))
+        try? Self.task.write(to: folder.appendingPathComponent("TASK.md"), atomically: true, encoding: .utf8)
+        store.addLog("做视频：交给 Claude 桌面版（\(style.name) · \(ratio) · \(host.name) · \(model)），工程在 \(folder.path)")
+        phase = .waiting
         started = .now
-        activity = ""
-        let ok = await runClaude(Self.planPrompt, in: folder, store: store)
-        guard phase == .planning else { return }      // 中途被停下了
-        guard let q = Self.readJSON(folder.appendingPathComponent("quote.json")) else {
-            phase = .failed(ok ? "没拿到报价。工程目录里有这一轮的记录。" : activity)
-            return
-        }
-        if let error = q["error"] as? String { phase = .failed(error); return }
-        let items = (q["items"] as? [[String: Any]] ?? []).map { item -> Quote.Item in
-            let credits = Self.number(item["credits"]).map { "\(Int($0.rounded())) 积分" } ?? ""
-            let count = Self.number(item["count"]).map { " × \(Int($0))" } ?? ""
-            return Quote.Item(name: (item["name"] as? String ?? "") + count, detail: credits)
-        }
-        quote = Quote(credits: Self.number(q["credits"]) ?? 0, balance: Self.number(q["balance"]),
-                      segments: Int(Self.number(q["segments"]) ?? 0), seconds: Int(Self.number(q["seconds"]) ?? 0),
-                      items: items, plan: q["plan"] as? String ?? "", notes: q["notes"] as? [String] ?? [])
-        phase = .quoted
-        store.addLog("做视频：报价 \(Int(quote?.credits ?? 0)) 积分，\(quote?.segments ?? 0) 段 \(quote?.seconds ?? 0) 秒")
+        openSession()
+        Task { await watch(store) }
     }
 
-    // MARK: 第二轮：生成到出片（用户点了确认才会走到这里）
-
-    func produce(store: BeanStore) async {
-        guard let job, let quote, phase == .quoted else { return }
-        let budget = Int((quote.credits * 1.1).rounded(.up))
-        store.addLog("做视频：用户确认，预算上限 \(budget) 积分，开始生成和剪辑")
-        phase = .producing
-        started = .now
-        activity = ""
-        stepIndex = 0; stepDetail = "准备生成"
-        let poll = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2))
-                guard let self, let p = Self.readJSON(job.appendingPathComponent("progress.json")) else { continue }
-                self.stepIndex = Int(Self.number(p["index"]) ?? Double(self.stepIndex))
-                self.stepDetail = p["detail"] as? String ?? p["step"] as? String ?? self.stepDetail
-            }
-        }
-        defer { poll.cancel() }
-        let ok = await runClaude(Self.producePrompt(budget: budget), in: job, store: store, resume: session)
-        guard phase == .producing else { return }
-        guard let r = Self.readJSON(job.appendingPathComponent("result.json")) else {
-            phase = .failed(ok ? "片子没交付出来。已经生成的段在 Renoise 里，不会重复花积分。" : "做到一半停了：\(activity)")
-            return
-        }
-        if let error = r["error"] as? String { phase = .failed(error); return }
-        let local = (r["video"] as? String).map { $0.hasPrefix("/") ? URL(fileURLWithPath: $0) : job.appendingPathComponent($0) }
-        guard let local, FileManager.default.fileExists(atPath: local.path) else {
-            phase = .failed("result.json 里写的成片在本机找不到。"); return
-        }
-        // 成片拷进录音库，挂在这条录音下面
-        let name = "\(recording)-video-\(Int(Date.now.timeIntervalSince1970)).mp4"
-        let out = store.folder.appendingPathComponent(name)
-        try? FileManager.default.copyItem(at: local, to: out)
-        let spent = Int(Self.number(r["credits_spent"]) ?? quote.credits)
-        store.addVideo(recording, file: name, host: "\(style.name) · \(host?.name ?? "数字人")", seconds: quote.seconds, credits: spent)
-        store.addLog("做视频：交付 \(name)，花了 \(spent) 积分。\(r["summary"] as? String ?? "")")
-        store.toast("checkmark.circle.fill", "视频做好了")
-        phase = .finished(out)
+    /// 在 Claude 桌面版里新开 Claude Code 会话：工作目录是工程文件夹，提示词填好，用户按发送开始。
+    func openSession() {
+        guard let job else { return }
+        var c = URLComponents()
+        c.scheme = "claude"; c.host = "code"; c.path = "/new"
+        c.queryItems = [URLQueryItem(name: "folder", value: job.path), URLQueryItem(name: "q", value: Self.prompt)]
+        if let url = c.url { NSWorkspace.shared.open(url) }
     }
 
-    /// 停下后台任务。已经提交给 Renoise 的段照样会扣积分。
-    func stop(store: BeanStore) {
-        let wasProducing = phase == .producing
-        process?.terminate()
-        process = nil
-        store.addLog("做视频：用户停下了")
-        phase = wasProducing ? .failed("已经停下。已提交的生成任务照常扣积分，生成好的段留在 Renoise 里。") : .choosing
+    /// 切回 Claude 桌面版（报价确认、看它在做什么）。
+    func showClaude() {
+        if let app = Self.claudeApp { NSWorkspace.shared.openApplication(at: app, configuration: .init()) }
+    }
+
+    /// 不再跟这一条：Claude 里那个会话要在 Claude 里自己停。
+    func abandon(store: BeanStore) {
+        if let job { FileManager.default.createFile(atPath: job.appendingPathComponent(".closed").path, contents: nil) }
+        store.addLog("做视频：豆仓不再跟进 \(job?.lastPathComponent ?? "")")
+        job = nil
+        phase = .choosing
     }
 
     func showProject() {
         if let job { NSWorkspace.shared.activateFileViewerSelecting([job]) }
     }
 
-    // MARK: 调后台
+    /// 给 Claude Code 加上 Renoise MCP（用户范围）。只加地址，不放任何密钥：第一次用时用户在 Claude 里 /mcp 自己登录。
+    func connectRenoiseMCP() async {
+        guard let claude = Self.claudePath else {
+            setupNote = "没找到命令行版 claude，没法自动加。可以在 Claude 桌面版里自己加 MCP：\(Self.renoiseMCP)"
+            return
+        }
+        let r = await Self.shell("'\(claude)' mcp add --transport http --scope user renoise \(Self.renoiseMCP)")
+        checkSetup()
+        setupNote = renoiseMCPMissing ? "没加上：" + Self.tail(r.output) : "加好了。第一次用时 Claude 会让你输入 /mcp 登录 Renoise。"
+    }
+
+    // MARK: 跟进度
+
+    /// 一直看着工程文件夹：报价、进度、成片。App 重开后也接着跟最近没做完的那条，成片出来就挂到录音下面。
+    func watch(_ store: BeanStore) async {
+        guard !watching else { return }
+        watching = true
+        defer { watching = false }
+        if job == nil, let latest = activeJobs(store).last { adopt(latest) }
+        while true {
+            scan(store)
+            if activeJobs(store).isEmpty && !busy { return }
+            try? await Task.sleep(for: .seconds(2))
+        }
+    }
+
+    /// 还没交付、豆仓也没放弃的工程（三天内开的）
+    private func activeJobs(_ store: BeanStore) -> [URL] {
+        let fm = FileManager.default
+        let all = (try? fm.contentsOfDirectory(at: Self.jobsRoot(store), includingPropertiesForKeys: nil)) ?? []
+        let cutoff = Date.now.timeIntervalSince1970 - 3 * 86_400
+        return all.filter { folder in
+            guard fm.fileExists(atPath: folder.appendingPathComponent("TASK.md").path),
+                  !fm.fileExists(atPath: folder.appendingPathComponent(".done").path),
+                  !fm.fileExists(atPath: folder.appendingPathComponent(".closed").path),
+                  let stamp = Double(folder.lastPathComponent.split(separator: "-").last ?? ""), stamp > cutoff else { return false }
+            return true
+        }
+        .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// App 重开时把最近那条接回界面
+    private func adopt(_ folder: URL) {
+        guard let info = Self.readJSON(folder.appendingPathComponent("job.json")) else { return }
+        job = folder
+        recording = UInt32(Self.number(info["recording"]) ?? 0)
+        title = info["title"] as? String ?? ""
+        ratio = info["ratio"] as? String ?? ratio
+        style = Style.allCases.first { $0.name == info["style"] as? String } ?? style
+        started = Self.number(info["started"]).map { Date(timeIntervalSince1970: $0) }
+        phase = .waiting
+    }
+
+    private func scan(_ store: BeanStore) {
+        for folder in activeJobs(store) {
+            let current = folder == job
+            if let r = Self.readJSON(folder.appendingPathComponent("result.json")) {
+                deliver(folder, r, store: store, current: current)
+                continue
+            }
+            guard current, busy else { continue }
+            if let p = Self.readJSON(folder.appendingPathComponent("progress.json")) {
+                if phase != .producing { phase = .producing; started = .now }
+                stepIndex = Int(Self.number(p["index"]) ?? Double(stepIndex))
+                stepDetail = p["detail"] as? String ?? p["step"] as? String ?? stepDetail
+            } else if phase == .waiting, let q = Self.readJSON(folder.appendingPathComponent("quote.json")) {
+                if let error = q["error"] as? String { phase = .failed(error); continue }
+                quote = Self.parseQuote(q)
+                phase = .quoted
+                store.addLog("做视频：报价 \(Int(quote?.credits ?? 0)) 积分，\(quote?.segments ?? 0) 段 \(quote?.seconds ?? 0) 秒，等用户在 Claude 里确认")
+            }
+        }
+    }
+
+    /// 成片出来了：拷进录音库，挂到那条录音下面。出错也记一笔，之后不再看这个文件夹。
+    private func deliver(_ folder: URL, _ r: [String: Any], store: BeanStore, current: Bool) {
+        let info = Self.readJSON(folder.appendingPathComponent("job.json")) ?? [:]
+        let fm = FileManager.default
+        func close(_ failure: String?) {
+            fm.createFile(atPath: folder.appendingPathComponent(".done").path, contents: nil)
+            if let failure {
+                store.addLog("做视频：\(folder.lastPathComponent) 没做成：\(failure)")
+                if current { phase = .failed(failure) }
+            }
+        }
+        if let error = r["error"] as? String { close(error); return }
+        let local = (r["video"] as? String).map { $0.hasPrefix("/") ? URL(fileURLWithPath: $0) : folder.appendingPathComponent($0) }
+        guard let local, fm.fileExists(atPath: local.path) else {
+            // 文件可能还在写，先不收尾；result.json 写了但成片迟迟不在就等下一轮
+            if let mtime = (try? fm.attributesOfItem(atPath: folder.appendingPathComponent("result.json").path))?[.modificationDate] as? Date,
+               mtime.timeIntervalSinceNow < -120 {
+                close("result.json 里写的成片在本机找不到。")
+            }
+            return
+        }
+        let rec = UInt32(Self.number(info["recording"]) ?? Double(recording))
+        let name = "\(rec)-video-\(Int(Date.now.timeIntervalSince1970)).mp4"
+        let out = store.folder.appendingPathComponent(name)
+        do { try fm.copyItem(at: local, to: out) } catch { close("成片拷不进录音库：\(error.localizedDescription)"); return }
+        let quote = Self.readJSON(folder.appendingPathComponent("quote.json")).map(Self.parseQuote)
+        let spent = Int(Self.number(r["credits_spent"]) ?? quote?.credits ?? 0)
+        let seconds = Int(Self.number(r["seconds"]) ?? Double(quote?.seconds ?? 0))
+        store.addVideo(rec, file: name, host: "\(info["style"] as? String ?? "口播") · \(info["host"] as? String ?? "数字人")", seconds: seconds, credits: spent)
+        store.addLog("做视频：交付 \(name)，花了 \(spent) 积分。\(r["summary"] as? String ?? "")")
+        store.toast("checkmark.circle.fill", "视频做好了：\(info["title"] as? String ?? "")")
+        close(nil)
+        if current { phase = .finished(out) }
+    }
+
+    nonisolated static func parseQuote(_ q: [String: Any]) -> Quote {
+        let items = (q["items"] as? [[String: Any]] ?? []).map { item -> Quote.Item in
+            let credits = number(item["credits"]).map { "\(Int($0.rounded())) 积分" } ?? ""
+            let count = number(item["count"]).map { " × \(Int($0))" } ?? ""
+            return Quote.Item(name: (item["name"] as? String ?? "") + count, detail: credits)
+        }
+        return Quote(credits: number(q["credits"]) ?? 0, balance: number(q["balance"]),
+                     segments: Int(number(q["segments"]) ?? 0), seconds: Int(number(q["seconds"]) ?? 0),
+                     items: items, plan: q["plan"] as? String ?? "", notes: q["notes"] as? [String] ?? [])
+    }
+
+    // MARK: 环境
+
+    static func jobsRoot(_ store: BeanStore) -> URL {
+        store.folder.deletingLastPathComponent().appendingPathComponent("Videos", isDirectory: true)
+    }
+
+    static var claudeApp: URL? {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.anthropic.claudefordesktop")
+            ?? (FileManager.default.fileExists(atPath: "/Applications/Claude.app") ? URL(fileURLWithPath: "/Applications/Claude.app") : nil)
+    }
 
     static var claudePath: String? {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -235,142 +333,54 @@ final class VideoMaker {
             .first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
-    static var renoisePath: String? {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return ["\(home)/.local/bin/renoise", "/opt/homebrew/bin/renoise", "/usr/local/bin/renoise"]
-            .first { FileManager.default.isExecutableFile(atPath: $0) }
+    /// Claude Code 的用户配置里有没有接 Renoise MCP（任意名字，只看地址）
+    static var renoiseMCPConfigured: Bool {
+        let config = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude.json")
+        guard let servers = readJSON(config)?["mcpServers"] as? [String: Any] else { return false }
+        return servers.values.contains { ($0 as? [String: Any])?["url"] as? String == renoiseMCP }
     }
 
-    /// 后台只用 Claude 账号：盖掉 settings.json 里把 Claude Code 指到别的接口的设置（不改那个文件，只对这次生效）。
-    private static let claudeAccountSettings = #"{"env":{"ANTHROPIC_BASE_URL":"https://api.anthropic.com","ANTHROPIC_AUTH_TOKEN":"","ANTHROPIC_MODEL":"claude-opus-5-5","ANTHROPIC_DEFAULT_OPUS_MODEL":"claude-opus-5-5","ANTHROPIC_DEFAULT_SONNET_MODEL":"claude-sonnet-5-5","ANTHROPIC_DEFAULT_HAIKU_MODEL":"claude-haiku-5-5","ANTHROPIC_DEFAULT_FABLE_MODEL":"claude-fable-5-2"}}"#
+    // MARK: 给 Claude 的话
 
-    /// 在工程目录里跑一轮 claude -p，边跑边读它的输出更新「正在做什么」。返回这一轮是否正常结束。
-    private func runClaude(_ prompt: String, in folder: URL, store: BeanStore, resume: String? = nil) async -> Bool {
-        guard let claude = Self.claudePath else { phase = .failed("这台 Mac 上没找到 Claude Code（claude 命令）。"); return false }
-        guard let renoise = Self.renoisePath else { phase = .failed("这台 Mac 上没找到 Renoise 命令行，到设置的「连接」里装上并登录。"); return false }
-        let promptFile = folder.appendingPathComponent(resume == nil ? "prompt-plan.txt" : "prompt-produce.txt")
-        try? prompt.write(to: promptFile, atomically: true, encoding: .utf8)
-        var args = ["-p", "--output-format", "stream-json", "--verbose",
-                    "--settings", Self.claudeAccountSettings, "--model", "claude-opus-5-5",
-                    "--mcp-config", folder.appendingPathComponent("mcp.json").path, "--strict-mcp-config",
-                    "--permission-mode", "acceptEdits",
-                    "--allowedTools", "mcp__renoise", "Bash", "Read", "Write", "Edit", "Glob", "Grep", "TodoWrite"]
-        if let resume { args += ["--resume", resume] }
-        let quoted = args.map { "'" + $0.replacingOccurrences(of: "'", with: "'\\''") + "'" }.joined(separator: " ")
-        // renoise auth exec 把已登录的 Renoise 凭据放进环境变量，mcp.json 里引用它；凭据不落进任何文件
-        let command = "cd '\(folder.path)' && '\(renoise)' auth exec '\(claude)' \(quoted) < '\(promptFile.path)'"
-        let logFile = folder.appendingPathComponent(resume == nil ? "claude-plan.jsonl" : "claude-produce.jsonl")
-        FileManager.default.createFile(atPath: logFile.path, contents: nil)
-        let log = try? FileHandle(forWritingTo: logFile)
+    /// 填进 Claude 输入框的那句话（用户看得到，按发送才开始）
+    private static let prompt = "这是豆仓发来的视频任务：照这个文件夹里的 TASK.md，用 Renoise MCP 的 ai-avatar 和 talking-head-editor 两个 skill，把 source.md 这篇口播稿做成带完整包装的数字人口播视频。先规划报价，我确认了再花积分。"
 
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        p.arguments = ["-lc", command]
-        let pipe = Pipe()
-        p.standardOutput = pipe
-        p.standardError = pipe
-        process = p
-        let lines = AsyncStream<String> { continuation in
-            let reader = LineReader()
-            pipe.fileHandleForReading.readabilityHandler = { handle in
-                let chunk = handle.availableData
-                if chunk.isEmpty { continuation.finish(); handle.readabilityHandler = nil; return }
-                log?.write(chunk)
-                for line in reader.feed(chunk) { continuation.yield(line) }
-            }
-        }
-        do { try p.run() } catch { phase = .failed("后台没能启动：\(error.localizedDescription)"); return false }
-        var success = false
-        var sawResult = false
-        for await line in lines {
-            guard let event = Self.object(line) else {
-                if !line.isEmpty, !sawResult { activity = String(line.prefix(160)) }
-                continue
-            }
-            switch event["type"] as? String {
-            case "system":
-                if let id = event["session_id"] as? String { session = id }
-            case "assistant":
-                for block in (event["message"] as? [String: Any])?["content"] as? [[String: Any]] ?? [] {
-                    if block["type"] as? String == "tool_use" {
-                        let input = block["input"] as? [String: Any] ?? [:]
-                        let name = (block["name"] as? String ?? "").replacingOccurrences(of: "mcp__renoise__", with: "Renoise ")
-                        let what = input["description"] as? String ?? name
-                        if !what.isEmpty { activity = what }
-                    } else if block["type"] as? String == "text", let text = block["text"] as? String, !text.isEmpty {
-                        activity = String(String(text.split(separator: "\n").first ?? "").prefix(80))
-                    }
-                }
-            case "result":
-                sawResult = true
-                if let id = event["session_id"] as? String { session = id }
-                let raw = event["result"] as? String ?? ""
-                success = (event["subtype"] as? String) == "success" && (event["is_error"] as? Bool) != true && !raw.contains("API Error") && !raw.contains("Not logged in")
-                if !success { activity = Self.explain(raw) }
-            default: break
-            }
-        }
-        p.waitUntilExit()
-        try? log?.close()
-        process = nil
-        if !sawResult, activity.isEmpty { activity = "后台没有正常结束（退出码 \(p.terminationStatus)）。" }
-        else if !sawResult { activity = Self.explain(activity) }
-        return success && p.terminationStatus == 0
-    }
+    private static let task = """
+    # BeanPod video job
 
-    /// 把后台常见的报错换成人话。
-    nonisolated static func explain(_ raw: String) -> String {
-        if raw.contains("Not logged in") || raw.contains("/login") {
-            return "后台要用你的 Claude 账号，但命令行版 Claude Code 还没登录。在终端里运行 claude，输入 /login 登录一次 Claude 账号，再回来点一次。"
-        }
-        if raw.contains("401") || raw.contains("authenticate") {
-            return "Claude 账号的登录过期了。在终端里运行 claude，输入 /login 重新登录一次。"
-        }
-        if raw.lowercased().contains("renoise") && (raw.contains("not signed") || raw.contains("no credential") || raw.contains("auth login")) {
-            return "Renoise 命令行没登录。到设置的「连接」里登录 Renoise。"
-        }
-        return raw.isEmpty ? "后台出错了，没有给出原因。" : String(raw.prefix(200))
-    }
+    This job was started from the BeanPod app (豆仓). The user is in this conversation: talk to them in Simplified Chinese, briefly.
 
-    // MARK: 提示词
+    Goal: turn the Chinese talking-head script in ./source.md into a finished, fully packaged AI-avatar talking-head video, using the Renoise MCP tools and the Renoise hosted skills:
+    ai-avatar (script and performance, takes, generate, check, join the A-roll) → talking-head-editor (rough cut, sentence-by-sentence edit plan, captions and keyword big text, info cards, picture-in-picture, B-roll, sound effects, music, render, QA, in the Renoise cloud sandbox).
+    ./brief.json holds what the user already chose in BeanPod: edit style, aspect ratio, model, host reference material, platform, sandbox project folder. Those are the answers to the skills' clarifying questions; do not ask them again.
+    BeanPod watches this folder for ./quote.json, ./progress.json and ./result.json, so always write them exactly as below.
 
-    private static let planPrompt = """
-    You are running a background job for the BeanPod app. The user is not in this conversation and cannot answer: never ask questions or wait for replies.
-    Goal: turn the Chinese talking-head script in ./source.md into a finished, fully packaged AI-avatar talking-head video, using the Renoise MCP tools and the Renoise hosted skills.
-    The current directory is this job's local folder. ./brief.json holds every choice the user already made in the app (edit style, aspect ratio, model, host reference material, platform). Treat them as the user's answers to the skills' clarifying questions.
+    ## 0. Renoise MCP
+    Use the Renoise MCP tools (mcp__renoise__*). If they are not available or the server needs sign-in, tell the user in one line: 输入 /mcp，选 renoise 登录授权，好了回我一句。 Then wait. Never ask for or use API keys yourself.
 
-    THIS ROUND: PLAN AND QUOTE ONLY. Do not call create_tasks or anything else that spends credits. Do not start a sandbox task.
-    1. get_account. load_skill ai-avatar, then the files it tells you to read for planning (model-routing, its style menu and performance references), and load_skill talking-head-editor so the plan covers the edit.
-    2. Following ai-avatar steps 0–2: write the script and performance as script.json (keep the content of source.md; you may tighten it for speech and add a hook, but do not invent facts), cut it into takes, and price every take with estimate_cost using the chosen model and host reference.
-       Also plan any Renoise-generated B-roll the edit would want, and price it too. The edit itself (talking-head-editor in the sandbox) is free on this account's plan; say so if get_account confirms it.
-       Keep script.json and the plan in the sandbox project folder named in brief.json (create it with the sandbox tool in command mode) and also save a copy of script.json here.
-    3. Write ./quote.json (UTF-8, Chinese text for the user):
-    {"segments": number of takes, "seconds": total seconds of takes, "credits": total credits, "balance": balance,
+    ## 1. Plan and quote (no credits)
+    get_account. load_skill ai-avatar, then the files it tells you to read for planning, and load_skill talking-head-editor so the plan covers the edit.
+    Following ai-avatar steps 0–2: write the script and performance as script.json (keep the content of source.md; you may tighten it for speech and add a hook, but do not invent facts), cut it into takes, and price every take with estimate_cost using the chosen model and host reference. Plan and price any Renoise-generated B-roll the edit would want. Say whether the edit itself (the sandbox engineer) is free on this account's plan.
+    Keep script.json in the sandbox project folder from brief.json (create it with the sandbox tool in command mode) and save a copy here.
+    Write ./quote.json (UTF-8, Chinese text):
+    {"segments": takes, "seconds": total seconds, "credits": total credits, "balance": balance,
      "items": [{"name": "数字人出镜（模型名）", "count": takes, "credits": n}, {"name": "B-roll …", "count": n, "credits": n}],
-     "plan": "两三句中文：开场怎么抓人、怎么剪、用哪些包装（字幕花字、信息卡、画中画、B-roll、音乐）",
-     "notes": ["给用户的提醒，中文，比如稿子里要核实的说法"]}
-    If something blocks you, write {"error": "一句中文原因"} instead.
-    End with only the words: 报价完成
+     "plan": "两三句中文：开场怎么抓人、怎么剪、用哪些包装",
+     "notes": ["给用户的提醒，比如稿子里要核实的说法"]}
+    Then show the user the quote in chat and ask for a yes. Do not call create_tasks, start a sandbox task, or spend anything before they say yes.
+    If something blocks the plan, write ./quote.json {"error": "一句中文原因"} and tell the user.
+
+    ## 2. Produce (only after the user's yes)
+    Budget: the quoted credits + 10%. Never exceed it; if you would, stop, tell the user, and write ./result.json {"error": "中文原因，已花多少积分"}.
+    - ai-avatar steps 3–5: generate the takes with create_tasks, wait, check speech and frames, reshoot only a broken take (within budget), join the A-roll in the sandbox project.
+    - ai-avatar step 6 → talking-head-editor: the full edit in the style from brief.json: rough cut, edit plan, captions and keyword big text, info cards, picture-in-picture, B-roll (generate the planned shots only within budget), sound effects, music (choose a fitting royalty-free track; no audition round), render, final QA. Deliver the finished cut, not a draft.
+    - Deliver: upload_files the finished video (deliver: true), then download it into ./out/final.mp4 here.
+    Each time you start a stage, overwrite ./progress.json with {"index": n, "total": 6, "step": "<name>", "detail": "<one short Chinese sentence>"}.
+    Stages in order: 1 生成口播, 2 检查拼接, 3 剪辑规划, 4 包装配乐, 5 渲染质检, 6 下载交付.
+    While the sandbox engineer works, check its PROGRESS.md at least every 5 minutes (the sandbox pauses after 15 idle minutes) and keep progress.json current.
+    When done, write ./result.json: {"video": "out/final.mp4", "seconds": n, "material": "Renoise material id of the final cut", "credits_spent": n, "summary": "一两句中文：用了哪些包装", "checks": "一句中文：质检结果"}, and tell the user it is in BeanPod.
+    On any blocker, write ./result.json {"error": "一句中文原因"}; never stop silently.
     """
-
-    private static func producePrompt(budget: Int) -> String {
-        """
-        The user saw the quote in BeanPod and approved it: you may spend at most \(budget) credits in total (quote + 10%). That approval is the "yes" the ai-avatar skill asks for; the user still cannot answer questions.
-        Now make the finished video, following the Renoise hosted skills end to end:
-        - ai-avatar steps 3–5: generate the takes with create_tasks, wait, check speech and frames, reshoot only a broken take (within budget), join the A-roll in the sandbox project.
-        - ai-avatar step 6 → talking-head-editor: the full edit in the sandbox, in the style from brief.json: rough cut, sentence-by-sentence edit plan, captions and keyword big text, info cards, picture-in-picture, B-roll (generate the planned shots only if they fit the budget), sound effects, music (choose a fitting royalty-free track yourself; no audition round), render, final QA. No drafts: deliver the finished cut.
-        - Deliver: upload_files the finished video (deliver: true), then download_results / curl it into ./out/final.mp4 on this machine.
-
-        Rules:
-        - Never exceed \(budget) credits. If you would, stop and write ./result.json {"error": "中文原因，已花多少积分"}.
-        - Each time you start one of these stages, overwrite ./progress.json with {"index": n, "total": 6, "step": "<name>", "detail": "<one short Chinese sentence on what you are doing>"}.
-          Stages, in order: 1 生成口播, 2 检查拼接, 3 剪辑规划, 4 包装配乐, 5 渲染质检, 6 下载交付.
-        - While the sandbox engineer works, check PROGRESS.md at least every 5 minutes (the sandbox pauses after 15 idle minutes) and keep progress.json current.
-        - When done, write ./result.json: {"video": "out/final.mp4", "material": "Renoise material id of the final cut", "credits_spent": n, "summary": "一两句中文：用了哪些包装", "checks": "一句中文：质检结果"}.
-        - On any blocker, write ./result.json {"error": "一句中文原因"}; never end silently.
-        End with only: 交付完成, or the error.
-        """
-    }
 
     // MARK: 小工具
 
@@ -404,6 +414,12 @@ final class VideoMaker {
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 
+    nonisolated static func write(_ object: [String: Any], to url: URL) {
+        if let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) {
+            try? data.write(to: url)
+        }
+    }
+
     nonisolated static func number(_ value: Any?) -> Double? {
         if let d = value as? Double { return d }
         if let i = value as? Int { return Double(i) }
@@ -412,24 +428,7 @@ final class VideoMaker {
     }
 }
 
-/// 把管道里读到的一块块字节拼成一行行。
-private nonisolated final class LineReader: @unchecked Sendable {
-    private var buffer = Data()
-    private let lock = NSLock()
-    func feed(_ chunk: Data) -> [String] {
-        lock.withLock {
-            buffer.append(chunk)
-            var out: [String] = []
-            while let nl = buffer.firstIndex(of: 0x0A) {
-                out.append(String(decoding: buffer[buffer.startIndex..<nl], as: UTF8.self))
-                buffer.removeSubrange(buffer.startIndex...nl)
-            }
-            return out
-        }
-    }
-}
-
-/// 「做成视频」：选风格和主播 → 规划报价（不花积分）→ 确认 → 后台出片，看进度。
+/// 「做成视频」：选风格和主播 → 交给 Claude 桌面版（报价、确认都在那边）→ 这里跟进度，成片自动回来。
 struct VideoSheet: View {
     @Environment(BeanStore.self) private var store
     @Environment(VideoMaker.self) private var maker
@@ -441,29 +440,22 @@ struct VideoSheet: View {
                 MascotView(mood: maker.busy ? .writing : .idle, power: .mid).frame(width: 64, height: 64).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("做成数字人口播").font(.system(size: 22, weight: .bold, design: .rounded))
-                    Text("用 Renoise 的数字人和口播剪辑 skill 一条龙做：写稿、生成出镜、在 Renoise 云端剪辑包装（字幕花字、信息卡、B-roll、音乐），交付能直接发的成片。")
+                    Text("交给 Claude 桌面版，用 Renoise 的数字人和口播剪辑 skill 一条龙做：写稿、生成出镜、在 Renoise 云端剪辑包装（字幕花字、信息卡、B-roll、音乐），成片自动回到这里。")
                         .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
 
-            if maker.claudeMissing || maker.renoiseMissing {
-                Label(maker.claudeMissing ? "做视频要用 Claude Code，这台 Mac 上没找到 claude 命令。" : "没找到 Renoise 命令行，到设置的「连接」里装上并登录。",
-                      systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.accent)
-                HStack { Spacer(); Button("关闭") { dismiss() } }
-            } else {
-                switch maker.phase {
-                case .idle, .choosing: choosing
-                case .planning: planning
-                case .quoted: quoted
-                case .producing: producing
-                case .finished(let url): finished(url)
-                case .failed(let why): failed(why)
-                }
+            switch maker.phase {
+            case .idle, .choosing: choosing
+            case .waiting: waiting
+            case .quoted: quoted
+            case .producing: producing
+            case .finished(let url): finished(url)
+            case .failed(let why): failed(why)
             }
         }
         .padding(24)
         .frame(width: 620)
-        .interactiveDismissDisabled(maker.phase == .planning)
     }
 
     // 选风格、主播
@@ -499,12 +491,23 @@ struct VideoSheet: View {
                 .labelsHidden().frame(width: 260)
             }
         }
+        if maker.claudeAppMissing {
+            Label("这台 Mac 上没装 Claude 桌面版，做视频要靠它。", systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.accent)
+        } else if maker.renoiseMCPMissing {
+            HStack {
+                Label("Claude 里还没接 Renoise MCP。", systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.accent)
+                Spacer()
+                Button("接上 Renoise MCP") { Task { await maker.connectRenoiseMCP() } }
+            }
+        }
+        if !maker.setupNote.isEmpty { Text(maker.setupNote).font(.callout).foregroundStyle(.secondary) }
         HStack {
-            Text("先规划和报价，这一步不花积分；看过报价点确认才开始生成。").font(.caption).foregroundStyle(.tertiary)
+            Text("会在 Claude 桌面版新开一个会话，话已经填好，按发送开始。报价出来后在 Claude 里确认才花积分。")
+                .font(.caption).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button("先不做") { dismiss() }
-            Button("规划并报价") { Task { await maker.plan(store: store) } }
-                .buttonStyle(.glassProminent).disabled(maker.host == nil)
+            Button("交给 Claude 做") { maker.start(store: store) }
+                .buttonStyle(.glassProminent).disabled(maker.host == nil || maker.claudeAppMissing)
         }
         .controlSize(.large)
     }
@@ -526,17 +529,28 @@ struct VideoSheet: View {
         .buttonStyle(.plain)
     }
 
-    private var planning: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private var waiting: some View {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 ProgressView().controlSize(.small)
-                Text("正在规划和报价（不花积分）").font(.headline)
+                Text("已交给 Claude 桌面版").font(.headline)
                 Spacer()
                 if let start = maker.started { Text(start, style: .timer).monospacedDigit().foregroundStyle(.secondary) }
             }
-            Text(maker.activity.isEmpty ? "正在读稿子、按风格写分镜、逐项核价，一般几分钟。" : "正在：\(maker.activity)")
-                .font(.callout).foregroundStyle(.secondary).lineLimit(2)
-            HStack { Spacer(); Button("停下") { maker.stop(store: store) } }
+            VStack(alignment: .leading, spacing: 6) {
+                step(1, "在 Claude 里按发送。")
+                step(2, "第一次用会让你输入 /mcp 登录 Renoise，登好回它一句。")
+                step(3, "它写稿、逐项核价，报价会同时显示在这里，不花积分。")
+            }
+            .padding(12).panel(radius: 12)
+            footer(stop: true)
+        }
+    }
+
+    private func step(_ n: Int, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("\(n)").font(.caption.monospacedDigit().weight(.semibold)).foregroundStyle(Theme.accent)
+            Text(text).font(.callout)
         }
     }
 
@@ -564,17 +578,11 @@ struct VideoSheet: View {
                 ForEach(q.notes, id: \.self) { note in
                     Label(note, systemImage: "exclamationmark.triangle.fill").font(.callout).foregroundStyle(Theme.accent).fixedSize(horizontal: false, vertical: true)
                 }
-                Text("视频由 AI 生成，出镜的是数字人。发出去之前请自己看一遍，并按平台要求标明「内容由 AI 生成」。确认后按这个报价加 10% 余量封顶，要超了就停。")
+                Label("要做就在 Claude 对话里回复确认，它按这个报价加 10% 余量封顶。豆仓会自动跟进度。", systemImage: "bubble.left.and.text.bubble.right")
+                    .font(.callout).fixedSize(horizontal: false, vertical: true)
+                Text("视频由 AI 生成，出镜的是数字人。发出去之前请自己看一遍，并按平台要求标明「内容由 AI 生成」。")
                     .font(.caption).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
-                HStack {
-                    Button("工程目录") { maker.showProject() }.buttonStyle(.borderless)
-                    Spacer()
-                    Button("重新选") { maker.phase = .choosing }
-                    Button("花 \(Int(q.credits.rounded())) 积分开始做") { Task { await maker.produce(store: store) } }
-                        .buttonStyle(.glassProminent)
-                        .disabled((q.balance ?? .infinity) < q.credits)
-                }
-                .controlSize(.large)
+                footer(stop: true)
             }
         }
     }
@@ -586,21 +594,30 @@ struct VideoSheet: View {
                     stepView(n, name)
                 }
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(maker.stepDetail.isEmpty ? "准备中…" : maker.stepDetail).font(.callout.weight(.medium))
-                if !maker.activity.isEmpty { Text("正在：\(maker.activity)").font(.caption).foregroundStyle(.secondary).lineLimit(1) }
-            }
+            Text(maker.stepDetail.isEmpty ? "准备中…" : maker.stepDetail).font(.callout.weight(.medium))
             HStack {
                 if let start = maker.started {
                     Label { Text(start, style: .timer).monospacedDigit() } icon: { Image(systemName: "clock") }.font(.caption).foregroundStyle(.secondary)
                 }
-                Text("一般要二三十分钟，可以关掉这个窗口去做别的。").font(.caption).foregroundStyle(.tertiary)
-                Spacer()
-                Button("工程目录") { maker.showProject() }.buttonStyle(.borderless)
-                Button("停下") { maker.stop(store: store) }
-                Button("关闭") { dismiss() }.buttonStyle(.glassProminent)
+                Text("一般要二三十分钟，可以关掉这个窗口，做好了会提醒。").font(.caption).foregroundStyle(.tertiary)
             }
+            footer(stop: false)
         }
+    }
+
+    private func footer(stop: Bool) -> some View {
+        HStack {
+            Button("工程目录") { maker.showProject() }.buttonStyle(.borderless)
+            if stop {
+                Button("不跟这条了") { maker.abandon(store: store) }.buttonStyle(.borderless)
+                    .help("豆仓不再跟进这条。Claude 里那个会话要在 Claude 里停")
+            }
+            Spacer()
+            if maker.phase == .waiting { Button("没打开？再开一次") { maker.openSession() } }
+            Button("回到 Claude") { maker.showClaude() }
+            Button("关闭") { dismiss() }.buttonStyle(.glassProminent)
+        }
+        .controlSize(.large)
     }
 
     private func stepView(_ n: Int, _ name: String) -> some View {
