@@ -950,7 +950,9 @@ struct RecordingsView: View {
                 picked = []; selecting = false
             }
         } message: {
-            Text("文字稿和纪要会一起删除。还在录音豆里的原件不受影响，可以再下载。")
+            Text(picked.allSatisfy { id in store.recordings.first { $0.id == id }?.isMaterial == true }
+                 ? "文字稿、纪要和译文会一起删除。原视频还在原来的平台上，需要的话可以重新导入。"
+                 : "文字稿和纪要会一起删除。还在录音豆里的原件不受影响，可以再下载。")
         }
         .onChange(of: nav.route) { if nav.route == .starred { nav.route = .all; quick = .starred } }
     }
