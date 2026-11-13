@@ -1,10 +1,21 @@
 import AVFoundation
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
-/// 不连录音豆也能录：用这台 Mac。可以录麦克风（外界的声音）、录电脑里播放的声音，或者两路一起录。
+/// 不连录音豆也能录：用这台 Mac（或这台 iPhone）。Mac 上可以录麦克风、录电脑里播放的声音，或者两路一起录；iPhone 上只有麦克风。
 /// 录完和录音豆的录音走同一条路——转写、整理、进知识库。
 extension BeanStore {
     enum MacRec { case off, recording, paused }
+
+    /// 界面上怎么称呼正在用的这台机器。
+    #if os(macOS)
+    static let thisDevice = "这台 Mac", deviceShort = "Mac"
+    #else
+    static let thisDevice = "这台 iPhone", deviceShort = "iPhone"
+    #endif
 
     /// 用 Mac 录音时录哪一路。
     enum MacSource: String, CaseIterable, Identifiable {
@@ -46,8 +57,8 @@ extension BeanStore {
             var tap: SystemAudioTap?
             if source.usesMic {
                 guard await AVCaptureDevice.requestAccess(for: .audio) else {
-                    problem = Problem(title: "豆仓用不了这台 Mac 的麦克风",
-                                      detail: "到「系统设置 → 隐私与安全性 → 麦克风」里把豆仓打开，再点一次录音。", action: .micPermission)
+                    problem = Problem(title: "豆仓用不了\(Self.thisDevice)的麦克风",
+                                      detail: "到系统设置的「隐私与安全性 → 麦克风」里把豆仓打开，再点一次录音。", action: .micPermission)
                     return
                 }
             }
@@ -62,6 +73,12 @@ extension BeanStore {
                 tap = t
             }
             if source.usesMic {
+                #if os(iOS)
+                // 手机上要先向系统申请「我要录音」，否则录音器开不起来；允许蓝牙耳机，别的声音压低
+                let session = AVAudioSession.sharedInstance()
+                try? session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
+                try? session.setActive(true)
+                #endif
                 let url = FileManager.default.temporaryDirectory.appendingPathComponent("beanpod-mac-\(UUID().uuidString).wav")
                 let format: [String: Any] = [
                     AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 44100, AVNumberOfChannelsKey: 1,
@@ -69,7 +86,7 @@ extension BeanStore {
                 ]
                 guard let r = try? AVAudioRecorder(url: url, settings: format), r.record() else {
                     await tap?.stop()
-                    problem = Problem(title: "这台 Mac 的麦克风没有开始录音", detail: "可能有别的软件正占着麦克风，或者没有接入任何麦克风。")
+                    problem = Problem(title: "\(Self.thisDevice)的麦克风没有开始录音", detail: "可能有别的软件正占着麦克风，或者没有接入任何麦克风。")
                     return
                 }
                 r.isMeteringEnabled = true
@@ -83,7 +100,7 @@ extension BeanStore {
             recordingSince = .now
             liveMarks = []; liveSegments = []; liveLevels = []; liveLevelTotal = 0
             liveNote = nil
-            addLog("开始用 Mac 录音：\(source.name)")
+            addLog("开始用\(Self.thisDevice)录音：\(source.name)")
             macMeter?.cancel()
             macMeter = Task { [weak self] in
                 while let self, !Task.isCancelled, self.macRec != .off {
@@ -162,12 +179,12 @@ extension BeanStore {
             importFile(mixed, consume: true, processNow: !settings.askKeep)
             // 刚导进来的那一条：标上来源和重点标记，标题留空（先显示时间，整理完会自动起名）
             if let i = recordings.firstIndex(where: { !before.contains($0.id) }) {
-                recordings[i].origin = "Mac · " + source.name
+                recordings[i].origin = Self.deviceShort + " · " + source.name
                 recordings[i].title = nil
                 recordings[i].marks = marks.filter { $0 <= recordings[i].duration + 1 }
                 saveLibrary()
                 addLog("Mac 录音结束（\(source.name)）：\(Int(recordings[i].duration)) 秒，\(marks.count) 个标记")
-                if settings.askKeep { offerKeep(id: recordings[i].id, seconds: recordings[i].duration, from: "这台 Mac", onMac: true) }
+                if settings.askKeep { offerKeep(id: recordings[i].id, seconds: recordings[i].duration, from: Self.thisDevice, onMac: true) }
             }
         }
     }

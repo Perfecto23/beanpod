@@ -354,7 +354,7 @@ private struct ModelsPane: View {
             ModelCard(icon: "waveform", title: "转写：把声音变成文字", ok: asrOK, status: asrOK ? "已就绪" : "还差模型") {
                 line("引擎") {
                     Picker("引擎", selection: $settings.engine) {
-                        ForEach(AppSettings.Engine.allCases) { Text($0.name).tag($0) }
+                        ForEach(AppSettings.Engine.available) { Text($0.name).tag($0) }
                     }
                     .labelsHidden().fixedSize()
                 }

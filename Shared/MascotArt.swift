@@ -58,7 +58,7 @@ struct MascotView: View {
                         .blur(radius: side * 0.025).offset(y: side * 0.44)
                         .scaleEffect(1 - hop / (side * 0.9))
                 }
-                Image(nsImage: Self.picture(art))
+                Self.image(art)
                     .resizable().interpolation(.high).scaledToFit()
                     .frame(width: side * 0.94, height: side * 0.94)
                     // 呼吸和点动：以脚底为轴，身子鼓起来再落回去
@@ -85,12 +85,24 @@ struct MascotView: View {
     }
 
     /// 图是散放在 App 包里的 PNG，按名字读出来，读过的留着不重复读。
-    private static var cache: [String: NSImage] = [:]
-    private static func picture(_ name: String) -> NSImage {
+    #if os(macOS)
+    private typealias Picture = NSImage
+    #else
+    private typealias Picture = UIImage
+    #endif
+    private static var cache: [String: Picture] = [:]
+    private static func picture(_ name: String) -> Picture {
         if let hit = cache[name] { return hit }
-        let image = Bundle.main.url(forResource: "xiaodou_" + name, withExtension: "png").flatMap { NSImage(contentsOf: $0) } ?? NSImage()
+        let image = Bundle.main.url(forResource: "xiaodou_" + name, withExtension: "png").flatMap { Picture(contentsOfFile: $0.path) } ?? Picture()
         cache[name] = image
         return image
+    }
+    private static func image(_ name: String) -> Image {
+        #if os(macOS)
+        Image(nsImage: picture(name))
+        #else
+        Image(uiImage: picture(name))
+        #endif
     }
 
     /// 点一下，或者高兴的时候：蹦一下。

@@ -7,3 +7,4 @@ DerivedData/
 design/ip/model/
 *.log
 .DS_Store
+build-ios/

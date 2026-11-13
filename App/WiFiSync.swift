@@ -2,27 +2,6 @@ import BeanKit
 import Foundation
 import Network
 
-/// 一次 Wi‑Fi 快传的进度，给界面看的。
-nonisolated struct WiFiSync: Equatable {
-    enum Phase: Equatable { case opening, joining, connecting, transferring, closing }
-    var phase: Phase = .opening
-    var total: Int
-    /// 正在传第几条（从 1 数）。
-    var index = 0
-    /// 这一次里还没轮到的录音。
-    var waiting: [UInt32]
-
-    var text: String {
-        switch phase {
-        case .opening: "正在让录音豆打开 Wi‑Fi…"
-        case .joining: "正在连到录音豆上…"
-        case .connecting: "连上了，马上开始传…"
-        case .transferring: total > 1 ? "Wi‑Fi 快传 · 第 \(index) / \(total) 条" : "Wi‑Fi 快传中…"
-        case .closing: "传完了，正在连回原来的 Wi‑Fi…"
-        }
-    }
-}
-
 /// Wi‑Fi 快传：让录音豆开一个热点，这台 Mac 连上去，把录音一口气拉下来，比蓝牙快十倍左右。
 /// 代价是 Mac 要离开原来的 Wi‑Fi 大约一分钟，所以只在用户点了之后才走这条路。
 ///

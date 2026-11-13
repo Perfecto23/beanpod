@@ -88,3 +88,12 @@ docs/PROTOCOL.md   协议笔记，逐条标注了哪些是真机实测、哪些�
 ## 许可证
 
 [MIT](LICENSE)
+
+## iPhone 版（进行中）
+
+`Mobile/` 是 iPhone 版的界面，和 Mac 版共用 `Shared/` 里的同一套核心：蓝牙协议、下载解密、录音库、整理流程、提问。
+手机上不跑本机模型，转写走云端（兼容 OpenAI `/audio/transcriptions` 的服务，或系统语音识别），整理也走云端。
+
+- 用 Xcode 打开工程，选 `BeanPodMobile` 目标即可运行，需要装好 iOS 平台组件。
+- 没装平台组件时，`Mobile/build-sim.sh run` 可以绕过 Xcode 工程，直接编译并装进模拟器；`Mobile/shots.sh` 逐页截图。
+- 模拟器没有蓝牙，连接录音豆只能在真机上试。

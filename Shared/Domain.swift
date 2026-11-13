@@ -347,3 +347,24 @@ nonisolated func spokenDuration(_ t: TimeInterval) -> String {
     if m >= 60 { return m % 60 == 0 ? "\(m / 60) 小时" : "\(m / 60) 小时 \(m % 60) 分" }
     return m >= 1 ? "\(m) 分钟" : "\(Int(t)) 秒"
 }
+
+/// 一次 Wi‑Fi 快传的进度，给界面看的。
+nonisolated struct WiFiSync: Equatable {
+    enum Phase: Equatable { case opening, joining, connecting, transferring, closing }
+    var phase: Phase = .opening
+    var total: Int
+    /// 正在传第几条（从 1 数）。
+    var index = 0
+    /// 这一次里还没轮到的录音。
+    var waiting: [UInt32]
+
+    var text: String {
+        switch phase {
+        case .opening: "正在让录音豆打开 Wi‑Fi…"
+        case .joining: "正在连到录音豆上…"
+        case .connecting: "连上了，马上开始传…"
+        case .transferring: total > 1 ? "Wi‑Fi 快传 · 第 \(index) / \(total) 条" : "Wi‑Fi 快传中…"
+        case .closing: "传完了，正在连回原来的 Wi‑Fi…"
+        }
+    }
+}

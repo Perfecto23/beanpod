@@ -503,10 +503,6 @@ struct WindowGlass: NSViewRepresentable {
     func updateNSView(_ v: NSVisualEffectView, context: Context) {}
 }
 
-extension AppSettings.Appearance {
-    var scheme: ColorScheme? { self == .system ? nil : self == .light ? .light : .dark }
-}
-
 struct StageBadge: View {
     let stage: BeanStore.Stage
     var body: some View {

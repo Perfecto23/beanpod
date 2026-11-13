@@ -1,5 +1,9 @@
 import AVFoundation
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import BeanKit
 import Foundation
 import Observation
@@ -150,10 +154,16 @@ final class BeanStore {
         switch action {
         case .download(let id): download(id)
         case .process(let id): process(id)
+        #if os(macOS)
         case .screenPermission:
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
         case .micPermission:
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
+        #else
+        case .screenPermission, .micPermission:
+            // 手机上只能跳到豆仓自己的那一页设置
+            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+        #endif
         case .settings, .device: break      // 这两个要换页面，由界面自己处理
         }
     }
@@ -219,7 +229,9 @@ final class BeanStore {
         loadLibrary()
         refreshASRAvailability()
         watchInbox()
+        #if os(macOS)
         startMCPServer()
+        #endif
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
             if self?.settings.autoProcess == true { self?.upgradeRoughNotes() }
@@ -289,7 +301,7 @@ final class BeanStore {
     private func linkChanged(_ new: BLEClient.Link) {
         let old = link
         link = new
-        if new == .ready, old != .ready { toast("checkmark.circle.fill", "录音豆已连接"); NSSound(named: "Glass")?.play() }
+        if new == .ready, old != .ready { toast("checkmark.circle.fill", "录音豆已连接"); Self.chime() }
         if old == .ready, new != .ready, wifi == nil { toast("wifi.slash", "录音豆已断开") }
         poller?.cancel()
         guard new == .ready else {
@@ -905,7 +917,18 @@ final class BeanStore {
         saveLibrary()
     }
 
+    #if os(macOS)
     func reveal(_ id: UInt32) { NSWorkspace.shared.activateFileViewerSelecting([oggURL(id)]) }
+    #endif
+
+    /// 连上录音豆时「叮」一声。手机上用一下轻震代替。
+    static func chime() {
+        #if os(macOS)
+        NSSound(named: "Glass")?.play()
+        #else
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        #endif
+    }
 
     // MARK: 播放
 
@@ -961,6 +984,7 @@ final class BeanStore {
         saveLibrary()
     }
 
+    #if os(macOS)
     /// 把录音另存成别的软件能打开的音频文件。
     func exportAudio(_ id: UInt32, m4a: Bool) {
         guard let r = recordings.first(where: { $0.id == id }) else { return }
@@ -989,6 +1013,7 @@ final class BeanStore {
             }
         }
     }
+    #endif
 
     /// 从文字稿的某一句开始播。
     func play(_ id: UInt32, at time: TimeInterval) {

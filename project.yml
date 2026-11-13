@@ -4,6 +4,7 @@ options:
   bundleIdPrefix: com.andyhu
   deploymentTarget:
     macOS: "26.0"
+    iOS: "18.0"
   createIntermediateGroups: true
 packages:
   BeanKit:
@@ -18,7 +19,7 @@ targets:
   BeanPod:
     type: application
     platform: macOS
-    sources: [App]
+    sources: [App, Shared]
     dependencies:
       - package: BeanKit
     info:
@@ -40,5 +41,33 @@ targets:
         CODE_SIGN_IDENTITY: "-"
         ENABLE_HARDENED_RUNTIME: NO
         GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  BeanPodMobile:
+    type: application
+    platform: iOS
+    sources: [Shared, Mobile]
+    dependencies:
+      - package: BeanKit
+    info:
+      path: Mobile/Info.plist
+      properties:
+        CFBundleDisplayName: 豆仓
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleLocalizations: [zh-Hans]
+        CFBundleAllowMixedLocalizations: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIBackgroundModes: [bluetooth-central, audio]
+        NSBluetoothAlwaysUsageDescription: 需要蓝牙来连接你的录音豆。
+        NSMicrophoneUsageDescription: 录音豆没连上时，用这台 iPhone 的麦克风录音。
+        NSSpeechRecognitionUsageDescription: 没有配置云端转写时，用系统的语音识别把录音转成文字。
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.andyhu.beanpod.mobile
+        PRODUCT_NAME: BeanPod
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

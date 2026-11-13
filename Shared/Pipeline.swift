@@ -1,5 +1,9 @@
 import UserNotifications
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import BeanKit
 import Foundation
 
@@ -67,9 +71,18 @@ extension BeanStore {
         }
     }
 
+    /// 豆仓现在是不是在前台。
+    static var appIsActive: Bool {
+        #if os(macOS)
+        NSApp.isActive
+        #else
+        UIApplication.shared.applicationState == .active
+        #endif
+    }
+
     /// 一条录音整理好了。豆仓不在前台时发一条系统通知，点一下就打开那条录音。
     private func announceDone(_ id: UInt32) {
-        guard !NSApp.isActive, let r = recordings.first(where: { $0.id == id }), r.isAnalyzed else { return }
+        guard !Self.appIsActive, let r = recordings.first(where: { $0.id == id }), r.isAnalyzed else { return }
         let center = UNUserNotificationCenter.current()
         center.delegate = NotificationRouter.shared
         let title = r.displayTitle, summary = r.summary ?? "", todos = r.todos.count
@@ -99,7 +112,15 @@ extension BeanStore {
             do {
                 let segments: [Segment], engine: String
                 refreshASRAvailability()
-                if settings.engine == .qwen, asrAvailable {
+                if settings.engine == .cloud, let asr = settings.asrConfig {
+                    // 云端转写：录音会发给用户自己填的那家服务商
+                    segments = try await CloudASR.transcribe(wavURL(id), config: asr, language: settings.language) { fraction in
+                        Task { @MainActor [weak self] in
+                            if case .transcribing = self?.stages[id] { self?.stages[id] = .transcribing(fraction) }
+                        }
+                    }
+                    engine = "云端 · \(asr.model)"
+                } else if settings.engine == .qwen, asrAvailable {
                     segments = try await QwenASR.shared.transcribe(wavURL(id), serverPath: settings.llamaServerPath) { fraction in
                         Task { @MainActor [weak self] in
                             if case .transcribing = self?.stages[id] { self?.stages[id] = .transcribing(fraction) }
@@ -442,6 +463,7 @@ extension BeanStore {
         return md
     }
 
+    #if os(macOS)
     /// 把整理过的录音各存成一个 Markdown 文件，可以直接放进 Obsidian 之类的笔记库。
     func exportMarkdown(_ items: [Recording]) {
         let panel = NSOpenPanel()
@@ -459,6 +481,7 @@ extension BeanStore {
         }
         toast("checkmark.circle.fill", "已导出 \(written) 个文件到「\(folder.lastPathComponent)」")
     }
+    #endif
 
     /// 重点标记落在哪几句话上。
     nonisolated static func markedSentences(_ r: Recording) -> [String] {
@@ -756,6 +779,7 @@ extension BeanStore {
 
     static let mcpPort = 8791
     static var mcpAddress: String { "http://127.0.0.1:\(mcpPort)/mcp" }
+    #if os(macOS)
     static var cliPath: String { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/beanpod").path }
 
     /// 豆仓开着的时候，顺带把 MCP 的网址入口也开着，给只认网址的工具（比如 Grok Bot）用。只监听本机。
@@ -769,10 +793,12 @@ extension BeanStore {
         p.standardError = FileHandle.nullDevice
         if (try? p.run()) != nil { addLog("MCP 网址入口：\(Self.mcpAddress)") }
     }
+    #endif
 
     // MARK: 导入
 
-    /// 让用户挑音频或文字文件导进来。原文件不动。
+    #if os(macOS)
+    /// 让用户挑音频或文字文件导进来。原文件不动。（手机上用系统的文件选择器，在界面那边。）
     func chooseFilesToImport() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
@@ -783,6 +809,7 @@ extension BeanStore {
         guard panel.runModal() == .OK else { return }
         panel.urls.forEach { importFile($0, consume: false) }
     }
+    #endif
 
     /// 有了分析模型之后，把之前只按关键词粗分过类的录音补上完整纪要。
     func upgradeRoughNotes() {
@@ -874,6 +901,7 @@ extension BeanStore {
     /// 系统能直接解的格式自己解；解不了的（ogg、amr、微信的 silk 等）交给 ffmpeg，没装 ffmpeg 就放弃。
     nonisolated static func decodeAnyAudio(_ url: URL) -> [Float]? {
         if let s = try? QwenASR.loadMono16k(url) { return s }
+        #if os(macOS)
         guard let ffmpeg = ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"].first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { return nil }
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".wav")
         defer { try? FileManager.default.removeItem(at: tmp) }
@@ -884,6 +912,9 @@ extension BeanStore {
         guard (try? p.run()) != nil else { return nil }
         p.waitUntilExit()
         return p.terminationStatus == 0 ? try? QwenASR.loadMono16k(tmp) : nil
+        #else
+        return nil      // 手机上没有 ffmpeg，系统解不了的格式就放弃
+        #endif
     }
 
     // MARK: 模型下载
@@ -964,7 +995,9 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         guard let id = response.notification.request.content.userInfo["recording"] as? Int else { return }
         await MainActor.run {
+            #if os(macOS)
             NSApp.activate(ignoringOtherApps: true)
+            #endif
             NotificationCenter.default.post(name: Self.open, object: UInt32(id))
         }
     }

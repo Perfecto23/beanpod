@@ -4,32 +4,6 @@ import SwiftUI
 /// 小豆：豆仓的 3D 形象，一只脖子上挂着耳机的仓鼠。
 /// 模型由 Tripo 生成，骨骼和表情贴图由 design/ip/tools/build.py 生成。
 /// 它的样子跟着豆仓的状态和录音豆的电量走，点它一下会蹦一蹦。
-enum MascotMood: Equatable {
-    case sleeping    // 录音豆没连上
-    case idle        // 待命
-    case listening   // 正在录音
-    case writing     // 正在把录音转成文字：埋头、两只手轮流敲
-    case thinking    // 正在整理纪要：歪着头左看右看、一只手举着
-    case happy       // 刚处理完一条、刚配对成功
-}
-
-/// 录音豆的电量状态，决定待命时的表情
-enum MascotPower: Equatable {
-    case unknown
-    case charging(Int)   // 放在充电仓里，带当前电量
-    case low             // 20% 以下
-    case mid
-    case full            // 80% 以上
-
-    init(battery: Int, charging: Bool) {
-        if charging { self = .charging(battery) }
-        else if battery <= 0 { self = .unknown }
-        else if battery < 20 { self = .low }
-        else if battery >= 80 { self = .full }
-        else { self = .mid }
-    }
-}
-
 struct Mascot3DView: NSViewRepresentable {
     var mood: MascotMood
     var power: MascotPower = .unknown

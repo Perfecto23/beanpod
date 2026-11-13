@@ -5,9 +5,23 @@ import Observation
 @Observable
 final class AppSettings {
     enum Engine: String, CaseIterable, Identifiable {
-        case qwen, apple
+        case qwen, apple, cloud
         var id: String { rawValue }
-        var name: String { self == .qwen ? "Qwen3‑ASR（本机）" : "系统语音识别（本机）" }
+        var name: String {
+            switch self {
+            case .qwen: "Qwen3‑ASR（本机）"
+            case .apple: "系统语音识别"
+            case .cloud: "云端转写"
+            }
+        }
+        /// 这台机器上能选的引擎。手机上跑不动本机模型；Mac 上的云端转写还没有做设置界面，先不摆出来。
+        static var available: [Engine] {
+            #if os(macOS)
+            [.qwen, .apple]
+            #else
+            [.cloud, .apple]
+            #endif
+        }
     }
 
     enum Appearance: String, CaseIterable, Identifiable {
@@ -61,6 +75,14 @@ final class AppSettings {
     var llmModel: String { didSet { save("llmModel", llmModel) } }
     var llmKey: String { didSet { save("llmKey", llmKey) } }
 
+    /// 云端转写：任何兼容 OpenAI「/audio/transcriptions」接口的服务。
+    var asrBaseURL: String { didSet { save("asrBaseURL", asrBaseURL) } }
+    var asrModel: String { didSet { save("asrModel", asrModel) } }
+    var asrKey: String { didSet { save("asrKey", asrKey) } }
+    var asrConfig: ASRConfig? {
+        asrBaseURL.isEmpty || asrModel.isEmpty ? nil : ASRConfig(baseURL: asrBaseURL, model: asrModel, key: asrKey)
+    }
+
     var llamaServerPath: String { didSet { save("llamaServerPath", llamaServerPath) } }
     var exportFolder: String { didSet { save("exportFolder", exportFolder) } }
 
@@ -70,9 +92,17 @@ final class AppSettings {
     init() {
         let d = UserDefaults.standard
         analysisMode = AnalysisMode(rawValue: d.string(forKey: "analysisMode") ?? "") ?? .auto
+        #if os(macOS)
         appearance = Appearance(rawValue: d.string(forKey: "appearance") ?? "") ?? .dark
+        #else
+        appearance = Appearance(rawValue: d.string(forKey: "appearance") ?? "") ?? .system
+        #endif
         profession = Profession(rawValue: d.string(forKey: "profession") ?? "") ?? .general
+        #if os(macOS)
         engine = Engine(rawValue: d.string(forKey: "engine") ?? "") ?? .qwen
+        #else
+        engine = Engine(rawValue: d.string(forKey: "engine") ?? "") ?? .cloud
+        #endif
         language = d.string(forKey: "language") ?? "zh-CN"
         autoProcess = d.object(forKey: "autoProcess") as? Bool ?? true
         autoDownload = d.object(forKey: "autoDownload") as? Bool ?? true
@@ -91,6 +121,9 @@ final class AppSettings {
         llmBaseURL = d.string(forKey: "llmBaseURL") ?? ""
         llmModel = d.string(forKey: "llmModel") ?? ""
         llmKey = d.string(forKey: "llmKey") ?? ""
+        asrBaseURL = d.string(forKey: "asrBaseURL") ?? ""
+        asrModel = d.string(forKey: "asrModel") ?? ""
+        asrKey = d.string(forKey: "asrKey") ?? ""
         llamaServerPath = d.string(forKey: "llamaServerPath") ?? ""
         exportFolder = d.string(forKey: "exportFolder") ?? ""
     }
