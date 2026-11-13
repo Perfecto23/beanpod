@@ -158,7 +158,8 @@ extension BeanStore {
                 return
             }
             let before = Set(recordings.map(\.id))
-            importFile(mixed, consume: true)
+            // 开着「录完先问一句」时先不整理，等用户说留着再整理
+            importFile(mixed, consume: true, processNow: !settings.askKeep)
             // 刚导进来的那一条：标上来源和重点标记，标题留空（先显示时间，整理完会自动起名）
             if let i = recordings.firstIndex(where: { !before.contains($0.id) }) {
                 recordings[i].origin = "Mac · " + source.name
@@ -166,6 +167,7 @@ extension BeanStore {
                 recordings[i].marks = marks.filter { $0 <= recordings[i].duration + 1 }
                 saveLibrary()
                 addLog("Mac 录音结束（\(source.name)）：\(Int(recordings[i].duration)) 秒，\(marks.count) 个标记")
+                if settings.askKeep { offerKeep(id: recordings[i].id, seconds: recordings[i].duration, from: "这台 Mac", onMac: true) }
             }
         }
     }

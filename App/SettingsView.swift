@@ -164,6 +164,9 @@ private struct GeneralPane: View {
                 SettingRow(icon: "captions.bubble", title: "边录边出字", detail: "录音时在舞台上实时显示文字。") {
                     Toggle("边录边出字", isOn: $settings.liveTranscribe).labelsHidden().toggleStyle(.switch)
                 }
+                SettingRow(icon: "questionmark.bubble", title: "录完先问一句留不留", detail: "录完弹一张小卡片，不要的话当场删掉，哪里都不留。十秒不理它就默认留着。") {
+                    Toggle("录完先问一句留不留", isOn: $settings.askKeep).labelsHidden().toggleStyle(.switch)
+                }
                 SettingRow(icon: "arrow.down.circle", title: "自动从录音豆下载", detail: "录完一条、或者重新连上录音豆时，把还没下载的拉到这台 Mac 上。") {
                     Toggle("自动从录音豆下载", isOn: $settings.autoDownload).labelsHidden().toggleStyle(.switch)
                 }

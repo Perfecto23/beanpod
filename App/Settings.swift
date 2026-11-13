@@ -37,6 +37,8 @@ final class AppSettings {
     var autoProcess: Bool { didSet { save("autoProcess", autoProcess) } }
     /// 录完一条就自动从录音豆下载。
     var autoDownload: Bool { didSet { save("autoDownload", autoDownload) } }
+    /// 录完一条先问一句「留着还是不要」。
+    var askKeep: Bool { didSet { save("askKeep", askKeep) } }
     /// 录音时边录边出字。
     var liveTranscribe: Bool { didSet { save("liveTranscribe", liveTranscribe) } }
     /// 纠错词库：模型老是听错的词 → 正确的写法。转写出来之后自动替换。
@@ -75,6 +77,7 @@ final class AppSettings {
         autoProcess = d.object(forKey: "autoProcess") as? Bool ?? true
         autoDownload = d.object(forKey: "autoDownload") as? Bool ?? true
         liveTranscribe = d.object(forKey: "liveTranscribe") as? Bool ?? true
+        askKeep = d.object(forKey: "askKeep") as? Bool ?? true
         liveFontSize = d.object(forKey: "liveFontSize") as? Double ?? 22
         liveTidy = d.object(forKey: "liveTidy") as? Bool ?? true
         vocabulary = (d.array(forKey: "vocabulary") as? [[String: String]] ?? []).compactMap { e in

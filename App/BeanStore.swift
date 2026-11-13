@@ -18,6 +18,8 @@ final class BeanStore {
     /// 设备上有一条开着的录音（正在录，或暂停着还没结束）。
     var sessionOpen = false
     @ObservationIgnored var pullWhenListed = false
+    /// 刚录完、等用户说「留着」还是「不要」的那一条（见 KeepOrDiscard.swift）。
+    var justRecorded: JustRecorded?
     /// Wi‑Fi 快传：正在进行的那一次（没有就是 nil），以及录音豆对「开热点」命令的回包。
     var wifi: WiFiSync?
     @ObservationIgnored var wifiReply: Packet?
@@ -72,8 +74,10 @@ final class BeanStore {
     /// 这条录音是什么时候点的开始，用来把豆仓里点的标记对回下载下来的那条录音。
     @ObservationIgnored private var sessionStart: Date?
     /// 在豆仓里点的标记，等这条录音下载下来再写进去。
-    @ObservationIgnored private var pendingMarks: [(start: Date, file: UInt32, marks: [TimeInterval])] = []
+    @ObservationIgnored var pendingMarks: [(start: Date, file: UInt32, marks: [TimeInterval])] = []
     var rewriting: Set<UInt32> = []
+    /// 正在让 AI 重新起标题的录音。
+    var retitling: Set<UInt32> = []
 
     /// 用户刚手动改了一个词，问他要不要全部替换并记住。
     var pendingFix: PendingFix?
@@ -266,6 +270,14 @@ final class BeanStore {
         if active { ble.send(Command.stopTransfer()) }
         return active
     }
+    /// 把一条录音从下载里拿掉：排着队的取消排队，正在传的停下。
+    func dropFromDownloads(_ id: UInt32) {
+        queue.removeAll { $0 == id }
+        if job?.id == id {
+            failPull(id, nil)
+            ble.send(Command.stopTransfer())
+        }
+    }
     /// 这条录音是不是在排队等下载（蓝牙的队列，或者这一次快传里还没轮到的）。
     func isQueued(_ id: UInt32) -> Bool {
         queue.contains(id) || (wifi.map { $0.waiting.contains(id) } ?? false)
@@ -360,6 +372,7 @@ final class BeanStore {
     }
 
     func startRecording() {
+        if justRecorded != nil { keepJustRecorded() }   // 上一条还没说留不留就又开始录了：当作留着
         // 录音豆没连上：直接用这台 Mac 的麦克风录
         if link != .ready || preferMac, recState == .idle { startMacRecording(); return }
         guard link == .ready, recState == .idle else { return }
@@ -401,10 +414,14 @@ final class BeanStore {
     func finishRecording() {
         if macRec != .off { finishMacRecording(); return }
         guard link == .ready, recState != .idle else { return }
+        let fid = currentDeviceFile, seconds = elapsed()
         ble.send(Command.stopRecording())
         if !liveMarks.isEmpty, let since = sessionStart {
             pendingMarks.append((since, currentDeviceFile, liveMarks))
         }
+        // 先问一句留不留。问的这几秒里不下载、不整理；不知道是哪一条（录音豆没报编号）就不问，照旧直接下载
+        let ask = settings.askKeep && fid != 0
+        if ask { offerKeep(id: fid, seconds: seconds, from: displayDeviceName, onMac: false) }
         elapsedBase = 0
         recordingSince = nil
         info?.recording = false
@@ -414,7 +431,7 @@ final class BeanStore {
             try? await Task.sleep(for: .seconds(1))
             ble.send(Command.deviceInfo())
             try? await Task.sleep(for: .seconds(1))
-            pullWhenListed = settings.autoDownload
+            pullWhenListed = settings.autoDownload && !ask
             refreshFiles()
         }
     }
@@ -569,6 +586,11 @@ final class BeanStore {
         case (0x1A, 0x06):
             if info?.recording == false { info?.recording = true }
             let b = Array(p.payload)
+            // 记下正在录的是哪一条。以前只有开着实时出字才记，没开的时候结束录音就不知道该问哪一条、该删哪一条
+            if b.count >= 4, macRec == .off, live == nil, recordingSince != nil {
+                let fid = UInt32(b[0]) | UInt32(b[1]) << 8 | UInt32(b[2]) << 16 | UInt32(b[3]) << 24
+                if fid != 0 { currentDeviceFile = fid }
+            }
             // 不是豆仓点的开始，是按了录音豆上的键：这边的计时、实时出字都要跟着启动。
             // 以前只把状态标成「录音中」，计时停在 0:00，要等一分钟一次的状态查询才突然开始走。
             if live == nil, recordingSince == nil, macRec == .off, b.count >= 4 {

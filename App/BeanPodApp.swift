@@ -58,6 +58,13 @@ struct BeanPodApp: App {
                 Divider()
                 // 删除选中的那条录音。都会先问一句，不会直接删
                 let chosen = store.recordings.first { $0.id == nav.selection }
+                Button("重命名选中的录音…") {
+                    if case .all = nav.route {} else { nav.route = .all }
+                    nav.renaming = chosen?.id
+                }
+                .disabled(chosen == nil)
+                Button("让 AI 给选中的录音重新起标题") { if let id = chosen?.id { store.retitle(id) } }
+                    .disabled(chosen?.transcript == nil || !store.analysisAvailable)
                 Button("从这台 Mac 删除选中的录音…") { nav.confirmLocalDelete = true }
                     .keyboardShortcut(.delete, modifiers: .command)
                     .disabled(chosen?.downloaded != true || store.recState != .idle)
@@ -100,6 +107,7 @@ struct BeanPodApp: App {
             }
             CommandMenu("小豆") {
                 Button("跟着真实状态") { store.mascotPreview = nil }
+                Button("看看：「录好了」卡片") { store.offerKeep(id: 0, seconds: 25, from: "这台 Mac", onMac: true) }
                 Divider()
                 Button("看看：待命") { store.mascotPreview = (.idle, .mid) }
                 Button("看看：满电") { store.mascotPreview = (.idle, .full) }

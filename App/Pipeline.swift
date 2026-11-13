@@ -820,7 +820,7 @@ extension BeanStore {
     }
 
     /// consume：处理完把原文件删掉。收件箱里的文件是这样；用户自己选的文件不动它。
-    func importFile(_ file: URL, consume: Bool = true) {
+    func importFile(_ file: URL, consume: Bool = true, processNow: Bool = true) {
         let fm = FileManager.default
         var id = UInt32(Date.now.timeIntervalSince1970)
         while recordings.contains(where: { $0.id == id }) { id += 1 }
@@ -855,7 +855,7 @@ extension BeanStore {
             addLog("导入音频 \(file.lastPathComponent) → \(id)")
         }
         saveLibrary()
-        if settings.autoProcess || recordings.first?.textOnly == true { process(id) }
+        if processNow, settings.autoProcess || recordings.first?.textOnly == true { process(id) }
     }
 
     /// 处理不了的文件挪到「没能导入」里，不删，也不反复重试。

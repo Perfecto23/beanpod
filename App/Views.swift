@@ -18,6 +18,8 @@ final class Navigator {
     /// 正在问「真的要删吗」。放在这里，工具栏按钮和菜单栏命令都能触发同一个确认框。
     var confirmDeviceDelete = false
     var confirmWiFiSync = false
+    /// 正在给哪条录音改名（弹窗挂在录音页上）。
+    var renaming: UInt32?
     var confirmLocalDelete = false
 
     func open(_ id: UInt32) { route = .all; selection = id }
@@ -91,6 +93,14 @@ struct RootView: View {
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: store.wifi?.phase)
+        .overlay(alignment: .top) {
+            if let just = store.justRecorded, !(nav.stageOpen && store.recState != .idle) {
+                KeepCard(just: just)
+                    .padding(.top, 64)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: store.justRecorded?.id)
         .alert("用 Wi‑Fi 快传？", isPresented: Bindable(nav).confirmWiFiSync) {
             Button("开始快传") { store.startWiFiSync() }
             Button("还是用蓝牙", role: .cancel) {}
@@ -521,6 +531,7 @@ struct RecordingsView: View {
     @Environment(Navigator.self) private var nav
     @State private var query = ""
     @State private var quick: Quick = .all
+    @State private var renameText = ""
 
     /// 列表头上的快速筛选。星标以前是侧栏里单独的一页，没有星标时整页是空的，所以收进这里。
     enum Quick: String, CaseIterable, Identifiable {
@@ -616,7 +627,10 @@ struct RecordingsView: View {
                 List(selection: $nav.selection) {
                     ForEach(days, id: \.label) { day in
                         Section {
-                            ForEach(day.items) { rec in RecordingRow(recording: rec).tag(rec.id) }
+                            ForEach(day.items) { rec in
+                                RecordingRow(recording: rec).tag(rec.id)
+                                    .contextMenu { rowMenu(rec) }
+                            }
                         } header: {
                             HStack {
                                 Text(day.label)
@@ -669,6 +683,16 @@ struct RecordingsView: View {
         .navigationSubtitle(items.isEmpty ? "" : "\(items.count) 条")
         // 不留空白：没选中任何一条时，自动打开最新的那条
         .onAppear { pickFirstIfNeeded() }
+        .onChange(of: nav.renaming) { _, id in
+            if let id { renameText = store.recordings.first { $0.id == id }?.title ?? "" }
+        }
+        .alert("重命名", isPresented: Binding(get: { nav.renaming != nil }, set: { if !$0 { nav.renaming = nil } })) {
+            TextField("标题", text: $renameText)
+            Button("好") { if let id = nav.renaming { store.rename(id, to: renameText) }; nav.renaming = nil }
+            Button("取消", role: .cancel) { nav.renaming = nil }
+        } message: {
+            Text("留空的话，下次整理时会让 AI 重新起一个。")
+        }
         .onChange(of: items.map(\.id)) { pickFirstIfNeeded() }
         .onChange(of: nav.route) { if nav.route == .starred { nav.route = .all; quick = .starred } }
         .toolbar {
@@ -704,49 +728,92 @@ struct RecordingsView: View {
         }
     }
 
+    /// 右键一行：不用先点开，就能改名、打星、删掉。
+    @ViewBuilder private func rowMenu(_ rec: Recording) -> some View {
+        Button("重命名…") { nav.renaming = rec.id }
+        if rec.transcript != nil {
+            Button("让 AI 重新起标题") { store.retitle(rec.id) }
+                .disabled(!store.analysisAvailable || store.retitling.contains(rec.id))
+        }
+        Button(rec.starred ? "取消星标" : "标为星标") { store.toggleStar(rec.id) }
+        if let text = rec.transcript, !text.isEmpty {
+            Button("拷贝文字稿") { copy(text) }
+        }
+        if rec.downloaded || (rec.onDevice && store.link == .ready) {
+            Divider()
+            // 删除要再确认一次，确认框挂在详情页上，所以先选中这一条
+            if rec.downloaded {
+                Button("从这台 Mac 删除…", role: .destructive) { nav.selection = rec.id; Task { nav.confirmLocalDelete = true } }
+            }
+            if rec.onDevice, store.link == .ready, !rec.inProgress {
+                Button("从录音豆删除…", role: .destructive) { nav.selection = rec.id; Task { nav.confirmDeviceDelete = true } }
+            }
+        }
+    }
+
     private func pickFirstIfNeeded() {
         if let id = nav.selection, items.contains(where: { $0.id == id }) { return }
         nav.selection = items.first?.id
     }
 }
 
-/// 列表里的一行：左边一个场景色块，右边三层——标题、一句摘要、时间和时长。
+/// 列表里的一行：左边一个场景色块，右边两层——AI 起的标题，和一行小信息（时间、时长、场合、关键词、待办和重点的个数）。
 struct RecordingRow: View {
     @Environment(BeanStore.self) private var store
     let recording: Recording
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
             // 场景：一个带颜色的小方块，扫一眼就知道这条是什么场合
             Image(systemName: (recording.scene ?? .other).icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(recording.isAnalyzed ? Theme.amber : Color.secondary)
-                .frame(width: 30, height: 30)
-                .background((recording.isAnalyzed ? Theme.amber : Color.secondary).opacity(0.14), in: .rect(cornerRadius: 8))
+                .frame(width: 34, height: 34)
+                .background((recording.isAnalyzed ? Theme.amber : Color.secondary).opacity(0.14), in: .rect(cornerRadius: 9))
                 .help((recording.scene ?? .other).name)
-            VStack(alignment: .leading, spacing: 3) {
+            // 标题下面只放小信息：几点、多长、什么场合、两个关键词。不放摘要句子，那是点开之后看的
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 5) {
                     Text(recording.displayTitle).font(.body.weight(.semibold)).lineLimit(1)
+                    if store.retitling.contains(recording.id) { ProgressView().controlSize(.mini) }
                     Spacer(minLength: 4)
+                    if recording.starred { Image(systemName: "star.fill").font(.caption).foregroundStyle(Theme.amber).accessibilityLabel("星标") }
                     trailing
                 }
-                if let s = recording.summary {
-                    Text(s).font(.callout).foregroundStyle(.secondary).lineLimit(1)
-                }
                 HStack(spacing: 6) {
-                    Text(meta).monospacedDigit()
-                    if recording.starred { Image(systemName: "star.fill").foregroundStyle(Theme.amber) }
-                    if !recording.marks.isEmpty {
-                        Label("\(recording.marks.count)", systemImage: "flag.fill").labelStyle(.titleAndIcon).foregroundStyle(Theme.amber)
-                            .help("\(recording.marks.count) 个重点标记")
+                    ViewThatFits(in: .horizontal) {
+                        infoLine(tags: 2)
+                        infoLine(tags: 1)
+                        infoLine(tags: 0)
                     }
+                    Spacer(minLength: 2)
                     let todo = recording.todos.filter { !$0.done }.count
-                    if todo > 0 { Label("\(todo)", systemImage: "checklist").labelStyle(.titleAndIcon).help("\(todo) 件待办没做完") }
+                    if todo > 0 { Label("\(todo)", systemImage: "square").labelStyle(.titleAndIcon).help("\(todo) 件待办没做完") }
+                    if !recording.marks.isEmpty {
+                        Label("\(recording.marks.count)", systemImage: "flag").labelStyle(.titleAndIcon).help("\(recording.marks.count) 个重点标记")
+                    }
                 }
-                .font(.caption).foregroundStyle(.tertiary)
+                .font(.caption).foregroundStyle(.secondary).monospacedDigit()
             }
         }
         .padding(.vertical, 5)
+    }
+
+    private func infoLine(tags count: Int) -> some View {
+        HStack(spacing: 6) {
+            Text(meta).lineLimit(1).fixedSize()
+            ForEach(Array(shortTags.prefix(count)), id: \.self) { tag in
+                Text(tag).lineLimit(1).fixedSize()
+                    .padding(.horizontal, 6).padding(.vertical, 1.5)
+                    .foregroundStyle(Theme.amber)
+                    .background(Theme.amber.opacity(0.14), in: .capsule)
+            }
+        }
+    }
+
+    /// 关键词：去掉井号，太长的不要（放不下，也说明它不是个词）。
+    private var shortTags: [String] {
+        recording.tags.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "# ")) }.filter { !$0.isEmpty && $0.count <= 6 }
     }
 
     /// 日期已经写在分组标题上了，这里只写几点、多长、什么场合。
@@ -755,6 +822,9 @@ struct RecordingRow: View {
         if let d = recording.date { parts.append(d.formatted(.dateTime.hour().minute())) }
         parts.append(recording.textOnly ? "文字" : clock(recording.duration))
         if let scene = recording.scene { parts.append(scene.name) }
+        else if !recording.downloaded { parts.append("还在录音豆里") }
+        else if recording.transcript == nil { parts.append("还没转成文字") }
+        else if !recording.isAnalyzed { parts.append("还没整理") }
         return parts.joined(separator: " · ")
     }
 
@@ -1764,5 +1834,74 @@ struct Radar: View {
                 .contentTransition(.symbolEffect(.replace))
         }
         .frame(width: 150, height: 150)
+    }
+}
+
+// MARK: - 录好了：留着还是不要
+
+/// 录完一条之后浮出来的小卡片。十秒不理它就默认留着；点了「不要这条」还有五秒可以反悔。
+struct KeepCard: View {
+    @Environment(BeanStore.self) private var store
+    let just: JustRecorded
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Image(systemName: just.discardAt == nil ? "waveform" : "trash")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(just.discardAt == nil ? Theme.amber : Theme.rec)
+                    .frame(width: 46, height: 46)
+                    .background((just.discardAt == nil ? Theme.amber : Theme.rec).opacity(0.14), in: .rect(cornerRadius: 12))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(just.discardAt == nil ? "录好了" : "这条不要了").font(.title3.weight(.semibold))
+                    Text("\(clock(just.seconds)) · 来自 \(just.from)").font(.callout).foregroundStyle(.secondary).monospacedDigit()
+                }
+            }
+            Text(just.discardAt == nil
+                 ? (store.settings.autoProcess ? "留着的话，会自动转成文字并整理成纪要。" : "留着的话，它会出现在录音列表里。")
+                 : (just.onMac ? "马上从这台 Mac 上删掉，删了找不回来。" : "马上从录音豆里删掉，删了找不回来。"))
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+
+            if just.discardAt == nil {
+                HStack(spacing: 10) {
+                    Button("不要这条") { store.discardJustRecorded() }
+                        .buttonStyle(.plain).foregroundStyle(Theme.rec).fontWeight(.medium)
+                        .frame(maxWidth: .infinity, minHeight: 34).contentShape(.rect)
+                    Button { store.keepJustRecorded() } label: { Text("留着").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 22) }
+                        .buttonStyle(.glassProminent).controlSize(.large)
+                        .keyboardShortcut(.defaultAction)
+                }
+            } else {
+                Button { store.undoDiscard() } label: { Text("撤销，还是留着").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 22) }
+                    .buttonStyle(.glass).controlSize(.large)
+                    .keyboardShortcut(.cancelAction)
+            }
+
+            // 倒计时：一条越走越短的细线，旁边一句话说到点会怎样
+            TimelineView(.periodic(from: .now, by: 0.1)) { context in
+                let end = just.discardAt ?? just.deadline
+                let total = just.discardAt == nil ? JustRecorded.patience : JustRecorded.regret
+                let left = max(0, end.timeIntervalSince(context.date))
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(just.discardAt == nil ? "\(Int(left.rounded(.up))) 秒后自动留着" : "\(Int(left.rounded(.up))) 秒后删除")
+                        .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
+                    GeometryReader { geo in
+                        Capsule().fill(.quaternary)
+                            .overlay(alignment: .leading) {
+                                Capsule().fill(just.discardAt == nil ? Theme.amber : Theme.rec)
+                                    .frame(width: geo.size.width * left / total)
+                            }
+                    }
+                    .frame(height: 3)
+                }
+            }
+        }
+        .padding(18)
+        .frame(width: 340)
+        .background(.ultraThickMaterial, in: .rect(cornerRadius: 20))   // 要厚：后面是正文，透出来会跟卡片上的字打架
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.18), radius: 24, y: 10)
+        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: just.discardAt != nil)
     }
 }
