@@ -164,6 +164,9 @@ private struct GeneralPane: View {
                 SettingRow(icon: "captions.bubble", title: "边录边出字", detail: "录音时在舞台上实时显示文字。") {
                     Toggle("边录边出字", isOn: $settings.liveTranscribe).labelsHidden().toggleStyle(.switch)
                 }
+                SettingRow(icon: "doc.on.clipboard", title: "识别剪贴板里的视频链接", detail: "复制了抖音、B 站、YouTube 这些链接，切回豆仓时提示一键导入。只看链接，不存剪贴板内容。") {
+                    Toggle("识别剪贴板里的视频链接", isOn: $settings.watchClipboard).labelsHidden().toggleStyle(.switch)
+                }
                 SettingRow(icon: "questionmark.bubble", title: "录完先问一句留不留", detail: "录完弹一张小卡片，不要的话当场删掉，哪里都不留。十秒不理它就默认留着。") {
                     Toggle("录完先问一句留不留", isOn: $settings.askKeep).labelsHidden().toggleStyle(.switch)
                 }
@@ -428,6 +431,30 @@ private struct ModelsPane: View {
                 .fixedSize(horizontal: false, vertical: true)
                 Text("本机模型不联网，文字稿不出这台电脑。云端纪要质量更高，但文字稿会发给服务商，录音本身不会。")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+
+            ModelCard(icon: "character.bubble", title: "翻译：把外语译成你要的语言", ok: store.analysisAvailable, status: store.analysisAvailable ? "用整理的模型" : "还没选模型") {
+                line("译成") {
+                    Picker("译成", selection: $settings.translateTo) {
+                        ForEach(translateLanguages, id: \.self) { Text($0).tag($0) }
+                    }
+                    .labelsHidden().fixedSize()
+                }
+                Divider()
+                line("默认风格") {
+                    Picker("默认风格", selection: $settings.translateStyle) {
+                        ForEach(TranslateStyle.allCases) { Text($0.name).tag($0) }
+                    }
+                    .labelsHidden().fixedSize()
+                }
+                Text(settings.translateStyle.hint).font(.callout).foregroundStyle(.secondary)
+                if settings.translateStyle == .custom {
+                    TextField("自定义提示词，比如：译成小红书风格，口语化，每段不超过三句", text: $settings.translatePrompt, axis: .vertical)
+                        .lineLimit(2...5).textFieldStyle(.roundedBorder)
+                }
+                Divider()
+                Toggle("外语素材整理完自动翻译", isOn: $settings.autoTranslate).toggleStyle(.switch)
+                Text("用的是上面整理纪要的那个模型（云端优先），按句翻译，原文和译文一句对一句。").font(.callout).foregroundStyle(.secondary)
             }
         }
         .sheet(isPresented: $cloudSheet) { CloudServiceSheet() }

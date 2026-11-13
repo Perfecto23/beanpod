@@ -64,6 +64,11 @@ extension BeanStore {
                 await self.run(next)
                 self.stages[next] = nil
                 self.announceDone(next)
+                // 外语素材：整理完顺手译成目标语言
+                if self.settings.autoTranslate, let r = self.recordings.first(where: { $0.id == next }),
+                   r.isMaterial, self.needsTranslation(r) {
+                    self.translate(next)
+                }
             }
             await QwenASR.shared.stop()   // 干完活就把模型从内存里放掉
             await LocalLLM.shared.stop()

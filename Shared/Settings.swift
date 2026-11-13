@@ -75,6 +75,14 @@ final class AppSettings {
     var llmModel: String { didSet { save("llmModel", llmModel) } }
     var llmKey: String { didSet { save("llmKey", llmKey) } }
 
+    /// 翻译：译成什么语言、默认用哪种风格、自定义风格的提示词、外语素材导入后要不要自动翻译。
+    var translateTo: String { didSet { save("translateTo", translateTo) } }
+    var translateStyle: TranslateStyle { didSet { save("translateStyle", translateStyle.rawValue) } }
+    var translatePrompt: String { didSet { save("translatePrompt", translatePrompt) } }
+    var autoTranslate: Bool { didSet { save("autoTranslate", autoTranslate) } }
+    /// 剪贴板里出现视频链接时提示导入。
+    var watchClipboard: Bool { didSet { save("watchClipboard", watchClipboard) } }
+
     /// 云端转写：任何兼容 OpenAI「/audio/transcriptions」接口的服务。
     var asrBaseURL: String { didSet { save("asrBaseURL", asrBaseURL) } }
     var asrModel: String { didSet { save("asrModel", asrModel) } }
@@ -121,6 +129,11 @@ final class AppSettings {
         llmBaseURL = d.string(forKey: "llmBaseURL") ?? ""
         llmModel = d.string(forKey: "llmModel") ?? ""
         llmKey = d.string(forKey: "llmKey") ?? ""
+        translateTo = d.string(forKey: "translateTo") ?? "简体中文"
+        translateStyle = TranslateStyle(rawValue: d.string(forKey: "translateStyle") ?? "") ?? .general
+        translatePrompt = d.string(forKey: "translatePrompt") ?? ""
+        autoTranslate = d.object(forKey: "autoTranslate") as? Bool ?? true
+        watchClipboard = d.object(forKey: "watchClipboard") as? Bool ?? true
         asrBaseURL = d.string(forKey: "asrBaseURL") ?? ""
         asrModel = d.string(forKey: "asrModel") ?? ""
         asrKey = d.string(forKey: "asrKey") ?? ""

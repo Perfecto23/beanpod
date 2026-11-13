@@ -47,6 +47,7 @@ final class Navigator {
 struct RootView: View {
     @Environment(BeanStore.self) private var store
     @Environment(Navigator.self) private var nav
+    @Environment(ClipboardWatch.self) private var clipboard
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
@@ -135,6 +136,21 @@ struct RootView: View {
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: store.linkJobs.first?.id)
+        .overlay(alignment: .top) {
+            if !(nav.stageOpen && store.recState != .idle) {
+                ClipboardOffer().padding(.top, store.banner == nil && store.linkJobs.isEmpty ? 10 : 70)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: clipboard.offer?.url)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in clipboard.check(store) }
+        .task {
+            // 豆仓开在前台时，复制了一条链接再切回来之前也能看到：在前台每两秒看一眼剪贴板有没有变
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                if NSApp.isActive { clipboard.check(store) }
+            }
+        }
         .sheet(isPresented: Bindable(nav).linkSheet) { LinkImportSheet() }
         .sheet(item: Binding(get: { store.linkLogin }, set: { store.linkLogin = $0 })) { request in LinkLoginSheet(request: request) }
         .overlay(alignment: .top) {
@@ -1887,18 +1903,53 @@ struct TranscriptView: View {
     @State private var everywhere = false
     @State private var renaming: Int?
     @State private var newName = ""
+    /// 原文、双语、译文。有译文时默认双语。
+    @State private var view: Shown = .both
+    @State private var translateOpen = false
+
+    enum Shown: String, CaseIterable { case original = "原文", both = "双语", translated = "译文" }
 
     private var hasClean: Bool { recording.segments.contains { $0.clean != nil } }
+    private var translation: Translation? { recording.translation }
+    /// 这一句的译文（分句数对不上就不显示，免得错位）。
+    private func translated(_ index: Int) -> String? {
+        guard let t = translation, view != .original else { return nil }
+        let count = recording.segments.isEmpty ? 1 : recording.segments.count
+        guard t.lines.count == count, t.lines.indices.contains(index) else { return nil }
+        let line = t.lines[index].trimmingCharacters(in: .whitespaces)
+        return line.isEmpty ? nil : line
+    }
     private let palette: [Color] = Theme.speakers
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             controls
             if let fix = store.pendingFix, fix.recording == recording.id { fixBar(fix) }
-            if recording.segments.isEmpty {
-                Text(recording.transcript ?? "").textSelection(.enabled).lineSpacing(5)
+            if let p = store.translating[recording.id] {
+                HStack(spacing: 10) {
+                    ProgressView(value: p).frame(width: 140).tint(Theme.accent)
+                    Text("正在翻译 \(Int(p * 100))%").font(.callout).foregroundStyle(Theme.warm500)
+                }
+            } else if translation == nil, store.needsTranslation(recording) {
+                // 外语的：主动问一句
+                HStack(spacing: 10) {
+                    Image(systemName: "character.bubble").foregroundStyle(Theme.accent)
+                    Text("这条不是\(store.settings.translateTo)的。要逐句翻译成\(store.settings.translateTo)吗？").font(.callout).foregroundStyle(Theme.warm700)
+                    Spacer()
+                    Button("翻译（\(store.settings.translateStyle.name)）") { store.translate(recording.id) }
+                        .buttonStyle(.borderedProminent).disabled(!store.analysisAvailable)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .background(Theme.accent.opacity(0.07), in: .rect(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.accent.opacity(0.25), lineWidth: 1))
             }
-            ForEach(recording.segments) { seg in row(seg) }
+            if recording.segments.isEmpty {
+                if view != .translated || translated(0) == nil {
+                    Text(recording.transcript ?? "").textSelection(.enabled).lineSpacing(5)
+                }
+                if let t = translated(0) { translationLine(t, solo: view == .translated) }
+            }
+            ForEach(Array(recording.segments.enumerated()), id: \.element.id) { i, seg in row(seg, index: i) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .alert("给这位说话人起个名字", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
@@ -1908,23 +1959,59 @@ struct TranscriptView: View {
         }
     }
 
+    /// 上面一排：左边是改文字稿的工具，右边是翻译。放不下就分成两行，不挤掉文字。
     private var controls: some View {
-        HStack(spacing: 10) {
-            if hasClean {
-                Picker("", selection: $showClean) {
-                    Text("润色版").tag(true)
-                    Text("原文").tag(false)
-                }
-                .pickerStyle(.segmented).labelsHidden().frame(width: 150)
-                .help("润色版去掉了语气词和重复；原文是模型听到的原话")
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) { editTools; Spacer(minLength: 12); translateTools }
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) { editTools; Spacer() }
+                HStack(spacing: 10) { translateTools; Spacer() }
             }
-            Toggle(isOn: $editing) { Label("修改", systemImage: "pencil") }
-                .toggleStyle(.button)
-                .help("打开后可以直接改每一句的文字")
-            Button { replacing.toggle() } label: { Label("替换词语", systemImage: "arrow.left.arrow.right") }
-                .popover(isPresented: $replacing, arrowEdge: .bottom) { replaceForm }
-            Spacer()
         }
+    }
+
+    @ViewBuilder private var editTools: some View {
+        if hasClean {
+            Picker("", selection: $showClean) {
+                Text("润色版").tag(true)
+                Text("原文").tag(false)
+            }
+            .pickerStyle(.segmented).labelsHidden().frame(width: 150)
+            .help("润色版去掉了语气词和重复；原文是模型听到的原话")
+        }
+        Toggle(isOn: $editing) { Label("修改", systemImage: "pencil") }
+            .toggleStyle(.button).fixedSize()
+            .help("打开后可以直接改每一句的文字")
+        Button { replacing.toggle() } label: { Label("替换词语", systemImage: "arrow.left.arrow.right") }
+            .fixedSize()
+            .popover(isPresented: $replacing, arrowEdge: .bottom) { replaceForm }
+    }
+
+    @ViewBuilder private var translateTools: some View {
+        if translation != nil {
+            PaneSwitch(selection: Binding(get: { Shown.allCases.firstIndex(of: view) ?? 1 }, set: { view = Shown.allCases[$0] }),
+                       titles: Shown.allCases.map(\.rawValue))
+        }
+        if let t = translation {
+            Text("\(t.language) · \(t.style)").font(.caption).foregroundStyle(Theme.warm500).fixedSize()
+        }
+        Button { translateOpen.toggle() } label: {
+            Label(translation == nil ? "翻译" : "重新翻译", systemImage: "character.bubble").labelStyle(.titleAndIcon)
+        }
+        .buttonStyle(.borderedProminent).fixedSize()
+        .disabled(store.translating[recording.id] != nil || recording.transcript == nil)
+        .popover(isPresented: $translateOpen, arrowEdge: .bottom) {
+            TranslatePanel(recording: recording) { translateOpen = false }
+        }
+    }
+
+    /// 一句译文：比原文略小、暖灰色，左边一条细红线。只看译文时就是正文的样子。
+    private func translationLine(_ text: String, solo: Bool) -> some View {
+        Text(text).textSelection(.enabled).lineSpacing(4)
+            .font(solo ? .body : .system(size: 13))
+            .foregroundStyle(solo ? Theme.warm900 : Theme.warm600)
+            .padding(.leading, solo ? 0 : 10)
+            .overlay(alignment: .leading) { if !solo { Rectangle().fill(Theme.accent.opacity(0.6)).frame(width: 2) } }
     }
 
     private var replaceForm: some View {
@@ -1966,8 +2053,9 @@ struct TranscriptView: View {
         .glassEffect(.regular, in: .rect(cornerRadius: 14))
     }
 
-    private func row(_ seg: Segment) -> some View {
+    private func row(_ seg: Segment, index: Int) -> some View {
         let useClean = showClean && seg.clean != nil
+        let line = translated(index)
         let marked = isMarked(seg)
         return HStack(alignment: .firstTextBaseline, spacing: 12) {
             Button(clock(seg.start)) { store.play(recording.id, at: seg.start) }
@@ -1983,8 +2071,13 @@ struct TranscriptView: View {
                     store.editSegment(recording.id, start: seg.start, to: new, clean: useClean)
                 }
             } else {
-                Text(useClean ? (seg.clean ?? seg.text) : seg.text).textSelection(.enabled).lineSpacing(5)
-                    .foregroundStyle(isCurrent(seg) ? .primary : .secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    if view != .translated || line == nil {
+                        Text(useClean ? (seg.clean ?? seg.text) : seg.text).textSelection(.enabled).lineSpacing(5)
+                            .foregroundStyle(isCurrent(seg) ? .primary : .secondary)
+                    }
+                    if let line { translationLine(line, solo: view == .translated) }
+                }
             }
         }
         .padding(.vertical, marked ? 6 : 0).padding(.horizontal, marked ? 8 : 0)
@@ -2463,5 +2556,124 @@ struct ProjectDialogs: ViewModifier {
             } message: {
                 Text("里面的录音和素材都会留着，只是不再归这个项目。")
             }
+    }
+}
+
+// MARK: - 翻译
+
+/// 点「翻译」弹出来的小面板：译成什么语言、用哪种风格。
+struct TranslatePanel: View {
+    @Environment(BeanStore.self) private var store
+    let recording: Recording
+    let done: () -> Void
+    @State private var language = ""
+    @State private var style = TranslateStyle.general
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("翻译成").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.warm500)
+                Picker("翻译成", selection: $language) {
+                    ForEach(translateLanguages, id: \.self) { Text($0).tag($0) }
+                }
+                .labelsHidden().fixedSize()
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("风格").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.warm500)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 6) {
+                    ForEach(TranslateStyle.allCases) { s in
+                        Button { style = s } label: {
+                            Text(s.name).font(.system(size: 12, weight: style == s ? .semibold : .regular))
+                                .frame(maxWidth: .infinity).padding(.vertical, 5)
+                                .foregroundStyle(style == s ? Theme.warm50 : Theme.warm700)
+                                .background(style == s ? Theme.warm900 : Theme.warm200.opacity(0.7), in: .rect(cornerRadius: 8))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Text(style == .custom && store.settings.translatePrompt.isEmpty ? "还没写自定义提示词，在设置的「模型」里写。没写的话按通用风格译。" : style.hint)
+                    .font(.caption).foregroundStyle(Theme.warm500).fixedSize(horizontal: false, vertical: true)
+            }
+            Divider()
+            HStack {
+                Text(store.analysisAvailable ? "用整理纪要的那个云端模型来翻译" : "还没设置分析模型")
+                    .font(.caption).foregroundStyle(Theme.warm500)
+                Spacer()
+                Button("开始翻译") {
+                    store.settings.translateTo = language
+                    store.settings.translateStyle = style
+                    store.translate(recording.id, to: language, style: style)
+                    done()
+                }
+                .buttonStyle(.borderedProminent).disabled(!store.analysisAvailable)
+            }
+        }
+        .padding(16)
+        .frame(width: 360)
+        .onAppear { language = store.settings.translateTo; style = store.settings.translateStyle }
+    }
+}
+
+// MARK: - 剪贴板里的链接
+
+/// 剪贴板里有一条视频链接时，窗口顶上出一条提示：导入还是忽略。同一条只问一次，已经导入过的不问。
+@Observable
+final class ClipboardWatch {
+    var offer: (url: String, platform: String)?
+    @ObservationIgnored private var lastChange = NSPasteboard.general.changeCount
+    @ObservationIgnored private var asked: Set<String> = []
+
+    /// 豆仓回到前台、或者每隔几秒在前台时看一眼。只在剪贴板变了的时候才读。
+    func check(_ store: BeanStore) {
+        guard store.settings.watchClipboard else { offer = nil; return }
+        let pb = NSPasteboard.general
+        guard pb.changeCount != lastChange else { return }
+        lastChange = pb.changeCount
+        guard let text = pb.string(forType: .string), text.count < 2000 else { return }
+        // 只认能识别出平台的视频链接；普通网页链接不打扰
+        guard let url = LinkTools.urls(in: text).first(where: { LinkTools.platform(of: $0) != "网页视频" }),
+              !asked.contains(url),
+              !store.recordings.contains(where: { $0.source == url }),
+              !store.linkJobs.contains(where: { $0.url == url }) else { return }
+        asked.insert(url)
+        offer = (url, LinkTools.platform(of: url))
+    }
+}
+
+struct ClipboardOffer: View {
+    @Environment(BeanStore.self) private var store
+    @Environment(ClipboardWatch.self) private var watch
+    @Environment(Navigator.self) private var nav
+
+    var body: some View {
+        if let offer = watch.offer {
+            HStack(spacing: 12) {
+                Image(systemName: "link").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accent)
+                    .frame(width: 28, height: 28).background(Theme.accent.opacity(0.1), in: .rect(cornerRadius: 8))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("剪贴板里有一条\(offer.platform)链接").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.warm900)
+                    Text(offer.url.replacingOccurrences(of: #"^https?://(www\.)?"#, with: "", options: .regularExpression))
+                        .font(.system(size: 11)).foregroundStyle(Theme.warm500).lineLimit(1).truncationMode(.middle)
+                }
+                .frame(maxWidth: 260, alignment: .leading)
+                Button("导入") {
+                    store.importLinks(offer.url)
+                    watch.offer = nil
+                    nav.route = .materials
+                }
+                .buttonStyle(.plain).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accent)
+                Button("忽略") { watch.offer = nil }
+                    .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Theme.warm500)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(Theme.surface, in: .rect(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.warm200, lineWidth: 1))
+            .shadow(color: .black.opacity(0.12), radius: 16, y: 6)
+            .task(id: offer.url) {
+                // 不理它的话，二十秒后自己收起来
+                try? await Task.sleep(for: .seconds(20))
+                if watch.offer?.url == offer.url { watch.offer = nil }
+            }
+        }
     }
 }

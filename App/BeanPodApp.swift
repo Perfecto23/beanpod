@@ -8,12 +8,13 @@ struct BeanPodApp: App {
     @State private var connector = Connector()
     @State private var maker = VideoMaker()
     @State private var renoise = RenoiseSetup()
+    @State private var clipboard = ClipboardWatch()
     @Environment(\.openWindow) private var openWindow
 
     var body: some SwiftUI.Scene {
         Window("豆仓", id: "main") {
             RootView()
-                .environment(store).environment(nav).environment(dictation).environment(connector).environment(maker).environment(renoise)
+                .environment(store).environment(nav).environment(dictation).environment(connector).environment(maker).environment(renoise).environment(clipboard)
                 .task { dictation.attach(store) }
                 .frame(minWidth: 980, minHeight: 600)
                 .containerBackground(.clear, for: .window)

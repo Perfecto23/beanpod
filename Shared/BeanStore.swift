@@ -89,6 +89,8 @@ final class BeanStore {
     var rewriting: Set<UInt32> = []
     /// 正在让 AI 重新起标题的录音。
     var retitling: Set<UInt32> = []
+    /// 正在翻译的录音，和翻到第几成了（0…1）。
+    var translating: [UInt32: Double] = [:]
 
     /// 用户刚手动改了一个词，问他要不要全部替换并记住。
     var pendingFix: PendingFix?

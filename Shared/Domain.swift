@@ -308,6 +308,8 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
     var source: String?
     /// 归在哪个项目里（没归就是 nil）。
     var project: UUID?
+    /// 文字稿的译文（见 Translate.swift）。
+    var translation: Translation?
     /// 是从链接导入的素材，不是自己录的。
     var isMaterial: Bool { source != nil }
     var textOnly = false
@@ -330,7 +332,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
 
     private enum CodingKeys: String, CodingKey {
         case id, size, date, duration, title, titleEdited, downloaded, onDevice, transcript, segments, transcribedBy, speakers, rewrites
-        case scene, sceneLocked, summary, sections, todos, tags, people, analyzedBy, starred, origin, source, project, textOnly, marks, videos
+        case scene, sceneLocked, summary, sections, todos, tags, people, analyzedBy, starred, origin, source, project, translation, textOnly, marks, videos
     }
 
     /// 每个字段都容错读取：以后加字段，旧的记录文件照样能打开。
@@ -361,6 +363,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
         origin = try c.decodeIfPresent(String.self, forKey: .origin)
         source = try c.decodeIfPresent(String.self, forKey: .source)
         project = try? c.decodeIfPresent(UUID.self, forKey: .project)
+        translation = try? c.decodeIfPresent(Translation.self, forKey: .translation)
         textOnly = try c.decodeIfPresent(Bool.self, forKey: .textOnly) ?? false
         marks = (try? c.decodeIfPresent([TimeInterval].self, forKey: .marks)) ?? []
         videos = (try? c.decodeIfPresent([VideoClip].self, forKey: .videos)) ?? []
