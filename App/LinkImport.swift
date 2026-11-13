@@ -1,0 +1,393 @@
+import AppKit
+import BeanKit
+import SwiftUI
+import WebKit
+
+/// 从链接导入：贴一条别人的视频链接，豆仓把声音下下来，转成文字、整理，和自己的录音放在一起。
+///
+/// 下载交给 yt-dlp（这台 Mac 上要装着它和 ffmpeg），豆仓不自己去解各个平台的接口——那些接口三天两头变。
+/// 只下声音，不存视频：要的是文字稿，不是原片。平台自带人工字幕的（多见于 YouTube）直接用字幕，不再转写一遍。
+/// 要登录才能看的：弹一个登录窗口，用户自己在里面登录（扫码或输入，豆仓不经手密码），
+/// 登录状态只存在这台 Mac 上，以后下载这个平台时带上。不读浏览器里的登录状态。
+extension BeanStore {
+    func importLinks(_ text: String) {
+        for url in LinkTools.urls(in: text) where !linkJobs.contains(where: { $0.url == url }) {
+            linkJobs.append(LinkJob(url: url, platform: LinkTools.platform(of: url)))
+        }
+        guard linkWorker == nil else { return }
+        linkWorker = Task { [weak self] in
+            // 一条一条来：同时下好几条容易被平台限流
+            while let self, let next = self.linkJobs.first {
+                await self.runLink(next.id)
+                self.linkJobs.removeAll { $0.id == next.id }
+            }
+            self?.linkWorker = nil
+        }
+    }
+
+    private func runLink(_ id: UUID) async {
+        guard let i = linkJobs.firstIndex(where: { $0.id == id }) else { return }
+        linkJobs[i].working = true
+        let url = linkJobs[i].url, platform = linkJobs[i].platform
+        addLog("从链接导入：\(platform) \(url)")
+
+        guard let tool = await Self.findTool("yt-dlp") else {
+            problem = Problem(title: "没找到下载工具 yt-dlp", detail: "从链接导入要靠它。在终端里运行下面这行装上，再试一次：\nbrew install yt-dlp ffmpeg")
+            linkJobs.removeAll()      // 后面排着的也都下不了
+            return
+        }
+        let work = FileManager.default.temporaryDirectory.appendingPathComponent("beanpod-link-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: work) }
+
+        let args = ["--no-playlist", "--no-warnings", "--newline", "--progress-template", "BP %(progress._percent_str)s",
+                    "-f", "bestaudio/best", "-x", "--audio-format", "m4a",
+                    "--write-info-json", "--write-subs", "--sub-langs", "zh-Hans,zh-CN,zh,zh-Hant,zh-TW,en",
+                    "--sub-format", "vtt/srt/best", "--convert-subs", "vtt",
+                    "-o", work.appendingPathComponent("media.%(ext)s").path, url]
+        let onLine: @Sendable (String) -> Void = { [weak self] line in
+            // 进度行形如「BP  43.2%」
+            guard line.hasPrefix("BP"), let percent = Double(line.dropFirst(2).replacingOccurrences(of: "%", with: "").trimmingCharacters(in: .whitespaces)) else { return }
+            Task { @MainActor in
+                if let k = self?.linkJobs.firstIndex(where: { $0.id == id }) { self?.linkJobs[k].progress = percent / 100 }
+            }
+        }
+        // 在豆仓里登录过这个平台：带上登录状态
+        let cookies = Self.cookieFile(platform)
+        let login = FileManager.default.fileExists(atPath: cookies.path) ? ["--cookies", cookies.path] : []
+        // 按系统的代理设置、不走代理、再按代理，最多试三次：开着代理软件的机器上，网络时好时坏，
+        // 实测同一条链接这一次走代理通、直连被要求验证，下一次正好反过来。
+        var result = await Self.runTool(tool, login + args, onLine: onLine)
+        // 被要求登录也换条路再试：YouTube 对直连常常要求「确认不是机器人」，走代理就不用
+        for (n, proxy) in [["--proxy", ""], []].enumerated() {
+            guard result.status != 0, Self.looksLikeNetworkTrouble(result.errors) || Self.needsLogin(result.errors) else { break }
+            addLog("第 \(n + 2) 次尝试（\(proxy.isEmpty ? "走代理" : "直连")），上次：\(result.errors.suffix(100))")
+            result = await Self.runTool(tool, login + proxy + args, onLine: onLine)
+        }
+
+        let files = (try? FileManager.default.contentsOfDirectory(at: work, includingPropertiesForKeys: nil)) ?? []
+        let audio = files.first { ["m4a", "mp3", "opus", "ogg", "wav", "aac", "flac", "webm", "mp4"].contains($0.pathExtension.lowercased()) && !$0.lastPathComponent.contains(".info.") }
+        guard result.status == 0, let audio else {
+            addLog("链接导入失败（\(result.status)）：\(result.errors.suffix(300))")
+            if Self.needsLogin(result.errors), Self.loginPage(platform) != nil {
+                // 要登录：弹登录窗口，登录好了再接着导入这一条
+                linkLogin = LinkLoginRequest(platform: platform, url: url)
+            } else {
+                problem = Problem(title: "这条\(platform)链接没能导入", detail: Self.explain(result.errors, platform: platform))
+            }
+            return
+        }
+
+        // 标题、作者从 yt-dlp 写下的信息文件里读
+        var title = "", author = "", page = url
+        if let info = files.first(where: { $0.lastPathComponent.hasSuffix(".info.json") }),
+           let data = try? Data(contentsOf: info), let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            title = (json["title"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            author = (json["uploader"] as? String ?? json["channel"] as? String ?? json["creator"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            page = json["webpage_url"] as? String ?? url
+        }
+        if let k = linkJobs.firstIndex(where: { $0.id == id }) { linkJobs[k].title = title; linkJobs[k].progress = 1 }
+
+        // 平台自带的人工字幕：按中文优先挑一份
+        let subs = files.filter { $0.pathExtension.lowercased() == "vtt" }
+        let order = ["zh-Hans", "zh-CN", "zh", "zh-Hant", "zh-TW", "en"]
+        let best = subs.min { a, b in
+            (order.firstIndex { a.lastPathComponent.contains(".\($0).") } ?? 99) < (order.firstIndex { b.lastPathComponent.contains(".\($0).") } ?? 99)
+        }
+        let cues = best.flatMap { try? String(contentsOf: $0, encoding: .utf8) }.map(SubtitleParser.parse) ?? []
+
+        let before = Set(recordings.map(\.id))
+        importFile(audio, consume: true, processNow: false)
+        guard let k = recordings.firstIndex(where: { !before.contains($0.id) }) else {
+            problem = Problem(title: "这条\(platform)链接没能导入", detail: "声音下下来了，但豆仓读不出这个音频文件。")
+            return
+        }
+        let rid = recordings[k].id
+        recordings[k].title = title.isEmpty ? nil : String(title.prefix(80))
+        recordings[k].titleEdited = !title.isEmpty        // 原作者起的标题留着，整理时不换
+        recordings[k].origin = author.isEmpty ? platform : "\(platform) · @\(author)"
+        recordings[k].source = page
+        if cues.count >= 3 {
+            recordings[k].segments = cues.map { Segment(start: $0.start, text: applyVocabulary($0.text)) }
+            recordings[k].transcript = recordings[k].segments.map(\.text).joined(separator: "\n")
+            recordings[k].transcribedBy = "平台字幕"
+        }
+        saveLibrary()
+        addLog("链接导入完成：\(rid)「\(title)」\(cues.count >= 3 ? "，用了平台字幕 \(cues.count) 句" : "")")
+        toast("checkmark.circle.fill", "导入好了：\(title.isEmpty ? platform : String(title.prefix(18)))")
+        if settings.autoProcess { process(rid) }
+    }
+
+    nonisolated static func needsLogin(_ errors: String) -> Bool {
+        let e = errors.lowercased()
+        return ["sign in", "log in", "login", "cookies", "confirm you", "not a bot", "需要登录", "请登录", "registered users"].contains { e.contains($0) }
+    }
+
+    nonisolated static func looksLikeNetworkTrouble(_ errors: String) -> Bool {
+        let e = errors.lowercased()
+        return ["ssl", "timed out", "timeout", "connection", "unable to download webpage", "unable to download api page", "proxy", "eof occurred", "network is unreachable"]
+            .contains { e.contains($0) }
+    }
+
+    /// 把 yt-dlp 的报错换成人话。
+    nonisolated static func explain(_ errors: String, platform: String) -> String {
+        let e = errors.lowercased()
+        if e.contains("unsupported url") { return "认不出这是哪个平台的视频链接。确认贴的是某一条作品的链接，不是主页或搜索页。" }
+        if needsLogin(errors) {
+            return "\(platform)要登录之后才给看这条内容。可以用别的工具把它下载成文件，再拖进豆仓的窗口。"
+        }
+        if e.contains("private") { return "这条内容是私密的，不能导入。" }
+        if e.contains("429") || e.contains("too many requests") { return "\(platform)嫌请求太频繁，过几分钟再试。" }
+        if e.contains("403") || e.contains("forbidden") { return "\(platform)拒绝了这次下载（403）。可能要登录，或者它最近改了接口，可以先升级 yt-dlp：brew upgrade yt-dlp" }
+        if looksLikeNetworkTrouble(errors) {
+            return "连不上\(platform)。看看网络，再试一次。"
+        }
+        if e.contains("ffmpeg") || e.contains("ffprobe") { return "这台 Mac 上没有 ffmpeg，声音转不出来。在终端里运行：brew install ffmpeg" }
+        let last = errors.split(separator: "\n").last(where: { $0.lowercased().contains("error") }) ?? errors.split(separator: "\n").last ?? ""
+        return last.isEmpty ? "下载工具没有说明原因。" : String(last.prefix(220))
+    }
+
+    // MARK: 调外部工具
+
+    /// 找命令行工具。从图形界面启动的应用拿不到终端里的 PATH，所以先看常见位置，再借登录 shell 找一遍。
+    nonisolated static func findTool(_ name: String) async -> String? {
+        for dir in ["/opt/homebrew/bin", "/usr/local/bin", "\(NSHomeDirectory())/.local/bin", "/usr/bin"] {
+            let path = dir + "/" + name
+            if FileManager.default.isExecutableFile(atPath: path) { return path }
+        }
+        let found = await runTool("/bin/zsh", ["-lc", "command -v \(name)"]) { _ in }.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        return found.hasPrefix("/") && FileManager.default.isExecutableFile(atPath: found) ? found : nil
+    }
+
+    nonisolated static func runTool(_ path: String, _ args: [String],
+                                    onLine: @Sendable @escaping (String) -> Void) async -> (status: Int32, output: String, errors: String) {
+        await Task.detached {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: path)
+            p.arguments = args
+            var env = ProcessInfo.processInfo.environment
+            env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + (env["PATH"] ?? "/usr/bin:/bin")
+            p.environment = env
+            let out = Pipe(), err = Pipe()
+            p.standardOutput = out; p.standardError = err
+            let collected = Collected()
+            out.fileHandleForReading.readabilityHandler = { handle in
+                let text = String(decoding: handle.availableData, as: UTF8.self)
+                guard !text.isEmpty else { return }
+                collected.add(text)
+                text.split(whereSeparator: \.isNewline).forEach { onLine(String($0)) }
+            }
+            do { try p.run() } catch { return (Int32(-1), "", error.localizedDescription) }
+            let errors = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            p.waitUntilExit()
+            out.fileHandleForReading.readabilityHandler = nil
+            return (p.terminationStatus, collected.text, errors)
+        }.value
+    }
+}
+
+private nonisolated final class Collected: @unchecked Sendable {
+    private let lock = NSLock()
+    private var buffer = ""
+    func add(_ s: String) { lock.withLock { buffer += s } }
+    var text: String { lock.withLock { buffer } }
+}
+
+// MARK: - 粘贴链接的窗口
+
+struct LinkImportSheet: View {
+    @Environment(BeanStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var text = ""
+    @FocusState private var typing: Bool
+
+    private var urls: [String] { LinkTools.urls(in: text) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("从链接导入").font(.title2.bold())
+                Text("粘贴视频链接或整段分享口令，可以一次贴好几条。").font(.callout).foregroundStyle(.secondary)
+            }
+            TextEditor(text: $text)
+                .font(.body).focused($typing)
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .frame(height: 110)
+                .background(.background.opacity(0.6), in: .rect(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(typing ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(.separator), lineWidth: typing ? 1.5 : 0.5))
+                .overlay(alignment: .topLeading) {
+                    if text.isEmpty {
+                        Text(verbatim: "比如：https://www.bilibili.com/video/BV…").foregroundStyle(.tertiary).padding(.horizontal, 13).padding(.vertical, 8).allowsHitTesting(false)
+                    }
+                }
+            if !urls.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(urls, id: \.self) { url in
+                        HStack(spacing: 10) {
+                            Image(systemName: "play.fill").font(.caption).foregroundStyle(Theme.amber)
+                                .frame(width: 24, height: 24).background(Theme.amber.opacity(0.14), in: .rect(cornerRadius: 7))
+                            Text(LinkTools.platform(of: url)).fontWeight(.medium)
+                            Text(url.replacingOccurrences(of: #"^https?://(www\.)?"#, with: "", options: .regularExpression))
+                                .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                            Spacer(minLength: 4)
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.ok)
+                        }
+                        .font(.callout)
+                    }
+                }
+                .padding(12)
+                .panel(radius: 10)
+            } else if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Label("这段文字里没有找到链接。", systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.secondary)
+            }
+            Text("只导入你有权保存的公开内容。下载下来的只有声音，用来转成文字；要登录才能看的内容导入不了。")
+                .font(.callout).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(urls.count > 1 ? "导入 \(urls.count) 条" : "导入") {
+                    store.importLinks(text)
+                    dismiss()
+                }
+                .buttonStyle(.glassProminent).keyboardShortcut(.defaultAction)
+                .disabled(urls.isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 520)
+        .onAppear {
+            // 剪贴板里正好是链接，就先替人贴上
+            if let clip = NSPasteboard.general.string(forType: .string), clip.count < 2000, !LinkTools.urls(in: clip).isEmpty { text = clip }
+            typing = true
+        }
+    }
+}
+
+// MARK: - 登录
+
+extension BeanStore {
+    /// 每个平台的登录状态存一个文件，只在这台 Mac 上，只有自己能读。
+    nonisolated static func cookieFile(_ platform: String) -> URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("BeanPod/Logins", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let safe = platform.replacingOccurrences(of: " ", with: "")
+        return dir.appendingPathComponent("\(safe).cookies.txt")
+    }
+
+    /// 平台的登录页，和它的登录状态落在哪些域名下。
+    nonisolated static func loginPage(_ platform: String) -> (url: String, domains: [String])? {
+        switch platform {
+        case "B 站": ("https://passport.bilibili.com/login", ["bilibili.com"])
+        case "抖音": ("https://www.douyin.com/", ["douyin.com"])
+        case "小红书": ("https://www.xiaohongshu.com/explore", ["xiaohongshu.com"])
+        case "YouTube": ("https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F", ["youtube.com", "google.com"])
+        case "TikTok": ("https://www.tiktok.com/login", ["tiktok.com"])
+        case "快手": ("https://www.kuaishou.com/", ["kuaishou.com"])
+        case "微博": ("https://passport.weibo.com/sso/signin", ["weibo.com", "weibo.cn"])
+        case "X": ("https://x.com/i/flow/login", ["x.com", "twitter.com"])
+        case "Instagram": ("https://www.instagram.com/accounts/login/", ["instagram.com"])
+        default: nil
+        }
+    }
+
+    var loggedInPlatforms: [String] {
+        ["B 站", "抖音", "小红书", "YouTube", "TikTok", "快手", "微博", "X", "Instagram"]
+            .filter { FileManager.default.fileExists(atPath: Self.cookieFile($0).path) }
+    }
+
+    func forgetLogin(_ platform: String) {
+        try? FileManager.default.removeItem(at: Self.cookieFile(platform))
+        // 登录窗口里那份也清掉，不然下次打开还是登录着的
+        let store = WKWebsiteDataStore.default()
+        let domains = Self.loginPage(platform)?.domains ?? []
+        store.fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { records in
+            let mine = records.filter { r in domains.contains { r.displayName.hasSuffix($0) } }
+            store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), for: mine) {}
+        }
+        addLog("清掉了\(platform)的登录状态")
+    }
+
+    /// 把登录窗口里的登录状态写成下载工具认的格式（Netscape cookies.txt）。返回写进去了几条。
+    func saveLogin(_ platform: String) async -> Int {
+        guard let domains = Self.loginPage(platform)?.domains else { return 0 }
+        let all = await WKWebsiteDataStore.default().httpCookieStore.allCookies()
+        let mine = all.filter { c in domains.contains { c.domain == $0 || c.domain.hasSuffix("." + $0) } }
+        guard !mine.isEmpty else { return 0 }
+        var lines = ["# Netscape HTTP Cookie File", "# 豆仓的登录窗口导出，只用于下载你自己能看的内容"]
+        for c in mine {
+            let domain = c.domain.hasPrefix(".") ? c.domain : "." + c.domain
+            let expiry = Int(c.expiresDate?.timeIntervalSince1970 ?? Date.now.addingTimeInterval(86400 * 30).timeIntervalSince1970)
+            lines.append([domain, "TRUE", c.path, c.isSecure ? "TRUE" : "FALSE", String(expiry), c.name, c.value].joined(separator: "\t"))
+        }
+        let file = Self.cookieFile(platform)
+        try? (lines.joined(separator: "\n") + "\n").write(to: file, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        addLog("保存了\(platform)的登录状态（\(mine.count) 条）")
+        return mine.count
+    }
+}
+
+/// 登录窗口：豆仓里开一个小浏览器，打开平台的登录页，用户自己扫码或输入登录。
+/// 豆仓不碰账号密码，只在用户点「登录好了」之后把这个窗口里的登录状态存下来。
+struct LinkLoginSheet: View {
+    @Environment(BeanStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    let request: LinkLoginRequest
+    @State private var saving = false
+    @State private var note: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: "person.badge.key").font(.title2).foregroundStyle(Theme.amber)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("在\(request.platform)登录一下").font(.headline)
+                    Text(note ?? "这条内容要登录之后才给看。在下面扫码或输入账号登录，登好了点右边的按钮，豆仓会接着导入。")
+                        .font(.callout).foregroundStyle(note == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.amber))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 12)
+                Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button {
+                    saving = true
+                    Task {
+                        let n = await store.saveLogin(request.platform)
+                        saving = false
+                        if n == 0 {
+                            note = "还没有看到登录状态。确认登录成功了再点一次。"
+                        } else {
+                            dismiss()
+                            store.importLinks(request.url)
+                        }
+                    }
+                } label: { Text(saving ? "正在保存…" : "登录好了，接着导入") }
+                .buttonStyle(.glassProminent).disabled(saving)
+            }
+            .padding(16)
+            Divider()
+            LoginWebView(url: URL(string: BeanStore.loginPage(request.platform)?.url ?? "about:blank")!)
+            Divider()
+            Text("登录状态只存在这台 Mac 上，用来下载你自己能看的内容。不想要了可以在设置的「连接」里清掉。")
+                .font(.caption).foregroundStyle(.tertiary).padding(.vertical, 8)
+        }
+        .frame(width: 900, height: 720)
+    }
+}
+
+private struct LoginWebView: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .default()
+        let web = WKWebView(frame: .zero, configuration: config)
+        // 用普通 Safari 的身份，不然有的平台会把登录页换成「请用 App 打开」
+        web.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+        web.load(URLRequest(url: url))
+        return web
+    }
+
+    func updateNSView(_ web: WKWebView, context: Context) {}
+}

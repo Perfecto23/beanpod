@@ -233,3 +233,40 @@ func reply(_ type: UInt8, _ id: UInt8, status: UInt8 = 1, _ payload: [UInt8] = [
     var buffer2 = [0x00, 0x01] + bad
     #expect(WiFiFrame.split(&buffer2).count == 1)
 }
+
+// MARK: - 从链接导入
+
+@Test func findsLinksInsideShareText() {
+    let text = "7.43 复制打开抖音，看看【某某的作品】三分钟讲清楚复利… https://v.douyin.com/iABcd12/ 快来看！\nhttps://www.bilibili.com/video/BV1xx411c7mD?t=3。还有（https://youtu.be/abc_DEF-1）"
+    let urls = LinkTools.urls(in: text)
+    #expect(urls == ["https://v.douyin.com/iABcd12/", "https://www.bilibili.com/video/BV1xx411c7mD?t=3", "https://youtu.be/abc_DEF-1"])
+    #expect(urls.map(LinkTools.platform(of:)) == ["抖音", "B 站", "YouTube"])
+    #expect(LinkTools.platform(of: "https://example.org/v/1") == "网页视频")
+    #expect(LinkTools.urls(in: "没有链接的一句话").isEmpty)
+    // 同一条贴两遍只算一条
+    #expect(LinkTools.urls(in: "https://x.com/a/status/1 https://x.com/a/status/1").count == 1)
+}
+
+@Test func parsesSubtitlesAndMergesRollingLines() {
+    let vtt = """
+    WEBVTT
+    Kind: captions
+
+    00:00:01.000 --> 00:00:03.000
+    大家好
+
+    00:00:03.000 --> 00:00:05.000 align:start
+    大家好 <c>今天聊复利</c>
+
+    00:00:05.000 --> 00:00:07.000
+    大家好 今天聊复利
+
+    1
+    00:01:02,500 --> 00:01:04,000
+    A &amp; B
+
+    """
+    let cues = SubtitleParser.parse(vtt)
+    #expect(cues.map(\.text) == ["大家好 今天聊复利", "A & B"])
+    #expect(cues.map(\.start) == [1, 62.5])
+}

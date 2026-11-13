@@ -22,6 +22,11 @@ final class BeanStore {
     /// 设备上有一条开着的录音（正在录，或暂停着还没结束）。
     var sessionOpen = false
     @ObservationIgnored var pullWhenListed = false
+    /// 正在从链接导入的内容（见 App/LinkImport.swift，目前只有 Mac 上有）。
+    var linkJobs: [LinkJob] = []
+    @ObservationIgnored var linkWorker: Task<Void, Never>?
+    /// 有一条链接要登录才能下，等用户去登录。
+    var linkLogin: LinkLoginRequest?
     /// 刚录完、等用户说「留着」还是「不要」的那一条（见 KeepOrDiscard.swift）。
     var justRecorded: JustRecorded?
     /// Wi‑Fi 快传：正在进行的那一次（没有就是 nil），以及录音豆对「开热点」命令的回包。

@@ -203,7 +203,7 @@ nonisolated struct VideoClip: Codable, Equatable, Identifiable {
 }
 
 nonisolated enum RewriteTemplate: String, CaseIterable, Identifiable {
-    case voiceover, shortVideo, thread, article, email, custom
+    case voiceover, shortVideo, thread, article, email, teardown, imitate, custom
     var id: String { rawValue }
 
     var name: String {
@@ -213,6 +213,8 @@ nonisolated enum RewriteTemplate: String, CaseIterable, Identifiable {
         case .thread: "社交媒体长帖"
         case .article: "公众号文章"
         case .email: "会后邮件"
+        case .teardown: "拆解写法"
+        case .imitate: "照结构仿写"
         case .custom: "自定义"
         }
     }
@@ -224,9 +226,29 @@ nonisolated enum RewriteTemplate: String, CaseIterable, Identifiable {
         case .thread: "改写成一条适合发在社交媒体上的长帖：开头一句话点明观点，中间分 3 到 5 个要点，每点两三句，语气直接，有具体细节和数字，结尾一句总结。"
         case .article: "改写成一篇公众号文章：有标题，有 3 到 4 个小标题分段，开头用一个场景或问题引入，行文连贯，保留原话里的具体例子。"
         case .email: "改写成一封会后跟进邮件：称呼、一句话说明来意、分点列出达成的结论和各自的待办（带负责人和时间）、礼貌收尾。简洁。"
+        case .teardown: "把这段内容当作一条别人发布的视频文案来拆解，目的是学它的写法，不是复述内容。按这几部分写：① 开头钩子：原话是什么，用了什么手法；② 结构：按先后顺序列出每一段在做什么（抛问题、讲故事、给数据、反转、收束），每段一句话；③ 金句：摘出 3 到 5 句最值得学的原话；④ 节奏和语气：句子长短、用第几人称、有什么口头禅；⑤ 结尾怎么引导互动；⑥ 可以直接借用的写法 3 条。只依据文字稿来写，不要猜测播放量之类文字稿里没有的东西。"
+        case .imitate: "先用三四行总结这条内容的结构（钩子、怎么展开、怎么收束），然后严格照这个结构和节奏，用「补充要求」里给的选题写一条新的口播稿：结构和手法学它，内容、例子、观点必须是新的，不要照搬原文的句子。如果补充要求里没有给选题，就先列出 3 个适合套用这个结构的选题，再用第一个来写。"
         case .custom: ""
         }
     }
+}
+
+/// 一条链接要登录才能下：等用户在登录窗口里登录好，再接着导入。
+nonisolated struct LinkLoginRequest: Identifiable, Equatable {
+    let id = UUID()
+    var platform: String
+    var url: String
+}
+
+/// 一条正在从链接导入的内容，给界面显示进度用。
+nonisolated struct LinkJob: Identifiable, Equatable {
+    let id = UUID()
+    var url: String
+    var platform: String
+    var title: String?
+    /// 0…1；还不知道就是 nil。
+    var progress: Double?
+    var working = false
 }
 
 nonisolated struct NoteSection: Codable, Equatable, Identifiable {
@@ -275,6 +297,8 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
     var starred = false
     /// 不是从录音豆来的：外部导入的音频，或者只有文字的笔记。
     var origin: String?
+    /// 从链接导入的：原来的网址。
+    var source: String?
     var textOnly = false
     /// 重点标记：录音时在录音豆上按过标记键、或在豆仓里点过「标重点」的时刻（秒）。
     var marks: [TimeInterval] = []
@@ -295,7 +319,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
 
     private enum CodingKeys: String, CodingKey {
         case id, size, date, duration, title, titleEdited, downloaded, onDevice, transcript, segments, transcribedBy, speakers, rewrites
-        case scene, sceneLocked, summary, sections, todos, tags, people, analyzedBy, starred, origin, textOnly, marks, videos
+        case scene, sceneLocked, summary, sections, todos, tags, people, analyzedBy, starred, origin, source, textOnly, marks, videos
     }
 
     /// 每个字段都容错读取：以后加字段，旧的记录文件照样能打开。
@@ -324,6 +348,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
         analyzedBy = try c.decodeIfPresent(String.self, forKey: .analyzedBy)
         starred = try c.decodeIfPresent(Bool.self, forKey: .starred) ?? false
         origin = try c.decodeIfPresent(String.self, forKey: .origin)
+        source = try c.decodeIfPresent(String.self, forKey: .source)
         textOnly = try c.decodeIfPresent(Bool.self, forKey: .textOnly) ?? false
         marks = (try? c.decodeIfPresent([TimeInterval].self, forKey: .marks)) ?? []
         videos = (try? c.decodeIfPresent([VideoClip].self, forKey: .videos)) ?? []

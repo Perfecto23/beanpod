@@ -18,6 +18,8 @@ final class Navigator {
     /// 正在问「真的要删吗」。放在这里，工具栏按钮和菜单栏命令都能触发同一个确认框。
     var confirmDeviceDelete = false
     var confirmWiFiSync = false
+    /// 「从链接导入」的窗口开没开。
+    var linkSheet = false
     /// 正在给哪条录音改名（弹窗挂在录音页上）。
     var renaming: UInt32?
     var confirmLocalDelete = false
@@ -93,6 +95,31 @@ struct RootView: View {
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: store.wifi?.phase)
+        .overlay(alignment: .top) {
+            // 正在从链接导入：下载要等一会儿，一直挂着让人知道进行到哪了
+            if let job = store.linkJobs.first, store.wifi == nil {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.down.to.line").font(.title3).foregroundStyle(Theme.amber)
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 8) {
+                            Text(job.title.map { "正在导入「\($0.prefix(16))」" } ?? "正在下载\(job.platform)的内容…").font(.callout.weight(.medium)).lineLimit(1)
+                            if let p = job.progress { Text("\(Int(p * 100))%").font(.callout).monospacedDigit().foregroundStyle(.secondary) }
+                            if store.linkJobs.count > 1 { Text("后面还有 \(store.linkJobs.count - 1) 条").font(.caption).foregroundStyle(.tertiary) }
+                        }
+                        if let p = job.progress { ProgressView(value: p).tint(Theme.amber) } else { ProgressView().progressViewStyle(.linear).tint(Theme.amber) }
+                    }
+                    .frame(width: 260, alignment: .leading)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
+                .padding(.top, store.banner == nil ? 10 : 56)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: store.linkJobs.first?.id)
+        .sheet(isPresented: Bindable(nav).linkSheet) { LinkImportSheet() }
+        .sheet(item: Binding(get: { store.linkLogin }, set: { store.linkLogin = $0 })) { request in LinkLoginSheet(request: request) }
         .overlay(alignment: .top) {
             if let just = store.justRecorded, !(nav.stageOpen && store.recState != .idle) {
                 KeepCard(just: just)
@@ -718,8 +745,11 @@ struct RecordingsView: View {
                 Button("刷新", systemImage: "arrow.clockwise") { store.refreshFiles() }
                     .disabled(store.link != .ready || store.loadingList || store.pull != nil)
                     .help("重新读取录音豆里的录音列表")
-                Button("导入", systemImage: "square.and.arrow.down") { store.chooseFilesToImport() }
-                    .help("导入电脑上的录音或文字文件。也可以直接把文件拖进窗口")
+                Menu("导入", systemImage: "square.and.arrow.down") {
+                    Button("从文件导入…", systemImage: "doc") { store.chooseFilesToImport() }
+                    Button("从链接导入…", systemImage: "link") { nav.linkSheet = true }
+                }
+                .help("导入电脑上的录音、文字文件，或者贴一条视频链接。文件也可以直接拖进窗口")
             }
         }
     }
@@ -761,7 +791,7 @@ struct RecordingRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             // 场景：一个带颜色的小方块，扫一眼就知道这条是什么场合
-            Image(systemName: (recording.scene ?? .other).icon)
+            Image(systemName: recording.source != nil ? "play.fill" : (recording.scene ?? .other).icon)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(recording.isAnalyzed ? Theme.amber : Color.secondary)
                 .frame(width: 34, height: 34)
@@ -817,7 +847,8 @@ struct RecordingRow: View {
         var parts: [String] = []
         if let d = recording.date { parts.append(d.formatted(.dateTime.hour().minute())) }
         parts.append(recording.textOnly ? "文字" : clock(recording.duration))
-        if let scene = recording.scene { parts.append(scene.name) }
+        if recording.source != nil, let origin = recording.origin { parts.append(origin) }   // 从链接来的：写平台和作者
+        else if let scene = recording.scene { parts.append(scene.name) }
         else if !recording.downloaded { parts.append("还在录音豆里") }
         else if recording.transcript == nil { parts.append("还没转成文字") }
         else if !recording.isAnalyzed { parts.append("还没整理") }
@@ -926,6 +957,10 @@ struct RecordingDetail: View {
                             Button("导出音频（WAV，无损）…") { store.exportAudio(recording.id, m4a: false) }
                         }
                         Button("拷贝文字稿") { copy(recording.transcript ?? "") }.disabled(recording.transcript == nil)
+                        if let source = recording.source, let url = URL(string: source) {
+                            Button("打开原链接") { NSWorkspace.shared.open(url) }
+                            Button("拷贝原链接") { copy(source) }
+                        }
                         if recording.origin == nil { Button("在访达中显示音频") { store.reveal(recording.id) } }
                     }
                     .disabled(store.stages[recording.id] != nil)

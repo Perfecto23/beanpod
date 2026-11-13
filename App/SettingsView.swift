@@ -641,6 +641,8 @@ private struct ConnectPane: View {
                 }
             }
 
+            LoginsGroup()
+
             SettingsGroup("给其他工具用", footer: "这个地址只在这台电脑上能访问，而且只有豆仓开着的时候才通。") {
                 SettingRow(icon: "network", title: "接入地址") {
                     Text(BeanStore.mcpAddress).font(.callout.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
@@ -656,5 +658,26 @@ private struct ConnectPane: View {
             }
         }
         .task { await connector.refresh() }
+    }
+}
+
+/// 从链接导入时登录过的平台。登录状态只存在这台 Mac 上，这里可以一个个清掉。
+private struct LoginsGroup: View {
+    @Environment(BeanStore.self) private var store
+    @State private var refresh = 0
+
+    var body: some View {
+        let list = store.loggedInPlatforms
+        let _ = refresh
+        SettingsGroup("从链接导入时登录过的平台", footer: "导入要登录才能看的内容时，豆仓会弹出登录窗口让你自己登录。登录状态只存在这台 Mac 上。") {
+            if list.isEmpty {
+                Text("还没有登录过任何平台。").foregroundStyle(.secondary)
+            }
+            ForEach(list, id: \.self) { platform in
+                SettingRow(icon: "person.crop.circle.badge.checkmark", title: platform) {
+                    Button("退出登录") { store.forgetLogin(platform); refresh += 1 }
+                }
+            }
+        }
     }
 }
