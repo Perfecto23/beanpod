@@ -97,6 +97,9 @@ final class BLEClient: NSObject, @preconcurrency CBCentralManagerDelegate, @prec
         return true
     }
 
+    /// 主动断开之后再把上次那台设备找回来。
+    func reconnect() { if active == nil, central?.state == .poweredOn { _ = reconnectLast() } }
+
     var hasRememberedDevice: Bool { UserDefaults.standard.string(forKey: Self.lastMACKey) != nil }
 
     func disconnect(forget: Bool) {

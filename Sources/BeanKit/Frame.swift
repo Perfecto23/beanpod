@@ -22,6 +22,7 @@ public enum Frame {
 
 public struct Packet: Sendable, Equatable {
     public let raw: [UInt8]
+    public init(raw: [UInt8]) { self.raw = raw }
     public var status: UInt8 { raw[4] }
     public var type: UInt8 { raw[5] }
     public var id: UInt8 { raw[6] }
@@ -95,4 +96,29 @@ func le32(_ v: UInt32) -> [UInt8] {
 
 public extension Sequence where Element == UInt8 {
     var hex: String { map { String(format: "%02X", $0) }.joined(separator: " ") }
+}
+
+// MARK: - Wi‑Fi 快传
+
+/// Wi‑Fi 快传时，帧还是同一种帧，只是装法不同：
+/// 主机发给录音豆的帧转成小写十六进制文本；录音豆发回来的是二进制消息，一条里可能连着好几帧。
+public enum WiFiFrame {
+    /// 把一条二进制消息切成帧。按 09 FF 00 00 找帧头、按第 7–8 字节的总长切；
+    /// 不校验校验和（官方客户端也不校验），切不完整的尾巴留在 buffer 里等下一条消息。
+    public static func split(_ buffer: inout [UInt8]) -> [Packet] {
+        var packets: [Packet] = []
+        var i = 0
+        while i + 9 <= buffer.count {
+            guard buffer[i] == 0x09, buffer[i + 1] == 0xFF, buffer[i + 2] == 0, buffer[i + 3] == 0 else { i += 1; continue }
+            let total = Int(buffer[i + 7]) | (Int(buffer[i + 8]) << 8)
+            guard total >= Frame.minLength else { i += 1; continue }
+            guard i + total <= buffer.count else { break }
+            packets.append(Packet(raw: Array(buffer[i..<(i + total)])))
+            i += total
+        }
+        buffer.removeFirst(min(i, buffer.count))
+        return packets
+    }
+
+    public static func hexText(_ bytes: [UInt8]) -> String { bytes.map { String(format: "%02x", $0) }.joined() }
 }

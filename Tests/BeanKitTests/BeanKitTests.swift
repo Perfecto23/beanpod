@@ -201,3 +201,35 @@ func reply(_ type: UInt8, _ id: UInt8, status: UInt8 = 1, _ payload: [UInt8] = [
     let rms = sqrt(samples.dropFirst(1600).reduce(Float(0)) { $0 + $1 * $1 } / Float(samples.count - 1600))
     #expect(rms > 0.25 && rms < 0.45)   // 0.5 振幅正弦波的有效值约 0.354
 }
+
+// MARK: - Wi‑Fi 快传
+
+@Test func wifiCommandsMatchOfficialClient() {
+    // 开热点：长度 + 热点名 + 长度 + 密码
+    let config = Array(Command.wifiConfig(ssid: "WiFi-1", password: "12345678"))
+    #expect(Array(config[5...8]) == [0x1A, 0x05, UInt8(config.count), 0])
+    #expect(Array(config[9..<(config.count - 1)]) == [6] + Array("WiFi-1".utf8) + [8] + Array("12345678".utf8))
+    // 要文件：十六进制文本，偏移在前、文件编号在后，末尾写死 1b
+    #expect(Command.wifiPullText(0x6AF5_1234, offset: 166) == "08ee0000001a071200" + "a6000000" + "3412f56a" + "1b")
+    // 确认收完
+    #expect(Command.wifiDoneText() == "08ee0000001a0a0b000126")
+}
+
+@Test func wifiSplitterHandlesBatchedAndPartialFrames() {
+    let a = reply(0x1A, 0x08, Array(repeating: 7, count: 166))
+    let b = reply(0x1A, 0x0A)
+    // 一条消息里连着两帧，后面跟着半帧
+    var buffer = a + b + Array(a.prefix(40))
+    let first = WiFiFrame.split(&buffer)
+    #expect(first.map(\.id) == [0x08, 0x0A])
+    #expect(buffer.count == 40)
+    // 下一条消息把剩下的补齐
+    buffer += a.dropFirst(40)
+    let second = WiFiFrame.split(&buffer)
+    #expect(second.count == 1 && second[0].raw == a)
+    #expect(buffer.isEmpty)
+    // 校验和不对也照收（官方客户端不校验）
+    var bad = b; bad[bad.count - 1] ^= 0xFF
+    var buffer2 = [0x00, 0x01] + bad
+    #expect(WiFiFrame.split(&buffer2).count == 1)
+}

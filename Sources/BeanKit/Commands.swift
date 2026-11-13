@@ -28,6 +28,24 @@ public enum Command {
     /// 中止正在进行的离线传输。
     public static func stopTransfer() -> Data { Frame.encode(type: 0x1A, id: 0xA9) }
 
+    // MARK: Wi‑Fi 快传（读官方客户端得来）
+
+    /// 让录音豆开热点。热点名和密码由主机定，各带一个字节的长度。
+    public static func wifiConfig(ssid: String, password: String) -> Data {
+        let s = Array(ssid.utf8), p = Array(password.utf8)
+        return Frame.encode(type: 0x1A, id: 0x05, payload: [UInt8(s.count)] + s + [UInt8(p.count)] + p)
+    }
+
+    /// 连上热点后要一个文件：十六进制文本。比蓝牙版少一个实时标志；最后一个字节官方写死成 1B。
+    public static func wifiPullText(_ fileID: UInt32, offset: UInt32 = 0) -> String {
+        WiFiFrame.hexText([0x08, 0xEE, 0x00, 0x00, 0x00, 0x1A, 0x07, 0x12, 0x00] + le32(offset) + le32(fileID) + [0x1B])
+    }
+
+    /// 确认一个文件收完了：十六进制文本。
+    public static func wifiDoneText() -> String {
+        WiFiFrame.hexText(Array(Frame.encode(type: 0x1A, id: 0x0A, payload: [0x01])))
+    }
+
     public static func keyExchange(publicKey: Data) -> Data { Frame.encode(type: 0x2E, id: 0x01, payload: Array(publicKey)) }
 
     public static func bind() -> Data { Frame.encode(type: 0x0B, id: 0x87, payload: [0x01]) }

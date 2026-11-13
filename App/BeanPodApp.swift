@@ -96,6 +96,9 @@ struct BeanPodApp: App {
                     .keyboardShortcut("d", modifiers: [.command, .shift])
             }
             CommandMenu("小豆") {
+                Button("Wi‑Fi 快传试验（电脑会断网约一分钟）") { store.startWifiTrial() }
+                    .disabled(store.link != .ready || store.wifiTrialRunning)
+                Divider()
                 Button("跟着真实状态") { store.mascotPreview = nil }
                 Divider()
                 Button("看看：待命") { store.mascotPreview = (.idle, .mid) }

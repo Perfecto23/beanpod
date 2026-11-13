@@ -18,6 +18,9 @@ final class BeanStore {
     /// 设备上有一条开着的录音（正在录，或暂停着还没结束）。
     var sessionOpen = false
     @ObservationIgnored var pullWhenListed = false
+    /// Wi‑Fi 快传试验用：录音豆对「开热点」命令的回包，以及试验是否在跑。
+    @ObservationIgnored var wifiReply: Packet?
+    var wifiTrialRunning = false
     /// 刚连上录音豆，还没把「在外面录的」同步下来。列表和密钥都到位后才动手。
     @ObservationIgnored var syncOnConnect = false
 
@@ -249,6 +252,12 @@ final class BeanStore {
         }
     }
     func stopScan() { ble.stopScan() }
+
+    // Wi‑Fi 快传试验要用到的几样（见 WiFiTrial.swift）
+    var sessionCrypto: CryptoSession { crypto }
+    var transferBusy: Bool { job != nil || !queue.isEmpty || loadingList }
+    func dropBLEForWiFi() { autoConnectAllowed = false; ble.disconnect(forget: false) }
+    func resumeBLEAfterWiFi() { autoConnectAllowed = true; ble.reconnect() }
     func connect(_ device: FoundDevice) { deviceName = device.name; ble.connect(device.id) }
     func disconnect(forget: Bool = true) { autoConnectAllowed = false; ble.disconnect(forget: forget) }
     var waitingForKnownDevice: Bool { link == .connecting && ble.hasRememberedDevice }
@@ -507,6 +516,8 @@ final class BeanStore {
             } else if live == nil {
                 problem = Problem(title: "录音豆没有开始录音", detail: "它可能正在传文件，或者电量太低。等几秒再点一次；还不行就把它放回充电盒再拿出来。")
             }
+        case (0x1A, 0x05):
+            wifiReply = p
         case (0x2E, 0x01):
             encryptionReady = crypto.completeHandshake(p)
             addLog(encryptionReady ? "密钥协商成功" : "密钥协商失败")
