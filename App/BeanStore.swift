@@ -309,9 +309,13 @@ final class BeanStore {
             refreshFiles()
         }
         poller = Task { [weak self] in
+            // 平时一分钟问一次状态；录音的时候五秒问一次，这样在录音豆上按键停下，这边很快就知道
+            var ticks = 0
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(60))
+                try? await Task.sleep(for: .seconds(5))
+                ticks += 1
                 guard let self, !Task.isCancelled, self.link == .ready, self.job == nil else { continue }
+                guard ticks % 12 == 0 || (self.info?.recording == true && self.macRec == .off) else { continue }
                 self.ble.send(Command.deviceInfo())
             }
         }
@@ -491,8 +495,14 @@ final class BeanStore {
                 let wasRecording = info?.recording == true
                 info = parsed
                 caseChanged(from: wasInCase, to: parsed.micCharging)
-                // 连上时它正在录，现在停了：重新列一遍，把该同步的拉下来
-                if wasRecording, !parsed.recording, syncOnConnect, macRec == .off, !loadingList, job == nil { refreshFiles() }
+                // 它刚才在录、现在停了，而且不是豆仓让它停的（豆仓点暂停或结束时会先把状态改掉，走不到这里）：
+                // 是在录音豆上按的键。让实时出字把最后一句收掉，再重新列一遍，该同步的拉下来
+                if wasRecording, !parsed.recording, macRec == .off {
+                    addLog("录音豆自己停止了录音")
+                    liveFlush = true
+                    syncOnConnect = syncOnConnect || settings.autoDownload
+                    if !loadingList, job == nil { refreshFiles() }
+                }
                 // 正在用 Mac 录音时，计时归 Mac 那边管，录音豆报的状态不去动它
                 if macRec == .off {
                     if parsed.recording, recordingSince == nil { recordingSince = .now; sessionOpen = true }
@@ -558,8 +568,28 @@ final class BeanStore {
             if p.isSuccess { refreshFiles() } else if scratchFiles.isEmpty { problem = Problem(title: "录音豆没有删掉这条录音", detail: "它可能还在录这一条，或者正在传文件。结束录音、等传完再删。") }
         case (0x1A, 0x06):
             if info?.recording == false { info?.recording = true }
-            // 语音输入：设备报出新录音的 id，立刻要求它边录边传
             let b = Array(p.payload)
+            // 不是豆仓点的开始，是按了录音豆上的键：这边的计时、实时出字都要跟着启动。
+            // 以前只把状态标成「录音中」，计时停在 0:00，要等一分钟一次的状态查询才突然开始走。
+            if live == nil, recordingSince == nil, macRec == .off, b.count >= 4 {
+                let fid = UInt32(b[0]) | UInt32(b[1]) << 8 | UInt32(b[2]) << 16 | UInt32(b[3]) << 24
+                if fid != 0 {
+                    let resumed = sessionOpen && fid == currentDeviceFile   // 同一条录音暂停后接着录
+                    addLog("录音豆自己开始录音了（\(resumed ? "接着录" : "新的一条")）：\(fid)")
+                    currentDeviceFile = fid
+                    sessionOpen = true
+                    recordingSince = .now
+                    if !resumed {
+                        elapsedBase = 0
+                        liveMarks = []
+                        sessionStart = .now
+                    }
+                    beginLiveTranscript(reset: !resumed)
+                    if !resumed { toast("record.circle", "录音豆开始录音了") }
+                    return
+                }
+            }
+            // 语音输入：设备报出新录音的 id，立刻要求它边录边传
             if live != nil, live?.fileID == nil, b.count >= 4 {
                 let fid = UInt32(b[0]) | UInt32(b[1]) << 8 | UInt32(b[2]) << 16 | UInt32(b[3]) << 24
                 if fid != 0 {
@@ -642,7 +672,14 @@ final class BeanStore {
         currentDeviceFile = activeFileID
         // 一连上就发现设备上有条没结束的录音（比如在设备上按键录的）：界面上也要显示成暂停中
         if activeFileID != 0, !scratchFiles.contains(activeFileID) { sessionOpen = true }
-        else if info?.recording != true { sessionOpen = false }
+        else if info?.recording != true {
+            // 这条录音在录音豆那边已经结束了：这边的计时和实时出字也收尾
+            if sessionOpen, macRec == .off {
+                elapsedBase = 0; recordingSince = nil
+                if live?.scratch == false { Task { await endLiveTranscript() } }
+            }
+            sessionOpen = false
+        }
         let growing: UInt32? = info?.recording == true && activeFileID != 0 ? activeFileID : nil
         var merged: [Recording] = []
         for var r in recordings.filter(\.downloaded) {
