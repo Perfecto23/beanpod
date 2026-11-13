@@ -103,13 +103,34 @@ struct MarkdownView: View {
 
     // MARK: 解析
 
-    /// 一行里的加粗、斜体、行内代码、链接。
+    /// 加粗、斜体、行内代码、链接。可以是多行（段落里的换行原样保留）。
+    ///
+    /// 加粗自己来配对，不交给系统的 Markdown 解析：模型写的加粗经常不合规范，系统会原样吐出星号。
+    /// 常见的两种：「**标题: **」星号里面带空格；「**画面：**电脑」结尾星号前是标点、后面紧跟文字。
+    /// 做法是一行一行看，按出现顺序把 ** 两两配成一对，中间的就是加粗。绝不跨行配对。
     static func inline(_ s: String) -> AttributedString {
-        // 模型常写出「**标题: **」这种星号里面带空格的加粗，按规范不算加粗，这里先把空格挪到外面
-        var fixed = s.replacingOccurrences(of: #"\*\*\s+([^*\n]+?)\*\*"#, with: "**$1**", options: .regularExpression)
-        fixed = fixed.replacingOccurrences(of: #"\*\*([^*\n]+?)\s+\*\*"#, with: "**$1** ", options: .regularExpression)
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        return (try? AttributedString(markdown: fixed, options: options)) ?? AttributedString(s)
+        func parse(_ t: String) -> AttributedString { (try? AttributedString(markdown: t, options: options)) ?? AttributedString(t) }
+        var out = AttributedString()
+        for (n, line) in s.components(separatedBy: "\n").enumerated() {
+            if n > 0 { out += AttributedString("\n") }
+            let parts = line.components(separatedBy: "**")
+            // 星号不成对、三连星号（加粗套斜体）、带行内代码的行：交回系统解析，不乱动
+            guard parts.count >= 3, parts.count % 2 == 1, !line.contains("***"), !line.contains("`") else {
+                out += parse(line)
+                continue
+            }
+            for (i, part) in parts.enumerated() where !part.isEmpty {
+                var piece = parse(part)
+                if i % 2 == 1 {
+                    for range in piece.runs.map(\.range) {
+                        piece[range].inlinePresentationIntent = (piece[range].inlinePresentationIntent ?? []).union(.stronglyEmphasized)
+                    }
+                }
+                out += piece
+            }
+        }
+        return out
     }
 
     private static func cells(_ line: String) -> [String] {
