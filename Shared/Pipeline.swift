@@ -754,32 +754,15 @@ extension BeanStore {
         }
     }
 
-    @discardableResult
-    func addVideo(_ id: UInt32, file: String, host: String, seconds: Int, credits: Int) -> UUID? {
-        guard let i = index(id) else { return nil }
-        let clip = VideoClip(file: file, host: host, seconds: seconds, credits: credits)
-        recordings[i].videos.insert(clip, at: 0)
-        saveLibrary()
-        return clip.id
-    }
-
-    func setPacked(_ id: UInt32, _ video: UUID, file: String) {
-        guard let i = index(id), let n = recordings[i].videos.firstIndex(where: { $0.id == video }) else { return }
-        if let old = recordings[i].videos[n].packed, old != file {
-            try? FileManager.default.trashItem(at: folder.appendingPathComponent(old), resultingItemURL: nil)
-        }
-        recordings[i].videos[n].packed = file
+    func addVideo(_ id: UInt32, file: String, host: String, seconds: Int, credits: Int) {
+        guard let i = index(id) else { return }
+        recordings[i].videos.insert(VideoClip(file: file, host: host, seconds: seconds, credits: credits), at: 0)
         saveLibrary()
     }
 
     func deleteVideo(_ id: UInt32, _ video: UUID) {
         guard let i = index(id), let n = recordings[i].videos.firstIndex(where: { $0.id == video }) else { return }
-        let clip = recordings[i].videos[n]
-        for name in [clip.file, clip.packed].compactMap({ $0 }) {
-            try? FileManager.default.trashItem(at: folder.appendingPathComponent(name), resultingItemURL: nil)
-        }
-        let parts = folder.appendingPathComponent(clip.file).deletingPathExtension().appendingPathExtension("parts")
-        try? FileManager.default.trashItem(at: parts, resultingItemURL: nil)
+        try? FileManager.default.trashItem(at: folder.appendingPathComponent(recordings[i].videos[n].file), resultingItemURL: nil)
         recordings[i].videos.remove(at: n)
         saveLibrary()
     }

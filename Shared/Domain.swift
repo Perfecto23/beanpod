@@ -200,8 +200,6 @@ nonisolated struct VideoClip: Codable, Equatable, Identifiable {
     var seconds: Int
     var credits: Int
     var date = Date()
-    /// 加了字幕和包装的成片；没包装过是空，打开的就是原片。
-    var packed: String?
 }
 
 nonisolated enum RewriteTemplate: String, CaseIterable, Identifiable {

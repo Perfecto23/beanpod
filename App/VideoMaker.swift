@@ -26,11 +26,7 @@ final class VideoMaker {
         enum State: Equatable { case waiting, generating, downloading, done, failed(String) }
     }
 
-    enum Phase: Equatable { case idle, quoting, ready, running, joining, packing, finished(URL), failed(String) }
-    /// 剪辑包装这一步：在做哪一小步、做到多少。重新包装旧视频时也用它。
-    var packStep = ""
-    var packProgress = 0.0
-    var packingClip: UUID?
+    enum Phase: Equatable { case idle, quoting, ready, running, joining, finished(URL), failed(String) }
 
     var hosts: [Host] = []
     var host: Host?
@@ -247,19 +243,6 @@ final class VideoMaker {
         try? files.map { "file '\($0.path)'" }.joined(separator: "\n").write(to: list, atomically: true, encoding: .utf8)
         let name = "\(recording)-video-\(Int(Date.now.timeIntervalSince1970)).mp4"
         let out = store.folder.appendingPathComponent(name)
-        // 各段和台词留一份：包装要用，以后想换包装也不用再花积分
-        let parts = VideoPackager.partsFolder(for: out)
-        try? FileManager.default.createDirectory(at: parts, withIntermediateDirectories: true)
-        var kept: [VideoPackager.Part] = []
-        for i in segments.indices where segments[i].state == .done {
-            let source = work.appendingPathComponent(String(format: "s%02d.mp4", i))
-            if (try? FileManager.default.copyItem(at: source, to: parts.appendingPathComponent(source.lastPathComponent))) != nil {
-                kept.append(.init(file: source.lastPathComponent, line: segments[i].line))
-            }
-        }
-        if let data = try? JSONEncoder().encode(VideoPackager.Manifest(title: title, parts: kept)) {
-            try? data.write(to: parts.appendingPathComponent("manifest.json"))
-        }
         let ffmpeg = ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"].first { FileManager.default.isExecutableFile(atPath: $0) }
         if let ffmpeg, files.count > 1 {
             let r = await Self.shell("'\(ffmpeg)' -v error -y -f concat -safe 0 -i '\(list.path)' -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p -c:a aac -b:a 160k -movflags +faststart '\(out.path)'")
@@ -269,43 +252,9 @@ final class VideoMaker {
             try? FileManager.default.removeItem(at: out)
             guard (try? FileManager.default.copyItem(at: files[0], to: out)) != nil else { phase = .failed("视频没能存下来。"); return }
         }
-        let clip = store.addVideo(recording, file: name, host: host.name, seconds: files.count == segments.count ? totalSeconds : 0, credits: Int(credits ?? 0))
-        store.addLog("视频拼好了：\(out.lastPathComponent)（\(files.count)/\(segments.count) 段），开始剪辑包装")
-
-        // 剪辑包装：字幕、开场标题、要点卡、进度条。在本机做，不再花积分；没包装成也还有原片
-        phase = .packing
-        if let clip, let packed = await pack(recording: recording, clip: clip, file: name, store: store) {
-            phase = .finished(packed)
-        } else {
-            phase = .finished(out)
-        }
-    }
-
-    /// 给一条做好的视频加字幕和包装（新做的会自动走这一步；旧的可以在视频那一行点「重新包装」）。
-    @discardableResult
-    func pack(recording: UInt32, clip: UUID, file: String, store: BeanStore) async -> URL? {
-        let raw = store.folder.appendingPathComponent(file)
-        let parts = VideoPackager.partsFolder(for: raw)
-        guard FileManager.default.fileExists(atPath: parts.appendingPathComponent("manifest.json").path) else {
-            store.problem = BeanStore.Problem(title: "这条视频没法重新包装", detail: "它做得比较早，没有留下分段。以后新做的视频都会留着分段，随时可以重新包装。")
-            return nil
-        }
-        packingClip = clip; packStep = "准备"; packProgress = 0
-        defer { packingClip = nil }
-        let name = raw.deletingPathExtension().lastPathComponent + "-packed-\(Int(Date.now.timeIntervalSince1970)).mp4"
-        let out = store.folder.appendingPathComponent(name)
-        do {
-            try await VideoPackager.run(folder: parts, out: out, store: store) { [weak self] step, value in
-                self?.packStep = step; self?.packProgress = value
-            }
-            store.setPacked(recording, clip, file: name)
-            store.toast("checkmark.circle.fill", "字幕和包装做好了")
-            return out
-        } catch {
-            store.addLog("剪辑包装失败：\(error.localizedDescription)")
-            store.problem = BeanStore.Problem(title: "字幕和包装没做成", detail: error.localizedDescription + "\n原片还在，可以在视频那一行点「重新包装」再试。")
-            return nil
-        }
+        store.addVideo(recording, file: name, host: host.name, seconds: files.count == segments.count ? totalSeconds : 0, credits: Int(credits ?? 0))
+        store.addLog("视频做好了：\(out.lastPathComponent)（\(files.count)/\(segments.count) 段）")
+        phase = .finished(out)
     }
 
     // MARK: 小工具
@@ -437,7 +386,7 @@ struct VideoSheet: View {
         .interactiveDismissDisabled(running)
     }
 
-    private var running: Bool { maker.phase == .running || maker.phase == .joining || maker.phase == .packing }
+    private var running: Bool { maker.phase == .running || maker.phase == .joining }
 
     @ViewBuilder private var footer: some View {
         switch maker.phase {
@@ -449,30 +398,16 @@ struct VideoSheet: View {
                 Spacer()
                 Button("关闭") { dismiss() }
             }
-        case .running, .joining, .packing:
-            VStack(alignment: .leading, spacing: 10) {
-                // 三步走：生成（花积分）→ 拼接 → 剪辑包装（本机做，不花积分）
-                HStack(spacing: 0) {
-                    stepDot("生成 \(maker.done)/\(maker.segments.count)", state: maker.phase == .running ? 1 : 2)
-                    stepLine(done: maker.phase != .running)
-                    stepDot("拼接", state: maker.phase == .joining ? 1 : (maker.phase == .packing ? 2 : 0))
-                    stepLine(done: maker.phase == .packing)
-                    stepDot("字幕和包装", state: maker.phase == .packing ? 1 : 0)
-                }
-                if maker.phase == .packing {
-                    ProgressView(value: maker.packProgress) {
-                        Text("\(maker.packStep)… \(Int(maker.packProgress * 100))%").font(.callout).foregroundStyle(.secondary)
-                    }
-                    .tint(Theme.accent)
-                    Text("加字幕、开场标题和要点卡，在这台 Mac 上做，不再花积分。").font(.caption).foregroundStyle(.tertiary)
-                } else {
-                    Text(maker.phase == .joining ? "正在把各段拼成一条…" : "正在生成，做好 \(maker.done) / \(maker.segments.count) 段。一段一般要几分钟，可以先去做别的。")
-                        .font(.callout).foregroundStyle(.secondary)
-                }
+        case .running, .joining:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(maker.phase == .joining ? "正在把各段拼成一条…" : "正在生成，做好 \(maker.done) / \(maker.segments.count) 段。一段一般要几分钟，可以先去做别的。")
+                    .foregroundStyle(.secondary)
+                Spacer()
             }
         case .finished(let url):
             HStack {
-                Label("做好了，带字幕和包装，已经放到这条录音的「改写」下面。", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.ok)
+                Label("做好了，已经放到这条录音的「改写」下面。", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.ok)
                 Spacer()
                 Button("在访达中显示") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
                 Button("打开") { NSWorkspace.shared.open(url); dismiss() }.buttonStyle(.glassProminent)
@@ -497,22 +432,6 @@ struct VideoSheet: View {
                 .controlSize(.large)
             }
         }
-    }
-
-    /// state：0 没开始，1 进行中，2 做完了
-    private func stepDot(_ title: String, state: Int) -> some View {
-        HStack(spacing: 6) {
-            ZStack {
-                Circle().fill(state == 0 ? AnyShapeStyle(.quaternary) : AnyShapeStyle(Theme.accent)).frame(width: 18, height: 18)
-                if state == 2 { Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white) }
-                else if state == 1 { ProgressView().controlSize(.mini).tint(.white) }
-            }
-            Text(title).font(.callout.weight(state == 1 ? .semibold : .regular)).foregroundStyle(state == 0 ? .tertiary : .primary)
-        }
-    }
-
-    private func stepLine(done: Bool) -> some View {
-        Capsule().fill(done ? AnyShapeStyle(Theme.accent.opacity(0.6)) : AnyShapeStyle(.quaternary)).frame(height: 2).frame(maxWidth: .infinity).padding(.horizontal, 8)
     }
 
     @ViewBuilder private func stateIcon(_ s: VideoMaker.Segment.State) -> some View {

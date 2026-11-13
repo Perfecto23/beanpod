@@ -1763,40 +1763,16 @@ struct RewriteView: View {
             }
             // 用这条录音做出来的视频
             ForEach(recording.videos) { clip in
-                let raw = store.folder.appendingPathComponent(clip.file)
-                let url = clip.packed.map { store.folder.appendingPathComponent($0) } ?? raw
-                let packing = maker.packingClip == clip.id
+                let url = store.folder.appendingPathComponent(clip.file)
                 HStack(spacing: 12) {
                     Image(systemName: "play.rectangle.fill").font(.title2).foregroundStyle(Theme.accent)
                         .frame(width: 44, height: 44).background(Theme.accent.opacity(0.14), in: .rect(cornerRadius: 11))
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text("数字人口播 · \(clip.host)").font(.body.weight(.semibold))
-                            Text(clip.packed == nil ? "原片" : "带字幕和包装").font(.caption2.weight(.semibold))
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .foregroundStyle(clip.packed == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.accent))
-                                .background(clip.packed == nil ? AnyShapeStyle(.quaternary) : AnyShapeStyle(Theme.accent.opacity(0.14)), in: .capsule)
-                        }
-                        if packing {
-                            ProgressView(value: maker.packProgress) {
-                                Text("\(maker.packStep)… \(Int(maker.packProgress * 100))%").font(.caption).foregroundStyle(.secondary)
-                            }
-                            .tint(Theme.accent).frame(maxWidth: 260)
-                        } else {
-                            Text(clip.date.formatted(date: .abbreviated, time: .shortened) + (clip.seconds > 0 ? " · 约 \(clip.seconds) 秒" : "") + " · \(clip.credits) 积分")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("数字人口播 · \(clip.host)").font(.body.weight(.semibold))
+                        Text(clip.date.formatted(date: .abbreviated, time: .shortened) + (clip.seconds > 0 ? " · 约 \(clip.seconds) 秒" : "") + " · \(clip.credits) 积分")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button(clip.packed == nil ? "加字幕和包装" : "重新包装", systemImage: "wand.and.stars") {
-                        Task { await maker.pack(recording: recording.id, clip: clip.id, file: clip.file, store: store) }
-                    }
-                    .buttonStyle(.glass).disabled(maker.packingClip != nil || maker.phase == .packing)
-                    .help("在这台 Mac 上加字幕、开场标题和要点卡，不花积分")
-                    if clip.packed != nil {
-                        Button("原片", systemImage: "film") { NSWorkspace.shared.open(raw) }.labelStyle(.iconOnly).buttonStyle(.borderless)
-                            .help("打开没加字幕的原片")
-                    }
                     Button("打开") { NSWorkspace.shared.open(url) }.buttonStyle(.glassProminent)
                     Button("在访达中显示", systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }.labelStyle(.iconOnly).buttonStyle(.borderless)
                     Button("删除", systemImage: "trash") { store.deleteVideo(recording.id, clip.id) }.labelStyle(.iconOnly).buttonStyle(.borderless)
@@ -1815,7 +1791,7 @@ struct RewriteView: View {
                             Task { await maker.prepare(text: item.text, recording: recording.id, title: recording.displayTitle) }
                         } label: { Label("做成视频", systemImage: "play.rectangle.on.rectangle") }
                             .buttonStyle(.glass).tint(Theme.accent)
-                            .disabled(maker.phase == .running || maker.phase == .joining || maker.phase == .packing || maker.packingClip != nil)
+                            .disabled(maker.phase == .running || maker.phase == .joining)
                             .help("用 Renoise 把这篇稿子做成数字人口播。会先报价，确认了才开始")
                         Button("拷贝", systemImage: "doc.on.doc") { copy(item.text); store.toast("doc.on.doc", "已拷贝") }
                             .labelStyle(.iconOnly).buttonStyle(.borderless)
@@ -1825,7 +1801,7 @@ struct RewriteView: View {
                     MarkdownView(text: item.text)
                 }
             }
-            if maker.recording == recording.id, maker.phase == .running || maker.phase == .joining || maker.phase == .packing {
+            if maker.recording == recording.id, maker.phase == .running || maker.phase == .joining {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text("正在做视频，做好 \(maker.done) / \(maker.segments.count) 段…").foregroundStyle(.secondary)
