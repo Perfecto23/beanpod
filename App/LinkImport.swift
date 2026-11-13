@@ -31,6 +31,13 @@ extension BeanStore {
         let url = linkJobs[i].url, platform = linkJobs[i].platform
         addLog("从链接导入：\(platform) \(url)")
 
+        // 抖音：yt-dlp 的抖音下载要请求签名，常年报「Fresh cookies are needed」，登没登录都一样。
+        // 改成在后台开一个看不见的网页窗口（和登录窗口共用登录状态）打开视频页，读页面自己拿到的视频信息。
+        if platform == "抖音" {
+            if await importDouyin(id, url) { return }
+            addLog("抖音页面方式没拿到，改用 yt-dlp 再试")
+        }
+
         guard let tool = await Self.findTool("yt-dlp") else {
             problem = Problem(title: "没找到下载工具 yt-dlp", detail: "从链接导入要靠它。在终端里运行下面这行装上，再试一次：\nbrew install yt-dlp ffmpeg")
             linkJobs.removeAll()      // 后面排着的也都下不了
@@ -69,9 +76,13 @@ extension BeanStore {
         let audio = files.first { ["m4a", "mp3", "opus", "ogg", "wav", "aac", "flac", "webm", "mp4"].contains($0.pathExtension.lowercased()) && !$0.lastPathComponent.contains(".info.") }
         guard result.status == 0, let audio else {
             addLog("链接导入失败（\(result.status)）：\(result.errors.suffix(300))")
-            if Self.needsLogin(result.errors), Self.loginPage(platform) != nil {
-                // 要登录：弹登录窗口，登录好了再接着导入这一条
+            if Self.needsLogin(result.errors), Self.loginPage(platform) != nil, login.isEmpty {
+                // 要登录、还没登录过：弹登录窗口，登录好了再接着导入这一条
                 linkLogin = LinkLoginRequest(platform: platform, url: url)
+            } else if Self.needsLogin(result.errors), !login.isEmpty {
+                // 已经登录过还是被拦：再弹登录窗口只会原地打转
+                problem = Problem(title: "这条\(platform)链接没能导入",
+                                  detail: "已经带着你在豆仓里的\(platform)登录状态试过了，还是被拦下。可能是登录过期了（去设置的「连接」里清掉重新登录），也可能是\(platform)改了接口。")
             } else {
                 problem = Problem(title: "这条\(platform)链接没能导入", detail: Self.explain(result.errors, platform: platform))
             }
@@ -86,8 +97,6 @@ extension BeanStore {
             author = (json["uploader"] as? String ?? json["channel"] as? String ?? json["creator"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             page = json["webpage_url"] as? String ?? url
         }
-        if let k = linkJobs.firstIndex(where: { $0.id == id }) { linkJobs[k].title = title; linkJobs[k].progress = 1 }
-
         // 平台自带的人工字幕：按中文优先挑一份
         let subs = files.filter { $0.pathExtension.lowercased() == "vtt" }
         let order = ["zh-Hans", "zh-CN", "zh", "zh-Hant", "zh-TW", "en"]
@@ -95,7 +104,12 @@ extension BeanStore {
             (order.firstIndex { a.lastPathComponent.contains(".\($0).") } ?? 99) < (order.firstIndex { b.lastPathComponent.contains(".\($0).") } ?? 99)
         }
         let cues = best.flatMap { try? String(contentsOf: $0, encoding: .utf8) }.map(SubtitleParser.parse) ?? []
+        finishLinkImport(id, audio: audio, title: title, author: author, page: page, platform: platform, cues: cues)
+    }
 
+    /// 声音拿到之后：放进录音库，标好来源，交给整理。
+    private func finishLinkImport(_ id: UUID, audio: URL, title: String, author: String, page: String, platform: String, cues: [SubtitleParser.Cue]) {
+        if let k = linkJobs.firstIndex(where: { $0.id == id }) { linkJobs[k].title = title; linkJobs[k].progress = 1 }
         let before = Set(recordings.map(\.id))
         importFile(audio, consume: true, processNow: false)
         guard let k = recordings.firstIndex(where: { !before.contains($0.id) }) else {
@@ -390,4 +404,184 @@ private struct LoginWebView: NSViewRepresentable {
     }
 
     func updateNSView(_ web: WKWebView, context: Context) {}
+}
+
+// MARK: - 抖音：用看不见的网页窗口拿视频信息
+
+extension BeanStore {
+    /// 成功放进录音库返回 true；拿不到返回 false，交给 yt-dlp 再试。
+    fileprivate func importDouyin(_ id: UUID, _ url: String) async -> Bool {
+        let page = DouyinPage()
+        guard let found = await page.fetch(url) else { return false }
+        addLog("抖音页面拿到了：\(found.awemeId)「\(found.title.prefix(30))」，\(found.media.count) 个音视频地址")
+        if let k = linkJobs.firstIndex(where: { $0.id == id }) { linkJobs[k].title = found.title; linkJobs[k].progress = 0.2 }
+
+        let work = FileManager.default.temporaryDirectory.appendingPathComponent("beanpod-link-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: work) }
+
+        // 地址按「纯音频 → 带声音的视频」排好了，挨个试，下到一个能用的就停
+        var media: URL?
+        for link in found.media {
+            var request = URLRequest(url: link, timeoutInterval: 60)
+            request.setValue("https://www.douyin.com/", forHTTPHeaderField: "Referer")
+            request.setValue(DouyinPage.agent, forHTTPHeaderField: "User-Agent")
+            guard let (tmp, response) = try? await URLSession.shared.download(for: request),
+                  (response as? HTTPURLResponse)?.statusCode == 200,
+                  let size = try? FileManager.default.attributesOfItem(atPath: tmp.path)[.size] as? Int, size > 20_000 else { continue }
+            let dest = work.appendingPathComponent("raw.mp4")
+            try? FileManager.default.removeItem(at: dest)
+            try? FileManager.default.moveItem(at: tmp, to: dest)
+            media = dest
+            break
+        }
+        guard let media else { addLog("抖音的音视频地址都没下下来"); return false }
+        if let k = linkJobs.firstIndex(where: { $0.id == id }) { linkJobs[k].progress = 0.8 }
+
+        // 只留声音：抽成 m4a；没有 ffmpeg 就直接交给导入
+        var audio = media
+        if let ffmpeg = await Self.findTool("ffmpeg") {
+            let out = work.appendingPathComponent("media.m4a")
+            let r = await Self.runTool(ffmpeg, ["-v", "error", "-y", "-i", media.path, "-vn", "-c:a", "aac", "-b:a", "128k", out.path]) { _ in }
+            if r.status == 0, FileManager.default.fileExists(atPath: out.path) { audio = out }
+            else { addLog("抽声音失败：\(r.errors.suffix(200))") }
+        }
+        finishLinkImport(id, audio: audio, title: found.title, author: found.author,
+                         page: "https://www.douyin.com/video/\(found.awemeId)", platform: "抖音", cues: [])
+        return true
+    }
+}
+
+/// 在后台开一个看不见的网页窗口打开抖音视频页，听页面自己请求的作品详情，读出标题、作者和音视频地址。
+/// 和登录窗口共用同一份登录状态（WKWebsiteDataStore.default），登录过的话能看到更多内容。
+@MainActor
+private final class DouyinPage: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
+    struct Found { var awemeId: String; var title: String; var author: String; var media: [URL] }
+
+    nonisolated static let agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+
+    private var web: WKWebView?
+    private var window: NSWindow?
+    private var detail: [String: Any]?
+
+    /// 在页面自己的脚本之前装好：作品详情接口一回来，就把原文递给豆仓。
+    private static let hook = """
+    (function(){
+      if (window.__bpHooked) return; window.__bpHooked = true;
+      var want = function(u){ return /aweme\\/v1\\/web\\/aweme\\/detail/.test(String(u||'')); };
+      var send = function(t){ try { window.webkit.messageHandlers.bp.postMessage(String(t)); } catch(e){} };
+      var of = window.fetch;
+      if (of) window.fetch = function(i, o){
+        var u = typeof i === 'string' ? i : (i && i.url);
+        var p = of.apply(this, arguments);
+        if (want(u)) p.then(function(r){ r.clone().text().then(send); }).catch(function(){});
+        return p;
+      };
+      var op = XMLHttpRequest.prototype.open, sd = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.open = function(m, u){ this.__bp = u; return op.apply(this, arguments); };
+      XMLHttpRequest.prototype.send = function(){
+        var x = this;
+        if (want(x.__bp)) x.addEventListener('load', function(){
+          try { send(x.responseType === 'json' ? JSON.stringify(x.response) : (x.responseType === '' || x.responseType === 'text' ? x.responseText : '')); } catch(e){}
+        });
+        return sd.apply(this, arguments);
+      };
+    })();
+    """
+
+    func fetch(_ link: String) async -> Found? {
+        guard let id = await Self.awemeId(link) else { return nil }
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .default()
+        config.mediaTypesRequiringUserActionForPlayback = []
+        let ucc = config.userContentController
+        ucc.addUserScript(WKUserScript(source: Self.hook, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+        ucc.add(self, contentWorld: .page, name: "bp")
+        let web = WKWebView(frame: NSRect(x: 0, y: 0, width: 1100, height: 760), configuration: config)
+        web.customUserAgent = Self.agent
+        // 放进一个透明、不抢焦点的窗口里：没有窗口的网页会被系统降速，视频也不加载
+        let window = NSWindow(contentRect: NSRect(x: -3000, y: -3000, width: 1100, height: 760), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.alphaValue = 0
+        window.ignoresMouseEvents = true
+        window.contentView = web
+        window.orderBack(nil)
+        self.web = web; self.window = window
+        defer {
+            ucc.removeScriptMessageHandler(forName: "bp", contentWorld: .page)
+            web.stopLoading()
+            window.orderOut(nil)
+            self.web = nil; self.window = nil
+        }
+        web.load(URLRequest(url: URL(string: "https://www.douyin.com/video/\(id)")!))
+
+        // 最多等 25 秒：先等详情接口；接口没听到的话，退而看页面已经在播的音轨
+        var title = "", author = ""
+        var media: [URL] = []
+        for tick in 0..<50 {
+            try? await Task.sleep(for: .milliseconds(500))
+            if let d = detail {
+                title = (d["desc"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                author = ((d["author"] as? [String: Any])?["nickname"] as? String) ?? ""
+                let video = d["video"] as? [String: Any] ?? [:]
+                // 纯音轨（新视频是音视频分开的）优先，再是带声音的整段视频，最后是配乐
+                var lists: [Any?] = []
+                if let bits = video["bit_rate_audio"] as? [[String: Any]] {
+                    lists += bits.map { (($0["audio_meta"] as? [String: Any])?["url_list"] as? [String: Any])?["main_url"] }
+                }
+                lists.append((video["play_addr"] as? [String: Any])?["url_list"])
+                lists.append((video["download_addr"] as? [String: Any])?["url_list"])
+                if (video["play_addr"] as? [String: Any]) == nil {
+                    lists.append(((d["music"] as? [String: Any])?["play_url"] as? [String: Any])?["url_list"])
+                }
+                for item in lists {
+                    let strings = (item as? [String]) ?? ((item as? String).map { [$0] } ?? [])
+                    media += strings.compactMap { URL(string: $0.hasPrefix("//") ? "https:" + $0 : $0) }
+                }
+            }
+            if media.isEmpty, tick >= 10, let found = try? await web.evaluateJavaScript(
+                "performance.getEntriesByType('resource').map(function(e){return e.name}).filter(function(n){return /media-audio/.test(n)}).slice(-1)[0] || ''") as? String,
+               let u = URL(string: found), !found.isEmpty {
+                media = [u]
+            }
+            if !media.isEmpty {
+                if title.isEmpty, let t = try? await web.evaluateJavaScript("document.title") as? String {
+                    title = t.replacingOccurrences(of: " - 抖音", with: "").trimmingCharacters(in: .whitespaces)
+                }
+                return Found(awemeId: id, title: title, author: author, media: media)
+            }
+        }
+        return nil
+    }
+
+    nonisolated func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let text = message.body as? String, let data = text.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let d = json["aweme_detail"] as? [String: Any] else { return }
+        let box = SendableDict(d)
+        MainActor.assumeIsolated { self.detail = box.value }
+    }
+
+    /// 从各种分享链接里找出作品号：v.douyin.com 短链先跟一次跳转。
+    static func awemeId(_ link: String) async -> String? {
+        func pick(_ s: String) -> String? {
+            for pattern in [#"/video/(\d{8,})"#, #"/note/(\d{8,})"#, #"modal_id=(\d{8,})"#, #"aweme_id=(\d{8,})"#] {
+                if let r = s.range(of: pattern, options: .regularExpression) {
+                    return String(s[r]).components(separatedBy: CharacterSet.decimalDigits.inverted).filter { $0.count >= 8 }.first
+                }
+            }
+            return nil
+        }
+        if let id = pick(link) { return id }
+        guard let url = URL(string: link) else { return nil }
+        var request = URLRequest(url: url, timeoutInterval: 15)
+        request.setValue(agent, forHTTPHeaderField: "User-Agent")
+        guard let (_, response) = try? await URLSession.shared.data(for: request), let final = response.url?.absoluteString else { return nil }
+        return pick(final)
+    }
+}
+
+private nonisolated struct SendableDict: @unchecked Sendable {
+    let value: [String: Any]
+    init(_ value: [String: Any]) { self.value = value }
 }
