@@ -96,7 +96,7 @@ struct KnowledgeView: View {
             if !store.analysisAvailable {
                 HStack {
                     Text("提问需要先设置分析模型。").font(.callout).foregroundStyle(.secondary)
-                    SettingsLink { Text("去设置") }
+                    ModelSettingsLink()
                 }
             } else if store.answer == nil, !store.asking {
                 // 还没问过：给几个现成的问题，点一下就问

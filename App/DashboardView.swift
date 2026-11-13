@@ -215,7 +215,7 @@ struct DashboardView: View {
                     HStack {
                         Label("还没设置分析模型，暂时只能按关键词粗略分类，出不了完整纪要", systemImage: "exclamationmark.circle")
                         Spacer()
-                        SettingsLink { Text("去设置") }
+                        ModelSettingsLink()
                     }
                 }
             }

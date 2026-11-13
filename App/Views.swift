@@ -73,7 +73,7 @@ struct RootView: View {
             if let action = p.action {
                 Button(action.label) {
                     switch action {
-                    case .settings: openSettings()
+                    case .settings: SettingsView.open(.models, with: openSettings)
                     case .device: nav.route = .device
                     default: store.resolve(action)
                     }
@@ -1134,7 +1134,7 @@ struct RewriteView: View {
                     if busy { ProgressView().controlSize(.small) }
                     if !store.analysisAvailable {
                         Text("需要先设置分析模型。").font(.callout).foregroundStyle(.secondary)
-                        SettingsLink { Text("去设置") }
+                        ModelSettingsLink()
                     }
                 }
             }
@@ -1242,7 +1242,7 @@ struct NotesView: View {
                             .disabled(store.stages[recording.id] != nil)
                     } else {
                         Text("先在设置里配置云端模型，或下载本机模型。").font(.callout).foregroundStyle(.secondary)
-                        SettingsLink { Text("打开设置") }
+                        ModelSettingsLink(title: "打开设置")
                     }
                 }
             }

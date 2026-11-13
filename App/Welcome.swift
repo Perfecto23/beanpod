@@ -42,7 +42,7 @@ struct WelcomeView: View {
                         ProgressView(value: progress).frame(width: 110)
                         Text("\(Int(progress * 100))%").font(.callout).monospacedDigit().foregroundStyle(.secondary)
                     } else {
-                        Button("打开设置") { openSettings() }
+                        ModelSettingsLink(title: "打开设置")
                     }
                 }
                 step(4, "连上你常用的 AI 助手（可选）",
