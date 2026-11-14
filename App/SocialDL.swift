@@ -36,6 +36,19 @@ extension BeanStore {
         let result = run.output.split(separator: "\n").reversed().lazy.compactMap { SocialDL.event(String($0)) }.first { $0["type"] as? String == "result" }
         guard let result, result["ok"] as? Bool == true else {
             let why = (result?["error"] as? String) ?? String(run.errors.suffix(300))
+            // 被拦在登录页：没登录过就弹豆仓的登录窗口，登好了接着导入；登录过还被拦就说清楚，别原地打转
+            if let wall = result?["needs_login"] as? String, !wall.isEmpty, Self.loginPage(platform) != nil {
+                addLog("social-dl：\(platform)要登录（\(why.prefix(80))）")
+                if cookie.isEmpty {
+                    linkLogin = LinkLoginRequest(platform: platform, url: url, hint: platform == "小红书"
+                        ? "小红书把这台 Mac 当成海外访问，跳到了 rednote.com，那边要登录才给看笔记。用小红书 App 扫码登录一次就行。"
+                        : "")
+                } else {
+                    problem = Problem(title: "这条\(platform)链接没能导入",
+                                      detail: "已经带着你在豆仓里的\(platform)登录状态试过了，还是被拦在登录页。可能是登录过期了，去设置的「连接」里退出后重新登录。")
+                }
+                return true
+            }
             addLog("social-dl 没拿到（\(run.status)）：\(why.prefix(200))，换下一种方式")
             return false
         }

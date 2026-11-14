@@ -26,6 +26,33 @@ def say(event: dict) -> None:
     sys.stdout.flush()
 
 
+def xhs_resolve(url: str, http) -> str:
+    """小红书把海外访问的 xiaohongshu.com 302 到 rednote.com。跨站跳转时手写的 Cookie 头会被丢掉，
+    所以先探一次跳转，直接用 rednote 的地址（social-dl 认 rednote.com）。"""
+    try:
+        from curl_cffi import requests as cr
+
+        r = cr.get(url, headers=http.headers(referer="https://www.xiaohongshu.com/"),
+                   allow_redirects=False, timeout=15, impersonate="chrome")
+        loc = r.headers.get("location") or ""
+        if r.status_code in (301, 302, 303, 307, 308) and "rednote." in loc and "/login" not in loc:
+            say({"type": "step", "id": "rednote", "label": "小红书跳到了 rednote.com", "detail": "", "state": "done"})
+            return loc
+    except Exception:
+        pass
+    return url
+
+
+def xhs_login_wall(url: str, http) -> bool:
+    """解析失败时看一眼：是不是被带到了登录页（海外访问 rednote 要登录才给看笔记）。"""
+    try:
+        r = http.get(url, referer="https://www.xiaohongshu.com/")
+        final = str(r.url)
+        return "/login" in final or "website-login" in final
+    except Exception:
+        return False
+
+
 def main() -> int:
     if len(sys.argv) < 3:
         say({"type": "result", "ok": False, "error": "用法：beanpod_social.py <链接> <保存目录>"})
@@ -44,12 +71,16 @@ def main() -> int:
         say({"type": "result", "ok": False, "skip": True, "error": f"{platform} 不归 social-dl 的解析器管"})
         return 2
 
+    http = dl.Http(cookie=os.environ.get("BEANPOD_COOKIE", ""))
+    if platform == "xiaohongshu":
+        url = xhs_resolve(url, http)
+
     out.mkdir(parents=True, exist_ok=True)
     try:
         reports, failures = dl.parse_and_download(
             url,
             out_dir=out,
-            http=dl.Http(cookie=os.environ.get("BEANPOD_COOKIE", "")),
+            http=http,
             image_format="jpeg",
             info_only=False,
             prefer_ytdlp=False,
@@ -57,7 +88,11 @@ def main() -> int:
             progress=say,
         )
     except dl.FetchError as exc:
-        say({"type": "result", "ok": False, "error": str(exc), "needs_login": getattr(exc, "needs_login", "") or ""})
+        # 全部失败时 social-dl 会抛出来；小红书再看一眼是不是被拦在登录页
+        needs = getattr(exc, "needs_login", "") or ""
+        if not needs and platform == "xiaohongshu" and xhs_login_wall(url, http):
+            needs = "xiaohongshu"
+        say({"type": "result", "ok": False, "error": str(exc), "needs_login": needs})
         return 1
     except Exception as exc:  # 解析器里任何意外都别让豆仓卡住
         say({"type": "result", "ok": False, "error": f"{type(exc).__name__}: {exc}"[:300]})
@@ -65,7 +100,10 @@ def main() -> int:
 
     if not reports:
         first = failures[0] if failures else {}
-        say({"type": "result", "ok": False, "error": first.get("error") or "没有拿到作品", "needs_login": first.get("needs_login") or ""})
+        needs = first.get("needs_login") or ""
+        if not needs and platform == "xiaohongshu" and xhs_login_wall(url, http):
+            needs = "xiaohongshu"
+        say({"type": "result", "ok": False, "error": first.get("error") or "没有拿到作品", "needs_login": needs})
         return 1
     r = reports[0]
     say({

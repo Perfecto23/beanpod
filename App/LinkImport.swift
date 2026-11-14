@@ -311,7 +311,8 @@ extension BeanStore {
         switch platform {
         case "B 站": ("https://passport.bilibili.com/login", ["bilibili.com"])
         case "抖音": ("https://www.douyin.com/", ["douyin.com"])
-        case "小红书": ("https://www.xiaohongshu.com/explore", ["xiaohongshu.com"])
+        // 海外访问会被跳到 rednote.com，登录状态落在那边
+        case "小红书": ("https://www.xiaohongshu.com/explore", ["xiaohongshu.com", "rednote.com"])
         case "YouTube": ("https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F", ["youtube.com", "google.com"])
         case "TikTok": ("https://www.tiktok.com/login", ["tiktok.com"])
         case "快手": ("https://www.kuaishou.com/", ["kuaishou.com"])
