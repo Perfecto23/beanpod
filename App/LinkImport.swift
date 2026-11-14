@@ -32,6 +32,11 @@ extension BeanStore {
         let url = linkJobs[i].url, platform = linkJobs[i].platform
         addLog("从链接导入：\(platform) \(url)")
 
+        // 小红书、抖音、快手、TikTok：先用用户自己的下载工具 social-dl 的解析器（SocialDL.swift）
+        if SocialDL.platforms.contains(platform) {
+            if await importWithSocialDL(id, url, platform: platform) { return }
+        }
+
         // 抖音：yt-dlp 的抖音下载要请求签名，常年报「Fresh cookies are needed」，登没登录都一样。
         // 改成在后台开一个看不见的网页窗口（和登录窗口共用登录状态）打开视频页，读页面自己拿到的视频信息。
         if platform == "抖音" {
@@ -179,7 +184,7 @@ extension BeanStore {
         return found.hasPrefix("/") && FileManager.default.isExecutableFile(atPath: found) ? found : nil
     }
 
-    nonisolated static func runTool(_ path: String, _ args: [String],
+    nonisolated static func runTool(_ path: String, _ args: [String], env extra: [String: String] = [:],
                                     onLine: @Sendable @escaping (String) -> Void) async -> (status: Int32, output: String, errors: String) {
         await Task.detached {
             let p = Process()
@@ -187,6 +192,7 @@ extension BeanStore {
             p.arguments = args
             var env = ProcessInfo.processInfo.environment
             env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + (env["PATH"] ?? "/usr/bin:/bin")
+            env.merge(extra) { _, new in new }
             p.environment = env
             let out = Pipe(), err = Pipe()
             p.standardOutput = out; p.standardError = err
