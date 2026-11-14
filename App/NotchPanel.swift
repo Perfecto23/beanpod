@@ -203,6 +203,7 @@ struct NotchView: View {
         let n = panel.notchSize
         if panel.expanded {
             var h = n.height + 84
+            if store.recState == .idle, store.link == .ready { h += 40 }     // 多一行「用录音豆录」
             if panel.clip != nil { h += 66 }
             if job != nil { h += 40 }
             return CGSize(width: max(360, n.width + 170), height: h)
@@ -268,12 +269,23 @@ struct NotchView: View {
     private var controls: some View {
         switch store.recState {
         case .idle:
-            HStack(spacing: 8) {
-                pill("开始录音", primary: true) { Circle().fill(.white).frame(width: 7, height: 7) } action: { store.startRecording() }
+            VStack(alignment: .leading, spacing: 10) {
                 if store.link == .ready {
-                    pill("用这台 Mac 录", primary: false) { Image(systemName: "laptopcomputer").font(.system(size: 10, weight: .semibold)) } action: { store.startMacRecording() }
+                    pill("用录音豆录", primary: true) { Circle().fill(.white).frame(width: 7, height: 7) } action: { store.startRecording() }
                 }
-                Spacer(minLength: 0)
+                // 用这台 Mac 录：录什么声音直接点，点哪个就用哪个开始，并记住这次的选择（和菜单栏一样）
+                HStack(spacing: 6) {
+                    Text("Mac 录").font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize().padding(.trailing, 2)
+                    ForEach(BeanStore.MacSource.allCases) { source in
+                        let last = store.macSource == source
+                        pill(Self.short(source), primary: store.link != .ready && last) {
+                            Image(systemName: Self.icon(source)).font(.system(size: 10, weight: .semibold))
+                        } action: { store.startMacRecording(source) }
+                        .overlay(Capsule().strokeBorder(.white.opacity(last && store.link == .ready ? 0.35 : 0), lineWidth: 1))
+                        .help(source.hint)
+                    }
+                    Spacer(minLength: 0)
+                }
             }
         case .recording, .paused:
             let paused = store.recState == .paused
@@ -294,15 +306,23 @@ struct NotchView: View {
         }
     }
 
+    static func short(_ s: BeanStore.MacSource) -> String {
+        switch s { case .mic: "麦克风"; case .system: "电脑声音"; case .both: "都录" }
+    }
+
+    static func icon(_ s: BeanStore.MacSource) -> String {
+        switch s { case .mic: "mic.fill"; case .system: "speaker.wave.2.fill"; case .both: "person.2.wave.2.fill" }
+    }
+
     private func pill<Icon: View>(_ title: String, primary: Bool, width: CGFloat? = nil,
                                   @ViewBuilder icon: () -> Icon, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 6) {
                 icon()
-                Text(title).font(.system(size: 12.5, weight: .semibold))
+                Text(title).font(.system(size: 12.5, weight: .semibold)).lineLimit(1).fixedSize()
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 12)
             .frame(width: width, height: 30)
             .background(primary ? AnyShapeStyle(rose) : AnyShapeStyle(.white.opacity(0.12)), in: .capsule)
             .contentShape(.capsule)
