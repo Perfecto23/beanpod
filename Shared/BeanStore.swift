@@ -211,6 +211,8 @@ final class BeanStore {
     @ObservationIgnored private var poller: Task<Void, Never>?
     @ObservationIgnored var worker: Task<Void, Never>?
     @ObservationIgnored var workQueue: [UInt32] = []
+    /// 要重新转写的录音：旧文字稿留到新的转出来为止
+    @ObservationIgnored var retranscribing: Set<UInt32> = []
 
     private struct PullJob {
         let id: UInt32
@@ -318,6 +320,8 @@ final class BeanStore {
         poller?.cancel()
         guard new == .ready else {
             if let job { failPull(job.id, "连接断开，下载中断") }
+            // 录音中断线：实时字幕收个尾关掉。不关的话它会一直挂着，以后每次录音都开不起来
+            if liveActive { Task { await endLiveTranscript() } }
             queue.removeAll()
             info = nil; encryptionReady = false; loadingList = false
             syncOnConnect = false
@@ -333,7 +337,8 @@ final class BeanStore {
         wifiFallback = false
         scratchTried = []
         currentDeviceFile = 0
-        sessionOpen = false; elapsedBase = 0; recordingSince = nil
+        // 用 Mac 录到一半时录音豆自己连上了：计时属于 Mac 那条录音，不能清零
+        if macRec == .off && !macStarting { sessionOpen = false; elapsedBase = 0; recordingSince = nil }
         Task {
             // 设备处理命令需要一点间隔，挨个发
             ble.send(Command.deviceInfo())

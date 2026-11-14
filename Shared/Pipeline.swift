@@ -54,25 +54,31 @@ extension BeanStore {
     /// 转写并整理一条录音。已有文字稿时只重新整理。
     func process(_ id: UInt32, retranscribe: Bool = false) {
         guard recordings.contains(where: { $0.id == id && $0.downloaded }), stages[id] == nil else { return }
-        if retranscribe, let i = index(id) { recordings[i].transcript = nil; recordings[i].segments = [] }
+        // 重新转写：旧文字稿先留着，新的转出来了再换；转失败了旧的还在
+        if retranscribe { retranscribing.insert(id) }
         stages[id] = .queued
         workQueue.append(id)
         guard worker == nil else { return }
         worker = Task { [weak self] in
-            while let self, !self.workQueue.isEmpty {
-                let next = self.workQueue.removeFirst()
-                await self.run(next)
-                self.stages[next] = nil
-                self.announceDone(next)
-                // 外语素材：整理完顺手译成目标语言
-                if self.settings.autoTranslate, let r = self.recordings.first(where: { $0.id == next }),
-                   r.isMaterial, self.needsTranslation(r) {
-                    self.translate(next)
+            while let self {
+                while !self.workQueue.isEmpty {
+                    let next = self.workQueue.removeFirst()
+                    await self.run(next)
+                    self.retranscribing.remove(next)
+                    self.stages[next] = nil
+                    self.announceDone(next)
+                    // 外语素材：整理完顺手译成目标语言
+                    if self.settings.autoTranslate, let r = self.recordings.first(where: { $0.id == next }),
+                       r.isMaterial, self.needsTranslation(r) {
+                        self.translate(next)
+                    }
                 }
+                await QwenASR.shared.stop()   // 干完活就把模型从内存里放掉
+                await LocalLLM.shared.stop()
+                // 停模型要等一会儿，这期间新排进来的录音看到 worker 还在就不会另起一个；
+                // 所以停完再看一眼队列，空了才放手，免得把它晾在「排队中」
+                if self.workQueue.isEmpty { self.worker = nil; return }
             }
-            await QwenASR.shared.stop()   // 干完活就把模型从内存里放掉
-            await LocalLLM.shared.stop()
-            self?.worker = nil
         }
     }
 
@@ -112,7 +118,7 @@ extension BeanStore {
         guard let rec = recordings.first(where: { $0.id == id }) else { return }
 
         // 1. 转写
-        if (rec.transcript ?? "").isEmpty {
+        if (rec.transcript ?? "").isEmpty || retranscribing.contains(id) {
             stages[id] = .transcribing(0)
             do {
                 let segments: [Segment], engine: String
@@ -143,7 +149,10 @@ extension BeanStore {
                 recordings[i].transcribedBy = engine
                 saveLibrary()
             } catch {
-                problem = Problem(title: "「\(rec.displayTitle)」没转写出来", detail: error.localizedDescription + "\n录音本身没问题，可以再试一次。", action: .process(id))
+                let kept = !(rec.transcript ?? "").isEmpty
+                problem = Problem(title: "「\(rec.displayTitle)」没转写出来",
+                                  detail: error.localizedDescription + (kept ? "\n原来的文字稿和纪要都留着没动，可以再试一次。" : "\n录音本身没问题，可以再试一次。"),
+                                  action: .process(id))
                 return
             }
         }
@@ -181,6 +190,14 @@ extension BeanStore {
             result = Analyzer.fallback(transcript: spoken, duration: rec.duration, fixedScene: fixed)
         }
         guard let j = index(id) else { return }
+        // 已经有模型出的纪要，这次模型没接通只能按关键词粗分：别用粗分把好的纪要、待办盖掉
+        if result.source == "关键词规则", recordings[j].summary != nil,
+           let before = recordings[j].analyzedBy, before != "关键词规则", before != "—" {
+            problem = Problem(title: "「\(rec.displayTitle)」这次没重新整理",
+                              detail: "分析模型没接通，原来的纪要和待办都留着没动。检查一下设置里的分析模型，再点「重新整理纪要」。",
+                              action: .settings)
+            return
+        }
         recordings[j].scene = result.scene
         if !recordings[j].titleEdited, !result.title.isEmpty { recordings[j].title = result.title }
         recordings[j].summary = result.summary

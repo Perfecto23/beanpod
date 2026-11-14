@@ -89,9 +89,11 @@ final class Dictation {
         dryRun = true
         press()
         guard holding else { dryRun = false; return }
-        Task {
+        Task { [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
-            release()
+            // 这次试录已经提前结束、又开始了一次真正的按键：别把那一次掐断
+            guard let self, self.dryRun else { return }
+            self.release()
         }
     }
 
@@ -132,6 +134,7 @@ final class Dictation {
             // 三秒还没有声音传过来：别让人一直按着干等
             guard let self, self.holding, self.phase == .preparing else { return }
             self.holding = false
+            self.dryRun = false
             store.send(Command.stopRecording())
             store.addLog("语音输入：3 秒内没有收到实时声音（当前文件 \(store.live?.fileID ?? 0)）")
             store.live = nil
@@ -144,6 +147,9 @@ final class Dictation {
     private func release() {
         guard holding, let store else { return }
         holding = false
+        // 「试一次」只管这一次按键：无论后面成功、失败还是提前收场，标志都在这里收回，不会带到下一次
+        let dry = dryRun
+        dryRun = false
         // 还没等到「在听」就松手了：什么都没录到，直接收场
         if phase == .preparing {
             store.send(Command.stopRecording())
@@ -155,10 +161,10 @@ final class Dictation {
         }
         store.send(Command.stopRecording())      // 结束这条临时录音，下次按键是新的一条
         phase = .working
-        task = Task { [weak self] in await self?.finish(store) }
+        task = Task { [weak self] in await self?.finish(store, dryRun: dry) }
     }
 
-    private func finish(_ store: BeanStore) async {
+    private func finish(_ store: BeanStore, dryRun: Bool) async {
         // 等最后一点声音传完：0.45 秒没有新数据就算完，最多等 3 秒
         await settle(store, quiet: 0.45, limit: 3)
 
@@ -199,7 +205,7 @@ final class Dictation {
             }
             lastText = text
             store.addLog("语音输入结果：\(text)")
-            if dryRun { dryRun = false } else { insert(text) }
+            if !dryRun { insert(text) }
             flash(.done(text))
         } catch {
             store.addLog("语音输入失败：\(error.localizedDescription)")
