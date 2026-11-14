@@ -36,6 +36,53 @@ public enum LinkTools {
         for (suffix, name) in table where host == suffix || host.hasSuffix("." + suffix) { return name }
         return "网页视频"
     }
+
+    /// 查重用的「作品键」：同一条作品的不同写法算成同一个键。
+    /// 认得出作品号的平台用「平台:作品号」（不管带没带分享参数、是网页版还是手机版、小红书的 token 换没换）；
+    /// 认不出的（短链、别的网站）用去掉分享追踪参数的地址。短链要等下载时解析出作品页，再按作品页查一次。
+    public static func contentKey(of url: String) -> String? {
+        guard var parts = URLComponents(string: url), let host = parts.host?.lowercased() else { return nil }
+        let items = parts.queryItems ?? []
+        func query(_ name: String) -> String? { items.first { $0.name == name }?.value.flatMap { $0.isEmpty ? nil : $0 } }
+        func capture(_ pattern: String) -> String? {
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                  let m = regex.firstMatch(in: url, range: NSRange(url.startIndex..., in: url)), m.numberOfRanges > 1,
+                  let r = Range(m.range(at: 1), in: url) else { return nil }
+            return String(url[r])
+        }
+        let platform = platform(of: url)
+        var id: String?
+        switch platform {
+        case "抖音": id = capture(#"/(?:video|note)/(\d{12,})"#) ?? query("modal_id") ?? query("aweme_id")
+        case "TikTok": id = capture(#"/(?:video|photo)/(\d{12,})"#)
+        case "视频号": id = capture(#"/sph/([A-Za-z0-9]+)"#) ?? (url.contains("pages/sph") ? query("id") : nil)
+        case "小红书": id = capture(#"/(?:explore|discovery/item|red_video|item)/([0-9a-f]{24})"#)
+        case "B 站":
+            if let bv = capture(#"(BV[0-9A-Za-z]{10})"#) ?? capture(#"/video/(av\d+)"#) {
+                // 分 P 的视频每一 P 算一条
+                let p = Int(query("p") ?? "") ?? 1
+                id = p > 1 ? "\(bv)?p=\(p)" : bv
+            }
+        case "YouTube": id = query("v") ?? capture(#"(?:youtu\.be/|/shorts/|/live/|/embed/)([A-Za-z0-9_-]{11})"#)
+        case "X": id = capture(#"/status(?:es)?/(\d+)"#)
+        case "快手": id = capture(#"/(?:short-video|photo|fw/photo)/([0-9A-Za-z]+)"#)
+        case "喜马拉雅": id = capture(#"/sound/(\d+)"#)
+        case "小宇宙": id = capture(#"/episode/([0-9a-f]{24})"#)
+        default: break
+        }
+        if let id { return "\(platform):\(id)" }
+        // 认不出作品号：去掉分享、追踪用的参数和末尾的斜杠
+        let tracking: Set = ["si", "spm", "from", "source", "share_source", "share_medium", "share_plat", "share_session_id",
+                             "share_tag", "share_from", "timestamp", "unique_k", "vd_source", "xsec_source", "xhsshare", "feature"]
+        let kept = items.filter { !tracking.contains($0.name.lowercased()) && !$0.name.lowercased().hasPrefix("utm_") }
+            .sorted { $0.name < $1.name }
+        parts.queryItems = kept.isEmpty ? nil : kept
+        parts.fragment = nil
+        var path = parts.path
+        while path.count > 1, path.hasSuffix("/") { path.removeLast() }
+        let bare = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        return bare + path + (parts.percentEncodedQuery.map { "?" + $0 } ?? "")
+    }
 }
 
 public enum SubtitleParser {

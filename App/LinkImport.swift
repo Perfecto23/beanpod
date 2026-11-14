@@ -12,8 +12,17 @@ import WebKit
 /// 登录状态只存在这台 Mac 上，以后下载这个平台时带上。不读浏览器里的登录状态。
 extension BeanStore {
     func importLinks(_ text: String) {
+        var skipped: [Recording] = []
         for url in LinkTools.urls(in: text) where !linkJobs.contains(where: { $0.url == url }) {
+            // 导入过的同一条作品不再下一份（库里已经有好几份一样的，就是这么来的）
+            if let old = importedRecording(for: url) { skipped.append(old); continue }
             linkJobs.append(LinkJob(url: url, platform: LinkTools.platform(of: url)))
+        }
+        if let first = skipped.first {
+            addLog("跳过导入过的 \(skipped.count) 条：\(skipped.map(\.id))")
+            toast("checkmark.circle", skipped.count == 1
+                  ? "导入过了，在素材里：\(String((first.title ?? first.origin ?? "这条").prefix(18)))"
+                  : "\(skipped.count) 条之前导入过，在素材里，没再下")
         }
         guard linkWorker == nil else { return }
         linkWorker = Task { [weak self] in
@@ -73,14 +82,19 @@ extension BeanStore {
         // 在豆仓里登录过这个平台：带上登录状态
         let cookies = Self.cookieFile(platform)
         let login = FileManager.default.fileExists(atPath: cookies.path) ? ["--cookies", cookies.path] : []
-        // 按系统的代理设置、不走代理、再按代理，最多试三次：开着代理软件的机器上，网络时好时坏，
+        // 换着网络路线最多试三次：开着代理软件的机器上，网络时好时坏，
         // 实测同一条链接这一次走代理通、直连被要求验证，下一次正好反过来。
-        var result = await Self.runTool(tool, login + args, onLine: onLine)
+        // 国内平台先直连：走代理时出口在海外，B 站的服务器直接回 HTTP 567 拒绝下载，直连一秒就下好了。
+        // 国外平台先按系统的代理设置：直连多半连不上，白等 20 秒超时。
+        let direct = ["--proxy", ""]
+        let routes: [[String]] = Self.domesticPlatforms.contains(platform) ? [direct, [], direct] : [[], direct, []]
+        var result = await Self.runTool(tool, login + routes[0] + args, onLine: onLine)
         // 被要求登录也换条路再试：YouTube 对直连常常要求「确认不是机器人」，走代理就不用
-        for (n, proxy) in [["--proxy", ""], []].enumerated() {
-            guard result.status != 0, Self.looksLikeNetworkTrouble(result.errors) || Self.needsLogin(result.errors) else { break }
-            addLog("第 \(n + 2) 次尝试（\(proxy.isEmpty ? "走代理" : "直连")），上次：\(result.errors.suffix(100))")
-            result = await Self.runTool(tool, login + proxy + args, onLine: onLine)
+        for (n, route) in routes.dropFirst().enumerated() {
+            guard result.status != 0, Self.looksLikeNetworkTrouble(result.errors) || Self.needsLogin(result.errors)
+                    || Self.looksLikeRegionBlock(result.errors) else { break }
+            addLog("第 \(n + 2) 次尝试（\(route.isEmpty ? "按系统代理设置" : "直连")），上次：\(result.errors.suffix(100))")
+            result = await Self.runTool(tool, login + route + args, onLine: onLine)
         }
 
         let files = (try? FileManager.default.contentsOfDirectory(at: work, includingPropertiesForKeys: nil)) ?? []
@@ -121,6 +135,12 @@ extension BeanStore {
     /// 声音拿到之后：放进录音库，标好来源，交给整理。
     func finishLinkImport(_ id: UUID, audio: URL, title: String, author: String, page: String, platform: String, cues: [SubtitleParser.Cue]) {
         if let k = linkJobs.firstIndex(where: { $0.id == id }) { linkJobs[k].title = title; linkJobs[k].progress = 1 }
+        // 贴的是短链时，导入前认不出是哪条；解析出作品页后再查一次，导入过的不再放一份
+        if let old = importedRecording(for: page) {
+            addLog("链接导入：「\(title)」之前导入过（\(old.id)），这次下的不留")
+            toast("checkmark.circle", "导入过了，在素材里：\(String((old.title ?? title).prefix(18)))")
+            return
+        }
         let before = Set(recordings.map(\.id))
         importFile(audio, consume: true, processNow: false)
         guard let k = recordings.firstIndex(where: { !before.contains($0.id) }) else {
@@ -143,6 +163,22 @@ extension BeanStore {
         if settings.autoProcess { process(rid) }
     }
 
+    /// 库里已经有的同一条作品（按作品键比，不管链接怎么写）。
+    func importedRecording(for url: String) -> Recording? {
+        guard let key = LinkTools.contentKey(of: url) else { return nil }
+        return recordings.first { $0.source.flatMap(LinkTools.contentKey(of:)) == key }
+    }
+
+    /// 国内平台：下载先直连，不走代理
+    nonisolated static let domesticPlatforms: Set = ["B 站", "抖音", "快手", "微博", "喜马拉雅", "小宇宙", "视频号", "小红书"]
+
+    /// 平台按地区拦下载（出口 IP 不对）：换条网络路线常常就好
+    nonisolated static func looksLikeRegionBlock(_ errors: String) -> Bool {
+        let e = errors.lowercased()
+        return ["http error 567", "ip address is blocked", "geo restrict", "not available in your country", "not available from your location"]
+            .contains { e.contains($0) }
+    }
+
     nonisolated static func needsLogin(_ errors: String) -> Bool {
         let e = errors.lowercased()
         return ["sign in", "log in", "login", "cookies", "confirm you", "not a bot", "需要登录", "请登录", "registered users"].contains { e.contains($0) }
@@ -162,6 +198,9 @@ extension BeanStore {
             return "\(platform)要登录之后才给看这条内容。可以用别的工具把它下载成文件，再拖进豆仓的窗口。"
         }
         if e.contains("private") { return "这条内容是私密的，不能导入。" }
+        if looksLikeRegionBlock(errors) {
+            return "\(platform)不让从现在的网络下载这条。直连和走代理都试过了，可以换个代理节点，或者关掉代理再试。"
+        }
         if e.contains("429") || e.contains("too many requests") { return "\(platform)嫌请求太频繁，过几分钟再试。" }
         if e.contains("403") || e.contains("forbidden") { return "\(platform)拒绝了这次下载（403）。可能要登录，或者它最近改了接口，可以先升级 yt-dlp：brew upgrade yt-dlp" }
         if looksLikeNetworkTrouble(errors) {
@@ -259,6 +298,7 @@ struct LinkImportSheet: View {
                         if url != urls.first { Divider().padding(.leading, 34) }
                         let platform = LinkTools.platform(of: url)
                         let logged = loginTick >= 0 && BeanStore.isLoggedIn(platform)
+                        let old = store.importedRecording(for: url)
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 10) {
                                 Image(systemName: "play.fill").font(.caption).foregroundStyle(Theme.accent)
@@ -267,10 +307,18 @@ struct LinkImportSheet: View {
                                 Text(url.replacingOccurrences(of: #"^https?://(www\.)?"#, with: "", options: .regularExpression))
                                     .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                                 Spacer(minLength: 4)
-                                loginState(platform: platform, url: url, logged: logged)
+                                if old != nil {
+                                    Text("已导入过").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                                } else {
+                                    loginState(platform: platform, url: url, logged: logged)
+                                }
                             }
-                            // 要先登录的，说一句为什么、登录会打开哪里
-                            if mustLogin.contains(platform), !logged, let why = Self.why(platform) {
+                            if let old {
+                                Text("「\(String((old.title ?? old.origin ?? "这条").prefix(30)))」已经在素材里，这条会跳过。")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                    .padding(.leading, 34).fixedSize(horizontal: false, vertical: true)
+                            } else if mustLogin.contains(platform), !logged, let why = Self.why(platform) {
+                                // 要先登录的，说一句为什么、登录会打开哪里
                                 Text(why).font(.caption).foregroundStyle(.secondary)
                                     .padding(.leading, 34).fixedSize(horizontal: false, vertical: true)
                             }
@@ -288,12 +336,13 @@ struct LinkImportSheet: View {
             HStack {
                 Spacer()
                 Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(urls.count > 1 ? "导入 \(urls.count) 条" : "导入") {
+                let fresh = urls.filter { store.importedRecording(for: $0) == nil }.count
+                Button(fresh > 1 ? "导入 \(fresh) 条" : "导入") {
                     store.importLinks(text)
                     dismiss()
                 }
                 .buttonStyle(.glassProminent).keyboardShortcut(.defaultAction)
-                .disabled(urls.isEmpty)
+                .disabled(fresh == 0)
             }
         }
         .padding(24)

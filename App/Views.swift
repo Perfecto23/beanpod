@@ -2644,7 +2644,7 @@ final class ClipboardWatch {
         // 只认能识别出平台的视频链接；普通网页链接不打扰
         guard let url = LinkTools.urls(in: text).first(where: { LinkTools.platform(of: $0) != "网页视频" }),
               !asked.contains(url),
-              !store.recordings.contains(where: { $0.source == url }),
+              store.importedRecording(for: url) == nil,
               !store.linkJobs.contains(where: { $0.url == url }) else { return }
         asked.insert(url)
         offer = (url, LinkTools.platform(of: url))

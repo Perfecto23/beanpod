@@ -143,7 +143,7 @@ final class NotchPanel {
               let text = NSPasteboard.general.string(forType: .string), text.count < 2000,
               let url = LinkTools.urls(in: text).first(where: { LinkTools.platform(of: $0) != "网页视频" }),
               !dismissed.contains(url),
-              !store.recordings.contains(where: { $0.source == url }),
+              store.importedRecording(for: url) == nil,
               !store.linkJobs.contains(where: { $0.url == url }) else { clip = nil; return }
         // 分享口令里常带着【标题 - 作者 | 平台…】
         var title = "", author = ""

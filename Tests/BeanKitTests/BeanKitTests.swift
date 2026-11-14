@@ -247,6 +247,24 @@ func reply(_ type: UInt8, _ id: UInt8, status: UInt8 = 1, _ payload: [UInt8] = [
     #expect(LinkTools.urls(in: "https://x.com/a/status/1 https://x.com/a/status/1").count == 1)
 }
 
+@Test func sameWorkSameKey() {
+    func same(_ a: String, _ b: String) -> Bool { LinkTools.contentKey(of: a) == LinkTools.contentKey(of: b) }
+    // 同一条作品的不同写法
+    #expect(same("https://www.youtube.com/watch?v=jNQXAC9IVRw&t=3s", "https://youtu.be/jNQXAC9IVRw?si=abc"))
+    #expect(same("https://www.bilibili.com/video/BV1bK411W797?share_source=copy", "https://m.bilibili.com/video/BV1bK411W797/"))
+    #expect(same("https://www.douyin.com/video/7702753359678420051", "https://www.douyin.com/user/MS4w?modal_id=7702753359678420051"))
+    #expect(same("https://www.xiaohongshu.com/discovery/item/6ae7447d000000001200a782?xsec_token=A&xsec_source=pc_share",
+                 "https://www.xiaohongshu.com/explore/6ae7447d000000001200a782?xsec_token=B"))
+    #expect(same("https://weixin.qq.com/sph/Aa3i6ZlzOW", "https://weixin.qq.com/sph/Aa3i6ZlzOW?from=share"))
+    #expect(same("https://x.com/a/status/123", "https://twitter.com/b/status/123?s=20"))
+    #expect(same("https://example.org/v/1/?utm_source=x", "https://www.example.org/v/1"))
+    // 不同的作品
+    #expect(!same("https://www.bilibili.com/video/BV1bK411W797", "https://www.bilibili.com/video/BV1bK411W797?p=2"))
+    #expect(!same("https://www.youtube.com/watch?v=jNQXAC9IVRw", "https://www.youtube.com/watch?v=aaaaaaaaaaa"))
+    #expect(!same("https://example.org/watch?id=1", "https://example.org/watch?id=2"))
+    #expect(LinkTools.contentKey(of: "https://v.douyin.com/pZn7NrrWMr8/") == "v.douyin.com/pZn7NrrWMr8")
+}
+
 @Test func parsesSubtitlesAndMergesRollingLines() {
     let vtt = """
     WEBVTT
