@@ -120,6 +120,42 @@ def tolerate_js_collections(dl) -> None:
     dl.load_js_object = load
 
 
+def prefer_small_audio(dl) -> None:
+    """豆仓只要声音，不要原画：小红书视频笔记的 mediaV2 里另有纯音频流（audio_stream，AAC），挑最小的一路先下
+    （实测 16 分钟的笔记：原画 101 MB，纯音频 11.8 MB）；没有纯音频流时，挑带声音的码流里最小的一路；
+    social-dl 原来的顺序（原画在前）放到最后兜底。"""
+    original = dl.XiaohongshuExtractor._video_urls
+
+    def video_urls(self, note):
+        rest = original(self, note)
+        video = note.get("video") or {}
+        first = []
+        try:
+            v2 = video.get("mediaV2")
+            v2 = json.loads(v2) if isinstance(v2, str) else (v2 or {})
+            audio = [it for items in (v2.get("audio_stream") or {}).values()
+                     for it in (items if isinstance(items, list) else [items])
+                     if isinstance(it, dict) and it.get("master_url")]
+            for it in sorted(audio, key=lambda it: it.get("size") or float("inf")):
+                first += [it["master_url"], *(it.get("backup_urls") or [])]
+        except Exception:
+            first = []
+        if not first:
+            stream = ((video.get("media") or {}).get("stream") or {}).values()
+            voiced = [it for items in stream if isinstance(items, list) for it in items
+                      if isinstance(it, dict) and (it.get("audioBitrate") or it.get("audioCodec"))]
+            for it in sorted(voiced, key=lambda it: it.get("size") or float("inf")):
+                first += [*([it["masterUrl"]] if it.get("masterUrl") else []), *(it.get("backupUrls") or [])]
+        seen, out = set(), []
+        for u in [dl.ensure_https(x) for x in first] + list(rest):
+            if u and u not in seen:
+                seen.add(u)
+                out.append(u)
+        return out
+
+    dl.XiaohongshuExtractor._video_urls = video_urls
+
+
 def xhs_resolve(url: str, http) -> str:
     """小红书把海外访问的 xiaohongshu.com 302 到 rednote.com。跨站跳转时手写的 Cookie 头会被丢掉，
     所以先探一次跳转，直接用 rednote 的地址（social-dl 认 rednote.com）。"""
@@ -157,6 +193,7 @@ def main() -> int:
 
     use_system_dns()
     tolerate_js_collections(dl)
+    prefer_small_audio(dl)
 
     def no_ytdlp(*args, **kwargs):
         raise dl.FetchError("这一步交给豆仓自己的 yt-dlp")
