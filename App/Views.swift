@@ -335,7 +335,7 @@ struct Sidebar: View {
 
             VStack(spacing: 4) {
                 item("总览", "house.fill", 0) { nav.route = .dashboard }
-                item("录音", "waveform", 1, count: store.recordings.count) { nav.route = .all }
+                item("录音", "waveform", 1, count: store.ownRecordings.count) { nav.route = .all }
                 item("素材", "play.rectangle.fill", 3, count: store.recordings.filter(\.isMaterial).count) { nav.route = .materials }
                 item("知识库", "book.closed.fill", 2) { nav.route = .knowledge }
             }
@@ -702,13 +702,13 @@ struct RecordingsView: View {
     private var scoped: [Recording] {
         var base: [Recording]
         switch nav.route {
-        case .starred: base = store.recordings.filter(\.starred)
-        case .scene(let s): base = store.recordings.filter { $0.scene == s }
+        case .starred: base = store.ownRecordings.filter(\.starred)
+        case .scene(let s): base = store.ownRecordings.filter { $0.scene == s }
         case .materials:
             base = store.recordings.filter(\.isMaterial)
             if let platform { base = base.filter { Self.platform(of: $0) == platform } }
         case .project(let id): base = store.recordings.filter { $0.project == id }
-        default: base = store.recordings
+        default: base = store.ownRecordings
         }
         switch quick {
         case .all: break
@@ -993,7 +993,7 @@ struct RecordingsView: View {
         switch nav.route {
         // 素材库、项目空着时，右边已经有完整的说明，这里不再重复一遍
         case .materials, .project: ""
-        default: store.recordings.isEmpty ? "还没有录音" : "这个条件下没有录音"
+        default: store.ownRecordings.isEmpty ? "还没有录音" : "这个条件下没有录音"
         }
     }
 
@@ -1045,7 +1045,7 @@ struct RecordingsView: View {
             }
             Section("按场景看") {
                 Button("全部场景") { nav.route = .all }
-                ForEach(Scene.allCases.filter { s in store.recordings.contains { $0.scene == s } }) { s in
+                ForEach(Scene.allCases.filter { s in store.ownRecordings.contains { $0.scene == s } }) { s in
                     Button { nav.route = .scene(s) } label: { Label(s.name, systemImage: s.icon) }
                 }
             }

@@ -106,6 +106,8 @@ final class BeanStore {
 
     // 录音
     var recordings: [Recording] = []
+    /// 自己录的（不含从链接导入的素材）。录音页、总览只看这些；素材只在素材库里
+    var ownRecordings: [Recording] { recordings.filter { !$0.isMaterial } }
     var loadingList = false
     var pull: PullProgress?
     var queue: [UInt32] = []

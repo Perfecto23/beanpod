@@ -8,7 +8,7 @@ struct DashboardView: View {
 
     private var week: [Recording] {
         let from = Calendar.current.date(byAdding: .day, value: -7, to: .now)!
-        return store.recordings.filter { ($0.date ?? .distantPast) >= from }
+        return store.ownRecordings.filter { ($0.date ?? .distantPast) >= from }
     }
 
     private struct Day: Identifiable { let date: Date; let minutes: Double; var id: Date { date } }
@@ -17,14 +17,14 @@ struct DashboardView: View {
         let cal = Calendar.current, today = cal.startOfDay(for: .now)
         return (0..<14).reversed().map { back in
             let day = cal.date(byAdding: .day, value: -back, to: today)!
-            let total = store.recordings.filter { $0.date.map { cal.isDate($0, inSameDayAs: day) } ?? false }.reduce(0) { $0 + $1.duration }
+            let total = store.ownRecordings.filter { $0.date.map { cal.isDate($0, inSameDayAs: day) } ?? false }.reduce(0) { $0 + $1.duration }
             return Day(date: day, minutes: total / 60)
         }
     }
 
     private var sceneCounts: [(scene: Scene, count: Int, duration: TimeInterval)] {
         Scene.allCases.compactMap { s in
-            let items = store.recordings.filter { $0.scene == s }
+            let items = store.ownRecordings.filter { $0.scene == s }
             return items.isEmpty ? nil : (s, items.count, items.reduce(0) { $0 + $1.duration })
         }.sorted { $0.count > $1.count }
     }
@@ -42,11 +42,11 @@ struct DashboardView: View {
                 LinkModule()
 
                 // 数字和图表收在最下面，想看再展开：首页先回答「现在该做什么」
-                if !store.recordings.isEmpty {
+                if !store.ownRecordings.isEmpty {
                     Button { withAnimation(.spring(response: 0.35, dampingFraction: 1)) { showStats.toggle() } } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "chevron.right").font(.caption.weight(.semibold)).rotationEffect(.degrees(showStats ? 90 : 0))
-                            Text("\(store.recordings.count) 条录音 · \(hours(store.recordings.reduce(0) { $0 + $1.duration })) · 近 7 天 \(week.count) 条")
+                            Text("\(store.ownRecordings.count) 条录音 · \(hours(store.ownRecordings.reduce(0) { $0 + $1.duration })) · 近 7 天 \(week.count) 条")
                                 .monospacedDigit()
                         }
                         .font(.callout).foregroundStyle(.secondary).contentShape(Rectangle())
@@ -58,7 +58,7 @@ struct DashboardView: View {
                 if showStats {
                 HStack(alignment: .top, spacing: 12) {
                     Card(title: "近 14 天录音时长") {
-                        if store.recordings.isEmpty {
+                        if store.ownRecordings.isEmpty {
                             Text("有了录音之后，这里会显示每天录了多久。").font(.callout).foregroundStyle(.secondary).frame(height: 150)
                         } else {
                             Chart(days) { d in
@@ -155,10 +155,10 @@ struct DashboardView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("最近的录音").font(.system(size: 20, weight: .semibold, design: .rounded)).padding(.bottom, 2)
-                if store.recordings.isEmpty {
+                if store.ownRecordings.isEmpty {
                     Text("录一段试试，录完会出现在这里。").foregroundStyle(.secondary).padding(.vertical, 10)
                 }
-                ForEach(store.recordings.prefix(4)) { r in
+                ForEach(store.ownRecordings.prefix(4)) { r in
                     Button { nav.open(r.id) } label: {
                         HStack(spacing: 12) {
                             Image(systemName: (r.scene ?? .other).icon).font(.system(size: 16, weight: .medium)).foregroundStyle(Theme.accent)
