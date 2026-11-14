@@ -203,7 +203,6 @@ struct NotchView: View {
         let n = panel.notchSize
         if panel.expanded {
             var h = n.height + 84
-            if store.recState == .idle, store.link == .ready { h += 40 }     // 多一行「用录音豆录」
             if panel.clip != nil { h += 66 }
             if job != nil { h += 40 }
             return CGSize(width: max(360, n.width + 170), height: h)
@@ -269,23 +268,25 @@ struct NotchView: View {
     private var controls: some View {
         switch store.recState {
         case .idle:
-            VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
                 if store.link == .ready {
                     pill("用录音豆录", primary: true) { Circle().fill(.white).frame(width: 7, height: 7) } action: { store.startRecording() }
                 }
-                // 用这台 Mac 录：录什么声音直接点，点哪个就用哪个开始，并记住这次的选择（和菜单栏一样）
-                HStack(spacing: 6) {
-                    Text("Mac 录").font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize().padding(.trailing, 2)
-                    ForEach(BeanStore.MacSource.allCases) { source in
-                        let last = store.macSource == source
-                        pill(Self.short(source), primary: store.link != .ready && last) {
-                            Image(systemName: Self.icon(source)).font(.system(size: 10, weight: .semibold))
-                        } action: { store.startMacRecording(source) }
-                        .overlay(Capsule().strokeBorder(.white.opacity(last && store.link == .ready ? 0.35 : 0), lineWidth: 1))
-                        .help(source.hint)
+                pill("用 Mac 录", primary: store.link != .ready) {
+                    Image(systemName: "laptopcomputer").font(.system(size: 10, weight: .semibold))
+                } action: { store.startMacRecording(withSystem ? .both : .mic) }
+                // 用 Mac 录时要不要连电脑里的声音一起录（线上会议、视频）；勾选记住
+                Button { store.macSource = withSystem ? .mic : .both } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: withSystem ? "checkmark.square.fill" : "square")
+                            .font(.system(size: 13)).foregroundStyle(withSystem ? rose : .white.opacity(0.45))
+                        Text("含电脑声音").font(.system(size: 12)).foregroundStyle(.white.opacity(0.7)).fixedSize()
                     }
-                    Spacer(minLength: 0)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .help("勾上：麦克风和电脑里播放的声音一起录，适合线上会议、语音通话")
+                Spacer(minLength: 0)
             }
         case .recording, .paused:
             let paused = store.recState == .paused
@@ -306,13 +307,8 @@ struct NotchView: View {
         }
     }
 
-    static func short(_ s: BeanStore.MacSource) -> String {
-        switch s { case .mic: "麦克风"; case .system: "电脑声音"; case .both: "都录" }
-    }
-
-    static func icon(_ s: BeanStore.MacSource) -> String {
-        switch s { case .mic: "mic.fill"; case .system: "speaker.wave.2.fill"; case .both: "person.2.wave.2.fill" }
-    }
+    /// 用 Mac 录时连电脑声音一起录（只录电脑声音的也算勾上）
+    private var withSystem: Bool { store.macSource != .mic }
 
     private func pill<Icon: View>(_ title: String, primary: Bool, width: CGFloat? = nil,
                                   @ViewBuilder icon: () -> Icon, action: @escaping () -> Void) -> some View {
