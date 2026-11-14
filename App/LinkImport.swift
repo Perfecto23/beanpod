@@ -1,5 +1,6 @@
 import AppKit
 import BeanKit
+import Network
 import SwiftUI
 import WebKit
 
@@ -36,6 +37,11 @@ extension BeanStore {
         if platform == "抖音" {
             if await importDouyin(id, url) { return }
             addLog("抖音页面方式没拿到，改用 yt-dlp 再试")
+        }
+        // 视频号：yt-dlp 不认，走自己的一条路（ChannelsImport.swift）
+        if platform == "视频号" {
+            await importChannels(id, url)
+            return
         }
 
         guard let tool = await Self.findTool("yt-dlp") else {
@@ -108,7 +114,7 @@ extension BeanStore {
     }
 
     /// 声音拿到之后：放进录音库，标好来源，交给整理。
-    private func finishLinkImport(_ id: UUID, audio: URL, title: String, author: String, page: String, platform: String, cues: [SubtitleParser.Cue]) {
+    func finishLinkImport(_ id: UUID, audio: URL, title: String, author: String, page: String, platform: String, cues: [SubtitleParser.Cue]) {
         if let k = linkJobs.firstIndex(where: { $0.id == id }) { linkJobs[k].title = title; linkJobs[k].progress = 1 }
         let before = Set(recordings.map(\.id))
         importFile(audio, consume: true, processNow: false)
@@ -255,6 +261,10 @@ struct LinkImportSheet: View {
             } else if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Label("这段文字里没有找到链接。", systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.secondary)
             }
+            if urls.contains(where: { LinkTools.platform(of: $0) == "视频号" }), !FileManager.default.fileExists(atPath: BeanStore.cookieFile("视频号").path) {
+                Label("视频号第一次导入时，要在弹出的窗口里用微信扫码登录腾讯元宝，只要登一次。", systemImage: "qrcode")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
             Text("只导入你有权保存的公开内容。下载下来的只有声音，用来转成文字；要登录才能看的内容导入不了。")
                 .font(.callout).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
             HStack {
@@ -302,12 +312,14 @@ extension BeanStore {
         case "微博": ("https://passport.weibo.com/sso/signin", ["weibo.com", "weibo.cn"])
         case "X": ("https://x.com/i/flow/login", ["x.com", "twitter.com"])
         case "Instagram": ("https://www.instagram.com/accounts/login/", ["instagram.com"])
+        // 视频号借腾讯元宝解析：登录的是元宝（微信扫码）
+        case "视频号": ("https://yuanbao.tencent.com/", ["tencent.com"])
         default: nil
         }
     }
 
     var loggedInPlatforms: [String] {
-        ["B 站", "抖音", "小红书", "YouTube", "TikTok", "快手", "微博", "X", "Instagram"]
+        ["B 站", "抖音", "小红书", "YouTube", "TikTok", "快手", "微博", "X", "Instagram", "视频号"]
             .filter { FileManager.default.fileExists(atPath: Self.cookieFile($0).path) }
     }
 
@@ -329,6 +341,8 @@ extension BeanStore {
         let all = await WKWebsiteDataStore.default().httpCookieStore.allCookies()
         let mine = all.filter { c in domains.contains { c.domain == $0 || c.domain.hasSuffix("." + $0) } }
         guard !mine.isEmpty else { return 0 }
+        // 元宝没扫码时也会种几条访客 cookie，要看到登录票据才算登好了
+        if platform == "视频号", !mine.contains(where: { $0.name == "hy_token" && !$0.value.isEmpty }) { return 0 }
         var lines = ["# Netscape HTTP Cookie File", "# 豆仓的登录窗口导出，只用于下载你自己能看的内容"]
         for c in mine {
             let domain = c.domain.hasPrefix(".") ? c.domain : "." + c.domain
@@ -357,8 +371,10 @@ struct LinkLoginSheet: View {
             HStack(spacing: 12) {
                 Image(systemName: "person.badge.key").font(.title2).foregroundStyle(Theme.accent)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("在\(request.platform)登录一下").font(.headline)
-                    Text(note ?? "这条内容要登录之后才给看。在下面扫码或输入账号登录，登好了点右边的按钮，豆仓会接着导入。")
+                    Text(request.platform == "视频号" ? "用微信扫码登录腾讯元宝" : "在\(request.platform)登录一下").font(.headline)
+                    Text(note ?? (request.platform == "视频号"
+                        ? "\(request.hint)视频号网页版不给下载地址，豆仓借腾讯元宝的视频号解析拿视频。在下面点「登录」用微信扫码，登好了点右边的按钮，豆仓会接着导入。只要登一次。"
+                        : "\(request.hint)这条内容要登录之后才给看。在下面扫码或输入账号登录，登好了点右边的按钮，豆仓会接着导入。"))
                         .font(.callout).foregroundStyle(note == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.accent))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -381,7 +397,8 @@ struct LinkLoginSheet: View {
             }
             .padding(16)
             Divider()
-            LoginWebView(url: URL(string: BeanStore.loginPage(request.platform)?.url ?? "about:blank")!)
+            LoginWebView(url: URL(string: BeanStore.loginPage(request.platform)?.url ?? "about:blank")!,
+                         direct: request.platform == "视频号" ? LoginProxy.tencent : [])
             Divider()
             Text("登录状态只存在这台 Mac 上，用来下载你自己能看的内容。不想要了可以在设置的「连接」里清掉。")
                 .font(.caption).foregroundStyle(.tertiary).padding(.vertical, 8)
@@ -392,10 +409,13 @@ struct LinkLoginSheet: View {
 
 private struct LoginWebView: NSViewRepresentable {
     let url: URL
+    /// 这些域名不走系统代理（只在这个窗口开着的时候）
+    var direct: [String] = []
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
+        if !direct.isEmpty { LoginProxy.bypass(direct) }
         let web = WKWebView(frame: .zero, configuration: config)
         // 用普通 Safari 的身份，不然有的平台会把登录页换成「请用 App 打开」
         web.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
@@ -404,6 +424,34 @@ private struct LoginWebView: NSViewRepresentable {
     }
 
     func updateNSView(_ web: WKWebView, context: Context) {}
+
+    static func dismantleNSView(_ web: WKWebView, coordinator: ()) {
+        LoginProxy.reset()
+    }
+}
+
+/// 开着代理软件的机器上，微信的几个站（open.weixin.qq.com 的扫码二维码、channels.weixin.qq.com）走代理会在握手时被断开，
+/// 直连是好的。视频号的登录窗口开着时，让登录窗口用的那份网页数据对腾讯的域名直连，别的照旧走系统代理；关窗就还原。
+/// 不改系统和代理软件的设置。
+@MainActor
+enum LoginProxy {
+    static let tencent = ["qq.com", "tencent.com", "qlogo.cn", "qpic.cn", "gtimg.cn", "gtimg.com", "idqqimg.com"]
+
+    static func bypass(_ domains: [String]) {
+        // 读系统当前的代理；没开代理就本来是直连，什么都不用做
+        guard let settings = CFNetworkCopySystemProxySettings()?.takeRetainedValue() as? [String: Any] else { return }
+        let (hostKey, portKey) = (settings["HTTPSEnable"] as? Int) == 1 ? ("HTTPSProxy", "HTTPSPort")
+            : (settings["HTTPEnable"] as? Int) == 1 ? ("HTTPProxy", "HTTPPort") : ("", "")
+        guard let host = settings[hostKey] as? String, !host.isEmpty,
+              let raw = settings[portKey] as? Int, let port = NWEndpoint.Port(rawValue: UInt16(clamping: raw)) else { return }
+        var proxy = ProxyConfiguration(httpCONNECTProxy: .hostPort(host: NWEndpoint.Host(host), port: port))
+        proxy.excludedDomains = domains + ((settings["ExceptionsList"] as? [String]) ?? []).filter { !$0.contains("/") && !$0.hasPrefix("<") }
+        WKWebsiteDataStore.default().proxyConfigurations = [proxy]
+    }
+
+    static func reset() {
+        WKWebsiteDataStore.default().proxyConfigurations = []
+    }
 }
 
 // MARK: - 抖音：用看不见的网页窗口拿视频信息
@@ -438,17 +486,22 @@ extension BeanStore {
         guard let media else { addLog("抖音的音视频地址都没下下来"); return false }
         if let k = linkJobs.firstIndex(where: { $0.id == id }) { linkJobs[k].progress = 0.8 }
 
-        // 只留声音：抽成 m4a；没有 ffmpeg 就直接交给导入
-        var audio = media
-        if let ffmpeg = await Self.findTool("ffmpeg") {
-            let out = work.appendingPathComponent("media.m4a")
-            let r = await Self.runTool(ffmpeg, ["-v", "error", "-y", "-i", media.path, "-vn", "-c:a", "aac", "-b:a", "128k", out.path]) { _ in }
-            if r.status == 0, FileManager.default.fileExists(atPath: out.path) { audio = out }
-            else { addLog("抽声音失败：\(r.errors.suffix(200))") }
-        }
+        let audio = await audioTrack(of: media, in: work) ?? media
         finishLinkImport(id, audio: audio, title: found.title, author: found.author,
                          page: "https://www.douyin.com/video/\(found.awemeId)", platform: "抖音", cues: [])
         return true
+    }
+}
+
+extension BeanStore {
+    /// 只留声音：把下下来的视频抽成 m4a。没有 ffmpeg 就原样交给导入；ffmpeg 读不了这个文件返回 nil。
+    func audioTrack(of media: URL, in work: URL) async -> URL? {
+        guard let ffmpeg = await Self.findTool("ffmpeg") else { return media }
+        let out = work.appendingPathComponent("media.m4a")
+        let r = await Self.runTool(ffmpeg, ["-v", "error", "-y", "-i", media.path, "-vn", "-c:a", "aac", "-b:a", "128k", out.path]) { _ in }
+        if r.status == 0, FileManager.default.fileExists(atPath: out.path) { return out }
+        addLog("抽声音失败：\(r.errors.suffix(200))")
+        return nil
     }
 }
 

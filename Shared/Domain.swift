@@ -245,6 +245,8 @@ nonisolated struct LinkLoginRequest: Identifiable, Equatable {
     let id = UUID()
     var platform: String
     var url: String
+    /// 登录窗口顶上多说一句（比如已经认出是哪条作品）
+    var hint: String = ""
 }
 
 /// 一条正在从链接导入的内容，给界面显示进度用。

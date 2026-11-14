@@ -2331,7 +2331,13 @@ struct DeviceView: View {
         .background {
             ZStack {
                 Circle().stroke(Theme.accent.opacity(0.15), lineWidth: 7)
-                Circle().trim(from: 0, to: min(1, fraction)).stroke(warn ? Theme.rec : Theme.accent, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                // 和「开始录音」按钮同一套渐变：从浅玫瑰沿着圆弧走到深玫红；电量低时换成琥珀到红。
+                // 渐变只铺在画出来的那一段弧上，起点往回让 4°，免得起头的圆角吃到末端的深色
+                let arc = min(1, fraction)
+                Circle().trim(from: 0, to: arc)
+                    .stroke(AngularGradient(colors: warn ? [Theme.amber, Theme.rec] : [Theme.roseLight, Theme.rec, Theme.recDeep],
+                                            center: .center, startAngle: .degrees(-4), endAngle: .degrees(max(8, 360 * arc - 4))),
+                            style: StrokeStyle(lineWidth: 7, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .animation(.spring(response: 0.8, dampingFraction: 1), value: fraction)
             }

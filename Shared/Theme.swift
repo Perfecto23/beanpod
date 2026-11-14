@@ -8,6 +8,8 @@ nonisolated enum Theme {
     static let amber = dynamic(light: (0.851, 0.467, 0.024), dark: (0.984, 0.749, 0.141))
     static let rec = Color(red: 0.957, green: 0.247, blue: 0.369)
     static let recDeep = Color(red: 0.882, green: 0.114, blue: 0.282)
+    /// 渐变的浅头（rose-300），只和 rec、recDeep 搭着用
+    static let roseLight = Color(red: 0.992, green: 0.643, blue: 0.686)
 
     /// 暖灰的一组（和设计稿的 warm-50…950 对应），深色时自动换成对应的暗色。
     static let warm50 = dynamic(light: (0.988, 0.984, 0.980), dark: (0.165, 0.149, 0.137))
