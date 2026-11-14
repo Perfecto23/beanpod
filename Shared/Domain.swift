@@ -247,6 +247,8 @@ nonisolated struct LinkLoginRequest: Identifiable, Equatable {
     var url: String
     /// 登录窗口顶上多说一句（比如已经认出是哪条作品）
     var hint: String = ""
+    /// 登好了就接着导入这条；从导入窗口里先点「登录」时为 false，登好只回到导入窗口
+    var continueImport = true
 }
 
 /// 一条正在从链接导入的内容，给界面显示进度用。

@@ -26,6 +26,100 @@ def say(event: dict) -> None:
     sys.stdout.flush()
 
 
+EXTRA_HOSTS = ("www.xiaohongshu.com", "www.rednote.com", "edith.xiaohongshu.com", "xhslink.com",
+               "www.douyin.com", "www.iesdouyin.com", "v.douyin.com", "www.kuaishou.com", "v.kuaishou.com")
+
+
+def use_system_dns() -> None:
+    """curl_cffi 自带一套 DNS 解析，实测在用户这台 Mac 上解 www.xiaohongshu.com 只拿到空答案、转去连不通的地址
+    （「Failed to connect … after 26 ms」），系统的解析是好的。每次请求前用系统解析出 IPv4 地址，
+    通过 CURLOPT_RESOLVE 告诉 curl；跳转常去的几个站也一起放进去。dl.py 本身不用改。"""
+    import socket
+    from urllib.parse import urlparse
+
+    from curl_cffi import requests as cr
+    from curl_cffi.const import CurlOpt
+
+    cache: dict = {}
+
+    def entry(host: str, port: int):
+        key = (host, port)
+        if key not in cache:
+            try:
+                ips = sorted({a[4][0] for a in socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)})
+            except OSError:
+                ips = []
+            cache[key] = f"{host}:{port}:{','.join(ips)}".encode() if ips else None
+        return cache[key]
+
+    # dl.py 用的是 curl_cffi.requests.get/post，它们都走模块里的 request()，这里换掉它
+    original = cr.request
+
+    def request(method, url, *args, **kwargs):
+        try:
+            u = urlparse(url)
+            port = u.port or (443 if u.scheme == "https" else 80)
+            hosts = {u.hostname or "", *EXTRA_HOSTS} if port == 443 else {u.hostname or ""}
+            pins = [e for e in (entry(h, port) for h in hosts if h) if e]
+            if pins:
+                opts = dict(kwargs.get("curl_options") or {})
+                opts[CurlOpt.RESOLVE] = pins
+                kwargs["curl_options"] = opts
+        except Exception:
+            pass
+        return original(method, url, *args, **kwargs)
+
+    cr.request = request
+
+
+def strip_js_collections(text: str) -> str:
+    """把 new Map([...]) / new Set([...]) 换成里面的数组；空的 Map 换成 {}。跳过字符串里的括号。"""
+    import re
+
+    pattern = re.compile(r"new (Map|Set)\(")
+    out, i = [], 0
+    while True:
+        m = pattern.search(text, i)
+        if not m:
+            out.append(text[i:])
+            break
+        out.append(text[i:m.start()])
+        j, depth, quote, escaped = m.end(), 1, "", False
+        while j < len(text) and depth:
+            c = text[j]
+            if quote:
+                if escaped:
+                    escaped = False
+                elif c == "\\":
+                    escaped = True
+                elif c == quote:
+                    quote = ""
+            elif c in "\"'":
+                quote = c
+            elif c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+            j += 1
+        inner = text[m.end():j - 1].strip()
+        out.append("{}" if m.group(1) == "Map" and inner in ("", "[]") else (inner or "[]"))
+        i = j
+    return "".join(out)
+
+
+def tolerate_js_collections(dl) -> None:
+    """小红书页面数据（window.__INITIAL_STATE__）里新出现了 JS 写法 new Map([])，不是 JSON，
+    social-dl 的 load_js_object 会整段读不出来、报「未能解析小红书笔记」。读之前先换掉。dl.py 本身不用改。"""
+    original = dl.load_js_object
+
+    def load(text, marker):
+        if text and ("new Map(" in text or "new Set(" in text):
+            text = strip_js_collections(text)
+        return original(text, marker)
+
+    dl.load_js_object = load
+
+
 def xhs_resolve(url: str, http) -> str:
     """小红书把海外访问的 xiaohongshu.com 302 到 rednote.com。跨站跳转时手写的 Cookie 头会被丢掉，
     所以先探一次跳转，直接用 rednote 的地址（social-dl 认 rednote.com）。"""
@@ -60,6 +154,9 @@ def main() -> int:
     url, out = sys.argv[1], Path(sys.argv[2])
 
     import dl
+
+    use_system_dns()
+    tolerate_js_collections(dl)
 
     def no_ytdlp(*args, **kwargs):
         raise dl.FetchError("这一步交给豆仓自己的 yt-dlp")

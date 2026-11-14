@@ -226,6 +226,12 @@ struct LinkImportSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
     @FocusState private var typing: Bool
+    /// 要先登录的平台（导入前就看得出来的）
+    @State private var mustLogin: Set<String> = []
+    /// 从这里打开的登录窗口
+    @State private var login: LinkLoginRequest?
+    /// 登录窗口关上后加一，让「已登录」重新看一遍
+    @State private var loginTick = 0
 
     private var urls: [String] { LinkTools.urls(in: text) }
 
@@ -250,14 +256,24 @@ struct LinkImportSheet: View {
             if !urls.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(urls, id: \.self) { url in
-                        HStack(spacing: 10) {
-                            Image(systemName: "play.fill").font(.caption).foregroundStyle(Theme.accent)
-                                .frame(width: 24, height: 24).background(Theme.accent.opacity(0.14), in: .rect(cornerRadius: 7))
-                            Text(LinkTools.platform(of: url)).fontWeight(.medium)
-                            Text(url.replacingOccurrences(of: #"^https?://(www\.)?"#, with: "", options: .regularExpression))
-                                .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                            Spacer(minLength: 4)
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.ok)
+                        if url != urls.first { Divider().padding(.leading, 34) }
+                        let platform = LinkTools.platform(of: url)
+                        let logged = loginTick >= 0 && BeanStore.isLoggedIn(platform)
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "play.fill").font(.caption).foregroundStyle(Theme.accent)
+                                    .frame(width: 24, height: 24).background(Theme.accent.opacity(0.14), in: .rect(cornerRadius: 7))
+                                Text(platform).fontWeight(.medium)
+                                Text(url.replacingOccurrences(of: #"^https?://(www\.)?"#, with: "", options: .regularExpression))
+                                    .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                                Spacer(minLength: 4)
+                                loginState(platform: platform, url: url, logged: logged)
+                            }
+                            // 要先登录的，说一句为什么、登录会打开哪里
+                            if mustLogin.contains(platform), !logged, let why = Self.why(platform) {
+                                Text(why).font(.caption).foregroundStyle(.secondary)
+                                    .padding(.leading, 34).fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                         .font(.callout)
                     }
@@ -267,11 +283,7 @@ struct LinkImportSheet: View {
             } else if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Label("这段文字里没有找到链接。", systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.secondary)
             }
-            if urls.contains(where: { LinkTools.platform(of: $0) == "视频号" }), !FileManager.default.fileExists(atPath: BeanStore.cookieFile("视频号").path) {
-                Label("视频号第一次导入时，要在弹出的窗口里用微信扫码登录腾讯元宝，只要登一次。", systemImage: "qrcode")
-                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            Text("只导入你有权保存的公开内容。下载下来的只有声音，用来转成文字；要登录才能看的内容导入不了。")
+            Text("只导入你有权保存的公开内容。下载下来的只有声音，用来转成文字。")
                 .font(.callout).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
@@ -290,6 +302,46 @@ struct LinkImportSheet: View {
             // 剪贴板里正好是链接，就先替人贴上
             if let clip = NSPasteboard.general.string(forType: .string), clip.count < 2000, !LinkTools.urls(in: clip).isEmpty { text = clip }
             typing = true
+        }
+        // 贴进来的平台里哪些要先登录（小红书要探一下这台 Mac 是不是被当成海外访问）
+        .task(id: Set(urls.map(LinkTools.platform(of:)))) {
+            for platform in Set(urls.map(LinkTools.platform(of:))) where await LoginNeeds.required(platform) {
+                mustLogin.insert(platform)
+            }
+        }
+        .sheet(item: $login, onDismiss: { loginTick += 1 }) { request in LinkLoginSheet(request: request) }
+    }
+
+    /// 行尾：登录过的写「已登录」；要先登录还没登的给「登录」按钮；别的打个勾表示认出来了
+    @ViewBuilder
+    private func loginState(platform: String, url: String, logged: Bool) -> some View {
+        if logged {
+            HStack(spacing: 5) {
+                Text("已登录").font(.caption.weight(.medium))
+                Image(systemName: "checkmark.circle.fill")
+            }
+            .foregroundStyle(Theme.ok)
+        } else if mustLogin.contains(platform) {
+            HStack(spacing: 6) {
+                Text("要先登录").font(.caption2.weight(.semibold)).foregroundStyle(Theme.accent)
+                    .padding(.horizontal, 6).padding(.vertical, 3).background(Theme.accent.opacity(0.1), in: .rect(cornerRadius: 5))
+                Button("登录") { login = LinkLoginRequest(platform: platform, url: url, continueImport: false) }
+                    .buttonStyle(.plain).font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                    .padding(.horizontal, 9).padding(.vertical, 3)
+                    .background(Theme.surface, in: .rect(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.accent.opacity(0.75), lineWidth: 1))
+                    .contentShape(.rect(cornerRadius: 6))
+            }
+        } else {
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.ok)
+        }
+    }
+
+    private static func why(_ platform: String) -> String? {
+        switch platform {
+        case "小红书": "这台 Mac 走的是海外网络，小红书要登录才给看笔记。会直接打开这条笔记，在页面上登录。"
+        case "视频号": "视频号借腾讯元宝解析，要用微信扫码登录元宝，只要登一次。"
+        default: nil
         }
     }
 }
@@ -323,6 +375,17 @@ extension BeanStore {
         case "视频号": ("https://yuanbao.tencent.com/", ["tencent.com"])
         default: nil
         }
+    }
+
+    /// 登录窗口打开哪一页：小红书、抖音直接打开要导入的这一条——在作品页上登录，登好就看到这条内容；
+    /// 别的平台打开它的登录页（视频号登录的是腾讯元宝）。
+    nonisolated static func loginURL(platform: String, link: String) -> URL {
+        if ["小红书", "抖音"].contains(platform), let url = URL(string: link), url.host != nil { return url }
+        return URL(string: loginPage(platform)?.url ?? "about:blank")!
+    }
+
+    nonisolated static func isLoggedIn(_ platform: String) -> Bool {
+        FileManager.default.fileExists(atPath: cookieFile(platform).path)
     }
 
     var loggedInPlatforms: [String] {
@@ -373,6 +436,9 @@ struct LinkLoginSheet: View {
     @State private var saving = false
     @State private var note: String?
 
+    private var then: String { request.continueImport ? "，豆仓会接着导入" : "回到导入" }
+    private var onItsPage: Bool { BeanStore.loginURL(platform: request.platform, link: request.url).absoluteString == request.url }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
@@ -380,8 +446,8 @@ struct LinkLoginSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(request.platform == "视频号" ? "用微信扫码登录腾讯元宝" : "在\(request.platform)登录一下").font(.headline)
                     Text(note ?? (request.platform == "视频号"
-                        ? "\(request.hint)视频号网页版不给下载地址，豆仓借腾讯元宝的视频号解析拿视频。在下面点「登录」用微信扫码，登好了点右边的按钮，豆仓会接着导入。只要登一次。"
-                        : "\(request.hint)这条内容要登录之后才给看。在下面扫码或输入账号登录，登好了点右边的按钮，豆仓会接着导入。"))
+                        ? "\(request.hint)视频号网页版不给下载地址，豆仓借腾讯元宝的视频号解析拿视频。在下面点「登录」用微信扫码，登好了点右边的按钮\(then)。只要登一次。"
+                        : "\(request.hint)\(onItsPage ? "下面打开的就是这条\(request.platform == "小红书" ? "笔记" : "作品")，在页面上扫码或输入账号登录" : "在下面扫码或输入账号登录")，登好了点右边的按钮\(then)。"))
                         .font(.callout).foregroundStyle(note == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.accent))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -396,15 +462,15 @@ struct LinkLoginSheet: View {
                             note = "还没有看到登录状态。确认登录成功了再点一次。"
                         } else {
                             dismiss()
-                            store.importLinks(request.url)
+                            if request.continueImport { store.importLinks(request.url) }
                         }
                     }
-                } label: { Text(saving ? "正在保存…" : "登录好了，接着导入") }
+                } label: { Text(saving ? "正在保存…" : request.continueImport ? "登录好了，接着导入" : "登录好了") }
                 .buttonStyle(.glassProminent).disabled(saving)
             }
             .padding(16)
             Divider()
-            LoginWebView(url: URL(string: BeanStore.loginPage(request.platform)?.url ?? "about:blank")!,
+            LoginWebView(url: BeanStore.loginURL(platform: request.platform, link: request.url),
                          direct: request.platform == "视频号" ? LoginProxy.tencent : [])
             Divider()
             Text("登录状态只存在这台 Mac 上，用来下载你自己能看的内容。不想要了可以在设置的「连接」里清掉。")
@@ -434,6 +500,39 @@ private struct LoginWebView: NSViewRepresentable {
 
     static func dismantleNSView(_ web: WKWebView, coordinator: ()) {
         LoginProxy.reset()
+    }
+}
+
+/// 导入前就看得出来哪些链接要先登录：
+/// 视频号一定要（借腾讯元宝解析）；小红书在这台 Mac 被当成海外访问时要（xiaohongshu.com 会跳到 rednote.com，那边要登录才给看笔记）。
+@MainActor
+enum LoginNeeds {
+    private static var xhsOverseas: Bool?
+
+    static func required(_ platform: String) async -> Bool {
+        switch platform {
+        case "视频号": return true
+        case "小红书":
+            if let xhsOverseas { return xhsOverseas }
+            guard let to = await redirectTarget(URL(string: "https://www.xiaohongshu.com/explore")!) else { return false }   // 没探成功不记，下次再探
+            xhsOverseas = to.contains("rednote.")
+            return xhsOverseas ?? false
+        default: return false
+        }
+    }
+
+    /// 只问一次、不跟跳转，看它往哪跳。没跳返回空字符串，连不上返回 nil。
+    nonisolated static func redirectTarget(_ url: URL) async -> String? {
+        var request = URLRequest(url: url, timeoutInterval: 10)
+        request.setValue(ChannelsAPI.agent, forHTTPHeaderField: "User-Agent")
+        guard let (_, response) = try? await URLSession.shared.data(for: request, delegate: NoRedirect()),
+              let http = response as? HTTPURLResponse else { return nil }
+        return http.value(forHTTPHeaderField: "Location") ?? ""
+    }
+
+    private nonisolated final class NoRedirect: NSObject, URLSessionTaskDelegate, Sendable {
+        func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                        newRequest request: URLRequest) async -> URLRequest? { nil }
     }
 }
 
