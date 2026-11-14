@@ -20,6 +20,9 @@ final class NotchPanel {
     var notchSize = CGSize(width: 0, height: 24)
     /// 菜单「录音」里可以关掉
     var visible = UserDefaults.standard.object(forKey: "notchPanel") as? Bool ?? true
+    /// 正在播的动画（开始录音时探头、录完打印胶片），和开始的时刻
+    var show: Show?
+    var showStart = Date.distantPast
 
     struct Clip: Equatable {
         var url: String
@@ -36,6 +39,13 @@ final class NotchPanel {
     @ObservationIgnored private var dismissed: Set<String> = []
     @ObservationIgnored private var clickMonitor: Any?
     @ObservationIgnored private var localMonitor: Any?
+    @ObservationIgnored private var showEnd: Task<Void, Never>?
+    @ObservationIgnored private var sampler: Task<Void, Never>?
+    /// 这次录音一路记下来的音量，录完印在胶片上
+    @ObservationIgnored private var wave: [Float] = []
+    @ObservationIgnored private var lastElapsed: TimeInterval = 0
+    /// 动画开始和结束的那一下窗口直接换大小，不走 0.3 秒的过渡（画面自己在动）
+    @ObservationIgnored private var instantResize = false
 
     func attach(_ store: BeanStore) {
         guard window == nil else { return }
@@ -103,6 +113,8 @@ final class NotchPanel {
     /// 窗口顶边贴着屏幕顶边、水平居中。
     func resize(_ size: CGSize, animated: Bool = true) {
         lastSize = size
+        let animated = animated && !instantResize
+        instantResize = false
         guard let window, let screen else { return }
         let f = screen.frame
         let frame = NSRect(x: (f.midX - size.width / 2).rounded(), y: f.maxY - size.height, width: size.width, height: size.height)
@@ -121,6 +133,7 @@ final class NotchPanel {
     func hover(_ inside: Bool) {
         collapseTask?.cancel()
         if inside {
+            guard show == nil else { return }       // 动画播着的时候不展开
             if !expanded { refreshClip(); expanded = true }
         } else if !pinned {
             // 稍等一下再收：鼠标从刘海滑进面板的那一瞬间会先出后进
@@ -154,6 +167,62 @@ final class NotchPanel {
             if parts.count > 1 { author = parts[1].trimmingCharacters(in: .whitespaces) }
         }
         clip = Clip(url: url, platform: LinkTools.platform(of: url), title: title, author: author)
+    }
+
+    // MARK: 动画
+
+    /// 录音开始、结束时由面板调用
+    func recStateChanged(from old: BeanStore.RecState, to new: BeanStore.RecState) {
+        if old == .idle, new != .idle {
+            startSampling()
+            play(.peek)
+        } else if old != .idle, new == .idle {
+            sampler?.cancel()
+            play(.printing(Ticket(title: "录音 · " + NotchView.clock(lastElapsed), date: .now, wave: wave)))
+        }
+    }
+
+    /// 菜单「小豆」里看看效果
+    func preview(peek: Bool) {
+        let demo: [Float] = (0..<60).map { i -> Float in
+            let x = Double(i)
+            let v: Double = abs(sin(x * 0.37) * sin(x * 0.11 + 1))
+            return Float(0.2 + 0.8 * v)
+        }
+        play(peek ? .peek : .printing(Ticket(title: "录音 · 00:48", date: .now, wave: demo)))
+    }
+
+    func play(_ s: Show) {
+        guard visible, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        collapseTask?.cancel()
+        expanded = false
+        pinned = false
+        instantResize = true
+        show = s
+        showStart = .now
+        if case .printing = s { PrintSound.shared.play() }
+        showEnd?.cancel()
+        guard Self.freezeAt == nil else { return }      // 定格调试时一直停在那一帧
+        showEnd = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(s.duration))
+            guard let self, !Task.isCancelled, self.show == s else { return }
+            self.instantResize = true
+            self.show = nil
+        }
+    }
+
+    /// 录音时每 0.4 秒记一下音量和时长：结束那一刻录音状态已经清零，读不到了
+    private func startSampling() {
+        wave = []
+        lastElapsed = 0
+        sampler?.cancel()
+        sampler = Task { [weak self] in
+            while !Task.isCancelled, let self, let store = self.store, store.recState != .idle {
+                if store.recState == .recording { self.wave.append(store.liveLevels.suffix(6).max() ?? 0) }
+                self.lastElapsed = store.elapsed(at: .now)
+                try? await Task.sleep(for: .milliseconds(400))
+            }
+        }
     }
 
     func importClip() {
@@ -201,6 +270,11 @@ struct NotchView: View {
     /// 各个样子要多大的窗口
     private var target: CGSize {
         let n = panel.notchSize
+        switch panel.show {
+        case .peek: return CGSize(width: n.width + 2 * 92, height: n.height + 100)
+        case .printing: return CGSize(width: max(n.width, 150) + 230, height: n.height + 300)
+        case nil: break
+        }
         if panel.expanded {
             var h = n.height + 84
             if panel.clip != nil { h += 66 }
@@ -213,6 +287,18 @@ struct NotchView: View {
 
     var body: some View {
         let size = target
+        Group {
+            if let show = panel.show {
+                NotchShowView(show: show, start: panel.showStart, notch: panel.notchSize, size: size, ears: AnyView(ears))
+            } else {
+                panelBody(size)
+            }
+        }
+        .onChange(of: size, initial: true) { _, s in panel.resize(s) }
+        .onChange(of: store.recState) { old, new in panel.recStateChanged(from: old, to: new) }
+    }
+
+    private func panelBody(_ size: CGSize) -> some View {
         ZStack(alignment: .top) {
             UnevenRoundedRectangle(bottomLeadingRadius: panel.expanded ? 24 : 10, bottomTrailingRadius: panel.expanded ? 24 : 10)
                 .fill(.black)
@@ -231,7 +317,6 @@ struct NotchView: View {
         .clipped()
         .environment(\.colorScheme, .dark)
         .animation(.spring(response: 0.3, dampingFraction: 1), value: panel.expanded)
-        .onChange(of: size, initial: true) { _, s in panel.resize(s) }
     }
 
     // MARK: 展开

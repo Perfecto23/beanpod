@@ -130,6 +130,9 @@ struct BeanPodApp: App {
                 Button("看看：转写中") { store.mascotPreview = (.writing, .mid) }
                 Button("看看：整理中") { store.mascotPreview = (.thinking, .mid) }
                 Button("看看：开心") { store.mascotPreview = (.happy, .mid) }
+                Divider()
+                Button("看看：刘海探头（开始录音）") { notch.preview(peek: true) }
+                Button("看看：刘海打印胶片（录完）") { notch.preview(peek: false) }
             }
         }
 

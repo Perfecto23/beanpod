@@ -85,6 +85,8 @@ final class VideoMaker {
     private var script = ""
     private(set) var job: URL?
     private var watching = false
+    /// 旧任务还挂着时又点了「做成视频」：先记下这次要做的，旧任务放弃后接着用
+    private var pending: (text: String, recording: UInt32, title: String, template: String)?
 
     var busy: Bool { phase == .waiting || phase == .quoted || phase == .producing }
 
@@ -102,7 +104,8 @@ final class VideoMaker {
 
     /// 打开「做成视频」时调用：读主播、按稿子推荐风格、看看 Claude 桌面版和 Renoise MCP 在不在。
     func prepare(text: String, recording: UInt32, title: String, template: String) {
-        guard !busy else { return }
+        guard !busy else { pending = (text, recording, title, template); return }
+        pending = nil
         self.recording = recording
         self.title = title
         script = text
@@ -162,7 +165,8 @@ final class VideoMaker {
         Self.write(brief, to: folder.appendingPathComponent("brief.json"))
         Self.write(["recording": Int(recording), "title": title, "style": style.name, "host": host.name, "ratio": ratio, "model": model, "started": stamp],
                    to: folder.appendingPathComponent("job.json"))
-        try? Self.task.write(to: folder.appendingPathComponent("TASK.md"), atomically: true, encoding: .utf8)
+        let header = "Job folder (absolute): \(folder.path)\nEvery ./ path below means a file in this job folder. If your working directory is somewhere else, cd here first or use the absolute path.\n\n"
+        try? (header + Self.task).write(to: folder.appendingPathComponent("TASK.md"), atomically: true, encoding: .utf8)
         store.addLog("做视频：交给 Claude 桌面版（\(style.name) · \(ratio) · \(host.name) · \(model)），工程在 \(folder.path)")
         phase = .waiting
         started = .now
@@ -175,7 +179,7 @@ final class VideoMaker {
         guard let job else { return }
         var c = URLComponents()
         c.scheme = "claude"; c.host = "code"; c.path = "/new"
-        c.queryItems = [URLQueryItem(name: "folder", value: job.path), URLQueryItem(name: "q", value: Self.prompt)]
+        c.queryItems = [URLQueryItem(name: "folder", value: job.path), URLQueryItem(name: "q", value: Self.prompt(job))]
         if let url = c.url { NSWorkspace.shared.open(url) }
     }
 
@@ -189,7 +193,30 @@ final class VideoMaker {
         if let job { FileManager.default.createFile(atPath: job.appendingPathComponent(".closed").path, contents: nil) }
         store.addLog("做视频：豆仓不再跟进 \(job?.lastPathComponent ?? "")")
         job = nil
-        phase = .choosing
+        quote = nil; stepIndex = 0; stepDetail = ""; started = nil
+        phase = .idle
+        if let p = pending {
+            // 放弃旧的那条后，接着准备这次点的那篇稿子（主播、风格都重新读）
+            prepare(text: p.text, recording: p.recording, title: p.title, template: p.template)
+        } else if !script.isEmpty {
+            prepare(text: script, recording: recording, title: title, template: "")
+        } else {
+            phase = .choosing
+        }
+    }
+
+    /// 交出去很久还没动静：多半是 Claude 里没按发送，或者那边停了
+    var stalledMinutes: Int? {
+        guard let started else { return nil }
+        let minutes = Int(Date.now.timeIntervalSince(started) / 60)
+        switch phase {
+        case .waiting: return minutes >= 10 ? minutes : nil
+        case .producing:
+            guard let job, let m = (try? FileManager.default.attributesOfItem(atPath: job.appendingPathComponent("progress.json").path))?[.modificationDate] as? Date else { return nil }
+            let idle = Int(Date.now.timeIntervalSince(m) / 60)
+            return idle >= 25 ? idle : nil
+        default: return nil
+        }
     }
 
     func showProject() {
@@ -343,7 +370,10 @@ final class VideoMaker {
     // MARK: 给 Claude 的话
 
     /// 填进 Claude 输入框的那句话（用户看得到，按发送才开始）
-    private static let prompt = "这是豆仓发来的视频任务：照这个文件夹里的 TASK.md，用 Renoise MCP 的 ai-avatar 和 talking-head-editor 两个 skill，把 source.md 这篇口播稿做成带完整包装的数字人口播视频。先规划报价，我确认了再花积分。"
+    /// 带上工程文件夹的完整路径：Claude 桌面版打开新会话时不一定用链接里给的文件夹（实测落在了桌面），不能靠「当前目录」
+    private static func prompt(_ job: URL) -> String {
+        "这是豆仓发来的视频任务。工程文件夹：\(job.path)\n先 cd 到这个文件夹，照里面的 TASK.md，用 Renoise MCP 的 ai-avatar 和 talking-head-editor 两个 skill，把 source.md 这篇口播稿做成带完整包装的数字人口播视频。先规划报价，我确认了再花积分。"
+    }
 
     private static let task = """
     # BeanPod video job
@@ -543,6 +573,12 @@ struct VideoSheet: View {
                 step(3, "它写稿、逐项核价，报价会同时显示在这里，不花积分。")
             }
             .padding(12).panel(radius: 12)
+            TimelineView(.periodic(from: .now, by: 30)) { _ in
+                if let m = maker.stalledMinutes {
+                Label("交出去 \(m) 分钟了还没有报价。在 Claude 里按发送了吗？没看到那个会话就点「再开一次」。", systemImage: "exclamationmark.circle")
+                    .font(.callout).foregroundStyle(Theme.accent).fixedSize(horizontal: false, vertical: true)
+                }
+            }
             footer(stop: true)
         }
     }
@@ -600,6 +636,12 @@ struct VideoSheet: View {
                     Label { Text(start, style: .timer).monospacedDigit() } icon: { Image(systemName: "clock") }.font(.caption).foregroundStyle(.secondary)
                 }
                 Text("一般要二三十分钟，可以关掉这个窗口，做好了会提醒。").font(.caption).foregroundStyle(.tertiary)
+            }
+            TimelineView(.periodic(from: .now, by: 30)) { _ in
+                if let m = maker.stalledMinutes {
+                Label("已经 \(m) 分钟没有新进度了，回 Claude 看看是不是停下来在等你。", systemImage: "exclamationmark.circle")
+                    .font(.callout).foregroundStyle(Theme.accent).fixedSize(horizontal: false, vertical: true)
+                }
             }
             footer(stop: false)
         }
