@@ -202,10 +202,10 @@ struct NotchView: View {
     private var target: CGSize {
         let n = panel.notchSize
         if panel.expanded {
-            var h = n.height + 182
-            if panel.clip != nil { h += 82 }
-            if job != nil { h += 44 }
-            return CGSize(width: max(440, n.width + 240), height: h)
+            var h = n.height + 104
+            if panel.clip != nil { h += 70 }
+            if job != nil { h += 42 }
+            return CGSize(width: max(400, n.width + 200), height: h)
         }
         if store.recState != .idle { return CGSize(width: n.width + 2 * 92, height: n.height) }
         return panel.hasNotch ? n : CGSize(width: 96, height: n.height)
@@ -237,80 +237,74 @@ struct NotchView: View {
     // MARK: 展开
 
     private var expandedContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Color.clear.frame(height: max(0, panel.notchSize.height - 6))      // 让开刘海和摄像头
+        VStack(alignment: .leading, spacing: 14) {
+            Color.clear.frame(height: max(0, panel.notchSize.height - 10))     // 让开刘海和摄像头
             header
-            controls.frame(maxWidth: .infinity)
+            controls
             if let clip = panel.clip { clipCard(clip) }
             if let job { progress(job) }
         }
-        .padding(.horizontal, 22).padding(.bottom, 18)
+        .padding(.horizontal, 18).padding(.bottom, 16)
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
-            Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 28, height: 28)
+        HStack(spacing: 8) {
+            Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 22, height: 22)
             if store.link == .ready {
-                Text(store.displayDeviceName).fontWeight(.medium).lineLimit(1)
-                Circle().fill(Theme.ok).frame(width: 7, height: 7)
+                Text(store.displayDeviceName).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
+                Circle().fill(Theme.ok).frame(width: 6, height: 6).padding(.leading, 2)
                 Text("已连接" + (store.info.map { " · 电量 \($0.micBattery)%" } ?? ""))
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.6))
             } else {
-                Text(store.recordingOnMac ? "正在用这台 Mac 录" : "录音豆没连上 · 可以用这台 Mac 录").foregroundStyle(.white.opacity(0.7))
+                Text(store.recordingOnMac ? "正在用这台 Mac 录" : "录音豆没连上 · 可以用这台 Mac 录")
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.6))
             }
             Spacer(minLength: 0)
         }
-        .font(.system(size: 13)).foregroundStyle(.white)
     }
 
+    /// 一行两个一样高的按钮：主操作玫瑰红，次要操作灰。录音中左边换成计时。
     @ViewBuilder
     private var controls: some View {
-        HStack(spacing: 30) {
-            switch store.recState {
-            case .idle:
-                bigButton(label: "开始录音", recording: false) { store.startRecording() }
+        switch store.recState {
+        case .idle:
+            HStack(spacing: 10) {
+                pill("开始录音", primary: true) { Circle().fill(.white).frame(width: 9, height: 9) } action: { store.startRecording() }
                 if store.link == .ready {
-                    capsule("用这台 Mac 录") { store.startMacRecording() }
+                    pill("用这台 Mac 录", primary: false) { Image(systemName: "laptopcomputer").font(.system(size: 12, weight: .semibold)) } action: { store.startMacRecording() }
                 }
-            case .recording:
-                bigButton(label: "结束", recording: true) { store.finishRecording() }
-                VStack(spacing: 10) {
-                    timer.font(.system(size: 22, weight: .semibold, design: .rounded))
-                    capsule("暂停") { store.pauseRecording() }
+            }
+        case .recording, .paused:
+            let paused = store.recState == .paused
+            HStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Circle().fill(paused ? .white.opacity(0.4) : rose).frame(width: 8, height: 8)
+                    timer.font(.system(size: 20, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(paused ? 0.6 : 1))
                 }
-            case .paused:
-                bigButton(label: "继续", recording: false) { store.resumeRecording() }
-                VStack(spacing: 10) {
-                    timer.font(.system(size: 22, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.6))
-                    capsule("结束") { store.finishRecording() }
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                pill(paused ? "继续" : "暂停", primary: false, width: 96) {
+                    Image(systemName: paused ? "play.fill" : "pause.fill").font(.system(size: 11, weight: .bold))
+                } action: { paused ? store.resumeRecording() : store.pauseRecording() }
+                pill("结束", primary: true, width: 96) {
+                    RoundedRectangle(cornerRadius: 2).fill(.white).frame(width: 9, height: 9)
+                } action: { store.finishRecording() }
             }
         }
     }
 
-    private func bigButton(label: String, recording: Bool, action: @escaping () -> Void) -> some View {
+    private func pill<Icon: View>(_ title: String, primary: Bool, width: CGFloat? = nil,
+                                  @ViewBuilder icon: () -> Icon, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 8) {
-                ZStack {
-                    Circle().fill(rose).frame(width: 64, height: 64)
-                    if recording {
-                        RoundedRectangle(cornerRadius: 5).fill(.white).frame(width: 20, height: 20)
-                    } else {
-                        Circle().fill(.white).frame(width: 24, height: 24)
-                    }
-                }
-                .shadow(color: rose.opacity(0.45), radius: 12)
-                Text(label).font(.system(size: 13, weight: .medium)).foregroundStyle(.white)
+            HStack(spacing: 7) {
+                icon()
+                Text(title).font(.system(size: 14, weight: .semibold))
             }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(NotchPress())
-    }
-
-    private func capsule(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(.white)
-                .padding(.horizontal, 18).padding(.vertical, 9)
-                .background(.white.opacity(0.14), in: .capsule)
+            .foregroundStyle(.white)
+            .frame(maxWidth: width == nil ? .infinity : nil)
+            .frame(width: width, height: 42)
+            .background(primary ? AnyShapeStyle(rose) : AnyShapeStyle(.white.opacity(0.12)), in: .capsule)
+            .contentShape(.capsule)
         }
         .buttonStyle(NotchPress())
     }
