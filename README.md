@@ -37,8 +37,7 @@
 - 语音输入：按住一个键对着录音豆说话，松开后文字打进当前正在用的软件
 
 **接上 AI 助手**
-- 豆仓自带 MCP 服务。Claude Code、Codex、Claude 桌面版、OpenClaw 等可以一键连接，连上后在助手里就能查录音、纪要和待办
-- 只认网址的工具，可以填 `http://127.0.0.1:8791/mcp`（豆仓开着时才有，只在本机可用）
+- 豆仓自带 MCP 服务和命令行工具，Claude Code、Codex、Claude 桌面版、OpenClaw 可以一键连接。连上后在助手里就能查录音、纪要和待办，也能让助手把内容存进豆仓。详见下面的[接入 AI 助手](#接入-ai-助手)
 
 ## 使用前要知道
 
@@ -92,6 +91,88 @@ open /Applications/BeanPod.app
 ```bash
 swift test
 ```
+
+## 接入 AI 助手
+
+豆仓把录音库开放给支持 [MCP](https://modelcontextprotocol.io) 的 AI 助手。助手能做的事：
+
+| 工具 | 作用 |
+|---|---|
+| `search_recordings` | 按关键词、时间、场景、人物、话题搜录音；不给条件时返回最近的录音 |
+| `get_recording` | 取一条录音的完整纪要：摘要、要点、待办、人物、话题，可选附带逐字稿 |
+| `list_todos` | 列出所有录音里的待办，默认只列没完成的 |
+| `list_topics` | 概览：录音总数和时长，各场景、话题、人物出现的次数 |
+| `add_note` | 把一段文字（聊天记录、想法、摘录）存进豆仓，豆仓会当成录音一样整理 |
+| `add_audio` | 把这台电脑上的一个音频文件交给豆仓转写、整理 |
+
+前四个只读。后两个不直接改录音库：内容先放进收件箱（`~/Library/Application Support/BeanPod/Inbox/`），豆仓开着时会自动导入并整理。
+
+### 一键连接
+
+菜单「帮助 → 连接 AI 助手」，或者在「设置 → 连接」里，每个助手一张卡片，显示装没装、连没连，可以一键连接、断开、试一下。
+
+| 助手 | 豆仓做了什么 |
+|---|---|
+| Claude Code | 运行 `claude mcp add --scope user beanpod -- ~/.local/bin/beanpod mcp` |
+| Codex | 运行 `codex mcp add beanpod -- ~/.local/bin/beanpod mcp` |
+| OpenClaw | 运行 `openclaw mcp add beanpod --command ~/.local/bin/beanpod --arg mcp` |
+| Claude 桌面版 | 往 `claude_desktop_config.json` 加一项（改之前先备份成 `claude_desktop_config.backup-by-beanpod.json`）；要先退出 Claude 桌面版，否则它会把改动写回去 |
+| Grok Bot 等只认网址的 | 拷贝网址 `http://127.0.0.1:8791/mcp` 填进去 |
+
+网址入口只在豆仓开着时存在，而且只监听本机，别的电脑连不上。
+
+### 手动配置
+
+别的支持 MCP 的工具，按它的格式填：
+
+```json
+{
+  "mcpServers": {
+    "beanpod": { "command": "/Users/<你的用户名>/.local/bin/beanpod", "args": ["mcp"] }
+  }
+}
+```
+
+### 命令行
+
+`beanpod` 本身也是个命令行工具，脚本里可以直接用：
+
+```bash
+beanpod search 预算 --from 7d --scene 会议
+```
+
+```bash
+beanpod todos
+```
+
+| 命令 | 作用 |
+|---|---|
+| `beanpod search [关键词] [--from 日期] [--to 日期] [--scene 场景] [--person 人物] [--tag 话题] [--limit N]` | 搜录音 |
+| `beanpod show <id> [--transcript]` | 一条录音的纪要 |
+| `beanpod todos [--all]` | 待办 |
+| `beanpod topics` | 场景、话题、人物一览 |
+| `beanpod add-note 标题 < 文本` | 把文字存进豆仓 |
+| `beanpod add-audio <文件>` | 把音频交给豆仓转写整理 |
+| `beanpod mcp` | 作为 MCP 服务运行（stdio） |
+| `beanpod serve [--port 8791]` | 作为 MCP 服务运行（HTTP） |
+
+日期可以写 `2026-11-12`、`today`、`yesterday`、`7d`。
+
+### 在微信里问豆仓
+
+通过 [OpenClaw](https://github.com/openclaw/openclaw) 和它的微信插件，可以在微信里问豆仓里的录音和待办。先在豆仓里把 OpenClaw 连上，再按 OpenClaw 的说明装微信插件、扫码登录，并给它配一个模型。
+
+### 做成数字人视频（可选）
+
+录音的「改写」页里，口播稿可以一键「做成视频」：豆仓在 Claude 桌面版里新开一个会话，把任务交给 [Renoise](https://renoise.ai) 生成数字人口播并剪辑包装，成片自动回到豆仓。需要：
+
+- Claude 桌面版，并且已添加 Renoise MCP
+- Renoise 账号和积分。生成前会先报价，你在 Claude 里确认了才会花积分
+- 数字人形象配置：装 [digital-human-koubo](https://github.com/andyhuo520/digital-human-koubo) skill，并在它的 `persona.json` 里设好主播形象。没有这份配置时，「做成视频」没有可选的主播
+
+连接页底部的「创作工具」卡片可以帮你安装、登录 Renoise 命令行。
+
+助手拿到内容后怎么处理，取决于那个助手和它用的模型服务。
 
 ## 隐私
 
