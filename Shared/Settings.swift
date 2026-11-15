@@ -82,6 +82,8 @@ final class AppSettings {
     /// 按住哪个键说话。存的是按键码，默认右 Option（61）。
     var dictationKey: Int { didSet { save("dictationKey", dictationKey) } }
     var dictationPolish: Bool { didSet { save("dictationPolish", dictationPolish) } }
+    /// 语音输入说的话，同时作为一条录音存进「录音」（默认开）。
+    var dictationSave: Bool { didSet { save("dictationSave", dictationSave) } }
     /// 给录音豆起的名字。只存在这台 Mac 上，设备本身不支持改名。
     var deviceAlias: String { didSet { save("deviceAlias", deviceAlias) } }
 
@@ -142,6 +144,7 @@ final class AppSettings {
         }
         dictationEnabled = d.object(forKey: "dictationEnabled") as? Bool ?? false
         dictationPolish = d.object(forKey: "dictationPolish") as? Bool ?? false
+        dictationSave = d.object(forKey: "dictationSave") as? Bool ?? true
         dictationKey = d.object(forKey: "dictationKey") as? Int ?? 61
         deviceAlias = d.string(forKey: "deviceAlias") ?? ""
         llmBaseURL = d.string(forKey: "llmBaseURL") ?? ""

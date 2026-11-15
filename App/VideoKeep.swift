@@ -157,6 +157,27 @@ extension BeanStore {
         }
     }
 
+    /// 把画面另存到「下载」文件夹（用素材标题当文件名，重名就加编号），然后在访达里选中它。
+    func saveVideoToDownloads(_ id: UInt32) {
+        guard hasVideo(id), let r = recordings.first(where: { $0.id == id }) else { return }
+        let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+        let safe = String(r.displayTitle.prefix(60).map { "/:\\?%*|\"<>\n".contains($0) ? "-" : $0 }).trimmingCharacters(in: .whitespaces)
+        let base = safe.isEmpty ? "豆仓视频-\(id)" : safe
+        var target = downloads.appendingPathComponent(base + ".mp4")
+        var n = 2
+        while FileManager.default.fileExists(atPath: target.path) {
+            target = downloads.appendingPathComponent("\(base) (\(n)).mp4"); n += 1
+        }
+        do {
+            try FileManager.default.copyItem(at: videoURL(id), to: target)
+            NSWorkspace.shared.activateFileViewerSelecting([target])
+            toast("checkmark.circle.fill", "已存到「下载」：\(target.lastPathComponent)")
+            addLog("画面另存到 \(target.path)")
+        } catch {
+            problem = Problem(title: "视频没存下来", detail: error.localizedDescription)
+        }
+    }
+
     /// 删掉一条的画面（声音、文字稿、纪要都留着）。
     func removeVideo(_ id: UInt32) {
         if playingID == id { stop() }
@@ -269,6 +290,8 @@ struct MaterialVideoCard: View {
                         Button { NSWorkspace.shared.open(url) } label: { Label("打开原链接", systemImage: "arrow.up.right.square") }
                     }
                     if has {
+                        Button { store.saveVideoToDownloads(recording.id) } label: { Label("保存到本地", systemImage: "square.and.arrow.down") }
+                            .help("存一份到「下载」文件夹，并在访达里打开")
                         Button { confirmRemove = true } label: { Label("删掉画面", systemImage: "trash") }
                     }
                 }

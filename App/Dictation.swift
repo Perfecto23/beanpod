@@ -195,6 +195,8 @@ final class Dictation {
             let samples = try QwenASR.loadMono16k(wav)
             var text = try await QwenASR.shared.transcribe(samples: samples, serverPath: store.settings.llamaServerPath)
             guard !text.isEmpty else { store.addLog("语音输入：没识别出文字"); flash(.failed("没听清")); return }
+            // 打字之外，把这段话也存成一条录音（设置里可关；「试一次」不存）
+            if !dryRun, store.settings.dictationSave { store.saveDictation(samples: samples, text: text) }
             if store.settings.dictationPolish, store.analysisAvailable {
                 let raw = text
                 if let polished = try? await store.withLLM({ config in
@@ -315,5 +317,29 @@ struct DictationHUD: View {
         .padding(.horizontal, 18).padding(.vertical, 12)
         .glassEffect(.regular, in: .capsule)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+
+extension BeanStore {
+    /// 语音输入说的一段话存成一条录音：声音 + 识别出的文字（原话，没润色），场合先记成「灵感」，再交给整理。
+    func saveDictation(samples: [Float], text: String) {
+        var id = UInt32(Date.now.timeIntervalSince1970)
+        while recordings.contains(where: { $0.id == id }) { id += 1 }
+        do { try QwenASR.wav(samples).write(to: wavURL(id), options: .atomic) } catch {
+            addLog("语音输入没能存进录音：\(error.localizedDescription)")
+            return
+        }
+        var rec = Recording(id: id, size: UInt32(samples.count * 2), date: .now, duration: Double(samples.count) / 16000)
+        rec.downloaded = true
+        rec.origin = "语音输入"
+        rec.scene = .memo
+        rec.segments = [Segment(start: 0, text: applyVocabulary(text))]
+        rec.transcript = rec.segments.map(\.text).joined(separator: "\n")
+        rec.transcribedBy = QwenASR.displayName
+        recordings.insert(rec, at: 0)
+        saveLibrary()
+        addLog("语音输入存成录音 \(id)（\(Int(rec.duration)) 秒）")
+        if settings.autoProcess { process(id) }
     }
 }

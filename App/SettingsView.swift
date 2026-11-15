@@ -310,6 +310,9 @@ private struct DictationPane: View {
                 SettingRow(icon: "text.badge.checkmark", title: "把口语理顺再输入", detail: "去掉嗯啊和重复，句子更通顺。要多等几秒。") {
                     Toggle("把口语理顺再输入", isOn: $settings.dictationPolish).labelsHidden().toggleStyle(.switch)
                 }
+                SettingRow(icon: "tray.and.arrow.down", title: "同时存进「录音」", detail: "打字的同时，把这段话也存成一条录音（声音 + 文字），之后能回听、搜索、整理。") {
+                    Toggle("同时存进录音", isOn: $settings.dictationSave).labelsHidden().toggleStyle(.switch)
+                }
                 SettingRow(icon: "play.circle", title: "先试一次", detail: "录 5 秒，只显示识别结果，不会打进别的 App。") {
                     Button("试一次") { dictation.tryOnce() }
                 }
