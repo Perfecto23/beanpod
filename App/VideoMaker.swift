@@ -60,7 +60,8 @@ final class VideoMaker {
     /// 主播都是用户自己添加的（App/Hosts.swift），豆仓不带默认人物。
     let library = HostLibrary()
     var hosts: [Host] { library.hosts }
-    var host: Host?
+    /// 选中的主播；记住上次选的，下次打开还是它。
+    var host: Host? { didSet { if let host { UserDefaults.standard.set(host.id, forKey: "lastHostID") } } }
     var style: Style = .premium
     var ratio = "9:16"
     var model = "wan3.0-video"
@@ -117,7 +118,10 @@ final class VideoMaker {
 
     func loadHosts() {
         library.load()
-        if host == nil || !hosts.contains(where: { $0.id == host?.id }) { host = hosts.first { $0.usable } ?? hosts.first }
+        if host == nil || !hosts.contains(where: { $0.id == host?.id }) {
+            let last = UserDefaults.standard.string(forKey: "lastHostID")
+            host = hosts.first { $0.id == last } ?? hosts.first { $0.usable } ?? hosts.first
+        }
         if hosts.contains(where: { !$0.usable || $0.face == nil }) { Task { await library.refreshFaces() } }
     }
 
@@ -180,6 +184,7 @@ final class VideoMaker {
         } else if !script.isEmpty {
             prepare(text: script, recording: recording, title: title, template: "")
         } else {
+            loadHosts()
             phase = .choosing
         }
     }
@@ -537,12 +542,13 @@ struct VideoSheet: View {
         if !maker.setupNote.isEmpty { Text(maker.setupNote).font(.callout).foregroundStyle(.secondary) }
         Divider()
         HStack {
-            Text(maker.hosts.isEmpty ? "先添加一个主播" : "会在 Claude 桌面版新开一个会话，报价确认后才花积分")
+            Text(maker.recording == 0 ? "这是预览，不能提交。要做视频，从录音的「改写」页打开" : maker.hosts.isEmpty ? "先添加一个主播" : "会在 Claude 桌面版新开一个会话，报价确认后才花积分")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button("先不做") { dismiss() }
-            Button("交给 Claude 做") { maker.start(store: store) }
-                .buttonStyle(.glassProminent).disabled(maker.host?.usable != true || maker.claudeAppMissing)
+            if maker.library.busy { ProgressView().controlSize(.small) }
+            Button("交给 Claude 做") { Task { await handOff() } }
+                .buttonStyle(.glassProminent).disabled(maker.recording == 0 || maker.host?.usable != true || maker.claudeAppMissing || maker.library.busy)
         }
         .controlSize(.large)
         .sheet(isPresented: $addingHost) {
@@ -566,11 +572,31 @@ struct VideoSheet: View {
         }
     }
 
+    /// 示例主播第一次用时先传到用户自己的 Renoise 账号，再交给 Claude。
+    private func handOff() async {
+        guard var h = maker.host else { return }
+        if h.material.isEmpty {
+            maker.setupNote = "正在把示例主播的照片传到你的 Renoise 账号（不花积分）…"
+            guard let up = await maker.library.ensureUploaded(h) else {
+                maker.setupNote = maker.library.error ?? "示例主播没传上去。"
+                return
+            }
+            h = up
+            maker.host = up
+            maker.setupNote = ""
+            guard up.usable else {
+                maker.setupNote = "示例主播已经传上去了，Renoise 正在审核人像，过一会儿再点「交给 Claude 做」。"
+                return
+            }
+        }
+        maker.start(store: store)
+    }
+
     private func styleCard(_ s: VideoMaker.Style) -> some View {
         let picked = maker.style == s
         return Button { maker.style = s } label: {
             VStack(spacing: 8) {
-                StylePreview(style: s).frame(height: 92).clipShape(.rect(cornerRadius: 8))
+                StylePreview(style: s).frame(maxWidth: .infinity).frame(height: 112).clipShape(.rect(cornerRadius: 8))
                 Text(s.name).font(.callout.weight(.semibold))
             }
             .padding(8)
@@ -722,10 +748,20 @@ struct VideoSheet: View {
     }
 }
 
-/// 包装风格的小示意图：只画版式，不放人物（豆仓不带默认人物）。
+/// 包装风格的小预览图。
 private struct StylePreview: View {
     let style: VideoMaker.Style
     var body: some View {
+        if let url = Bundle.main.url(forResource: "style_\(style.rawValue)", withExtension: "jpg"), let img = NSImage(contentsOf: url) {
+            // 内置的预览图（design/samples/gen.sh，虚构人物）
+            Color.clear.overlay(Image(nsImage: img).resizable().scaledToFill()).clipped().accessibilityHidden(true)
+        } else {
+            drawn
+        }
+    }
+
+    /// 没有预览图时的兜底：只画版式。
+    private var drawn: some View {
         ZStack {
             LinearGradient(colors: [Color(white: 0.9), Color(white: 0.78)], startPoint: .topLeading, endPoint: .bottomTrailing)
             Circle().fill(.white.opacity(0.35)).frame(width: 120).offset(x: 60, y: 40)

@@ -3,10 +3,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// 「做成视频」用的主播：用户自己上传的人像照片，存在用户自己的 Renoise 账号里，豆仓只记素材编号和一张缩略图。
-/// 豆仓不带任何默认人物。
+/// 另外内置两位示例主播（AI 生成的虚构人物，图片在 App 包里），第一次用来做视频时才传到用户自己的 Renoise 账号。
 struct Host: Codable, Identifiable, Hashable {
-    var id: String { material }
-    var material: String          // Renoise 素材编号
+    var id: String { sample.map { "sample-\($0)" } ?? material }
+    var material: String          // Renoise 素材编号；示例主播还没上传时为空
+    var sample: String?           // 示例主播在 App 包里的图片名，比如 sample_office
     var name: String
     var ratio: String             // 照片是竖图就 9:16，横图 16:9
     var face: String?             // Renoise 的人脸审核状态：active 通过；其他值见 faceText
@@ -22,6 +23,7 @@ struct Host: Codable, Identifiable, Hashable {
         }
     }
     var usable: Bool { face == nil || face == "active" }
+    var isSample: Bool { sample != nil }
 }
 
 @Observable
@@ -37,12 +39,54 @@ final class HostLibrary {
     private static var index: URL { root.appendingPathComponent("hosts.json") }
     static func thumb(_ material: String) -> URL { root.appendingPathComponent("\(material).jpg") }
 
+    /// 内置的两位示例主播（虚构人物）。只在第一次打开时放进主播列表；用户移除后不再回来。
+    static let samples = [
+        Host(material: "", sample: "sample_office", name: "示例 · 职业装", ratio: "9:16"),
+        Host(material: "", sample: "sample_home", name: "示例 · 居家", ratio: "16:9"),
+    ]
+    static func sampleURL(_ name: String) -> URL? { Bundle.main.url(forResource: name, withExtension: "jpg") }
+
+    /// 卡片上用的图：示例主播读 App 包里的，自己加的读本机缩略图。
+    static func image(for host: Host) -> NSImage? {
+        if let s = host.sample, let url = sampleURL(s) { return NSImage(contentsOf: url) }
+        return NSImage(contentsOf: thumb(host.material))
+    }
+
     init() { load() }
 
     func load() {
-        guard let data = try? Data(contentsOf: Self.index) else { hosts = []; return }
-        let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601
-        hosts = (try? d.decode([Host].self, from: data)) ?? []
+        if let data = try? Data(contentsOf: Self.index) {
+            let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601
+            hosts = (try? d.decode([Host].self, from: data)) ?? []
+        } else {
+            hosts = []
+        }
+        let key = "hostSamplesSeeded"
+        if !UserDefaults.standard.bool(forKey: key) {
+            UserDefaults.standard.set(true, forKey: key)
+            let missing = Self.samples.filter { s in !hosts.contains { $0.sample == s.sample } }
+            hosts.insert(contentsOf: missing, at: 0)
+            save()
+        }
+    }
+
+    /// 示例主播第一次用来做视频时，把 App 包里的图传到用户自己的 Renoise 账号，换成素材编号。不花积分。
+    func ensureUploaded(_ host: Host) async -> Host? {
+        guard host.material.isEmpty else { return host }
+        guard let s = host.sample, let url = Self.sampleURL(s) else { error = "示例主播的图片不见了。"; return nil }
+        busy = true; error = nil
+        defer { busy = false }
+        let r = await VideoMaker.shell("renoise upload '\(url.path.replacingOccurrences(of: "'", with: "'\\''"))' --type image --json")
+        guard r.ok, let id = Self.materialID(r.output) else {
+            error = Self.explain(r.output, fallback: "示例主播没传上去")
+            return nil
+        }
+        var h = host
+        h.material = id
+        await fillFace(&h)
+        if let i = hosts.firstIndex(where: { $0.id == host.id }) { hosts[i] = h }
+        save()
+        return h
     }
 
     private func save() {
@@ -113,21 +157,21 @@ final class HostLibrary {
     }
 
     func rename(_ host: Host, to name: String) {
-        guard let i = hosts.firstIndex(of: host), !name.isEmpty else { return }
+        guard let i = hosts.firstIndex(where: { $0.id == host.id }), !name.isEmpty else { return }
         hosts[i].name = name
         save()
     }
 
     /// 只从豆仓里去掉；Renoise 账号里的素材不动。
     func remove(_ host: Host) {
-        hosts.removeAll { $0.material == host.material }
-        try? FileManager.default.removeItem(at: Self.thumb(host.material))
+        hosts.removeAll { $0.id == host.id }
+        if !host.isSample { try? FileManager.default.removeItem(at: Self.thumb(host.material)) }
         save()
     }
 
     /// 审核还没结果的，重新问一次。
     func refreshFaces() async {
-        for i in hosts.indices where !hosts[i].usable || hosts[i].face == nil {
+        for i in hosts.indices where !hosts[i].material.isEmpty && (!hosts[i].usable || hosts[i].face == nil) {
             var h = hosts[i]
             await fillFace(&h)
             hosts[i] = h
@@ -188,13 +232,19 @@ struct HostCard: View {
             VStack(spacing: 8) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.08))
-                    if let img = NSImage(contentsOf: HostLibrary.thumb(host.material)) {
+                    if let img = HostLibrary.image(for: host) {
                         Image(nsImage: img).resizable().scaledToFill()
                     } else {
                         Image(systemName: "person.crop.rectangle").font(.system(size: 30)).foregroundStyle(.tertiary)
                     }
                 }
                 .frame(width: 104, height: 128).clipShape(.rect(cornerRadius: 10))
+                .overlay(alignment: .topLeading) {
+                    if host.isSample {
+                        Text("示例").font(.caption2.weight(.semibold)).padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(.black.opacity(0.55), in: .capsule).foregroundStyle(.white).padding(6)
+                    }
+                }
                 .overlay(alignment: .bottom) {
                     if let t = host.faceText {
                         Text(t).font(.caption2.weight(.medium)).lineLimit(1).padding(.horizontal, 6).padding(.vertical, 3)
@@ -222,7 +272,7 @@ struct HostCard: View {
         .buttonStyle(.plain)
         .onHover { hover = $0 }
         .contextMenu { Button("改名…", action: onRename); Button("从豆仓移除", role: .destructive, action: onRemove) }
-        .accessibilityLabel("主播 \(host.name)，\(host.ratio)\(picked ? "，已选中" : "")")
+        .accessibilityLabel("主播 \(host.name)，\(host.ratio)\(host.isSample ? "，示例" : "")\(picked ? "，已选中" : "")")
         .accessibilityAction(named: "改名", onRename)
         .accessibilityAction(named: "从豆仓移除", onRemove)
     }
