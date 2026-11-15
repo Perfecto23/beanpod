@@ -10,14 +10,6 @@ import SwiftUI
 /// 豆仓负责三件事：让用户选风格和主播、把任务交过去、盯着工程文件夹里的 quote/progress/result 把进度和成片接回来。
 @Observable
 final class VideoMaker {
-    /// 出镜的人：存在 Renoise 里的人像素材（编号来自数字人形象配置 persona.json）。
-    struct Host: Identifiable, Hashable {
-        var id: String            // persona.json 里的键：default / me / cat / dog …
-        var name: String
-        var ratio: String
-        var material: String
-    }
-
     /// talking-head-editor 的包装风格。
     enum Style: String, CaseIterable, Identifiable {
         case premium, restrained, variety
@@ -63,10 +55,11 @@ final class VideoMaker {
     /// waiting：已交给 Claude 桌面版，等它规划报价；quoted：报价出来了，等用户在 Claude 里确认；producing：确认后在出片。
     enum Phase: Equatable { case idle, choosing, waiting, quoted, producing, finished(URL), failed(String) }
 
-    static let persona = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/skills/digital-human-koubo/persona.json")
     static let renoiseMCP = "https://renoise.ai/api/public/mcp"
 
-    var hosts: [Host] = []
+    /// 主播都是用户自己添加的（App/Hosts.swift），豆仓不带默认人物。
+    let library = HostLibrary()
+    var hosts: [Host] { library.hosts }
     var host: Host?
     var style: Style = .premium
     var ratio = "9:16"
@@ -122,31 +115,17 @@ final class VideoMaker {
         renoiseMCPMissing = !Self.renoiseMCPConfigured
     }
 
-    private func loadHosts() {
-        var out: [Host] = []
-        if let data = try? Data(contentsOf: Self.persona),
-           let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            func material(_ d: [String: Any]) -> String? {
-                (d["reference_material"] as? String ?? (d["renoise"] as? [String: Any])?["reference_material"] as? String)?
-                    .replacingOccurrences(of: "material:", with: "")
-            }
-            if let m = material(root) {
-                out.append(Host(id: "default", name: root["name"] as? String ?? "数字人", ratio: (root["model"] as? [String: Any])?["ratio"] as? String ?? "9:16", material: m))
-            }
-            for (key, value) in (root["other_hosts"] as? [String: Any] ?? [:]).sorted(by: { $0.key < $1.key }) {
-                guard let d = value as? [String: Any], let m = material(d) else { continue }
-                out.append(Host(id: key, name: d["name"] as? String ?? key, ratio: d["ratio"] as? String ?? "16:9", material: m))
-            }
-        }
-        hosts = out
-        if host == nil || !out.contains(where: { $0.id == host?.id }) { host = out.first }
+    func loadHosts() {
+        library.load()
+        if host == nil || !hosts.contains(where: { $0.id == host?.id }) { host = hosts.first { $0.usable } ?? hosts.first }
+        if hosts.contains(where: { !$0.usable || $0.face == nil }) { Task { await library.refreshFaces() } }
     }
 
     // MARK: 交给 Claude 桌面版
 
     /// 建工程文件夹、写好任务说明，然后在 Claude 桌面版里新开一个会话。不花积分：报价出来后要用户在 Claude 里点头才生成。
     func start(store: BeanStore) {
-        guard let host, !busy else { return }
+        guard let host, host.usable, !busy else { return }
         checkSetup()
         guard !claudeAppMissing else { return }
         let stamp = Int(Date.now.timeIntervalSince1970)
@@ -466,6 +445,10 @@ struct VideoSheet: View {
     @Environment(BeanStore.self) private var store
     @Environment(VideoMaker.self) private var maker
     @Environment(\.dismiss) private var dismiss
+    @State private var addingHost = false
+    @State private var renaming: Host?
+    @State private var renameText = ""
+    @State private var removing: Host?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -491,37 +474,55 @@ struct VideoSheet: View {
         .frame(width: 620)
     }
 
-    // 选风格、主播
+    // 选风格、主播（设计稿 design/ui/ui_hosts_empty.png、ui_hosts_pick.png）
     @ViewBuilder private var choosing: some View {
         @Bindable var maker = maker
         VStack(alignment: .leading, spacing: 8) {
             Text("包装风格").font(.headline)
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 ForEach(VideoMaker.Style.allCases) { s in styleCard(s) }
             }
+            Text(maker.style.fits).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
-        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
-            GridRow {
-                Text("比例").foregroundStyle(.secondary)
-                Picker("比例", selection: $maker.ratio) { Text("9:16 竖屏").tag("9:16"); Text("16:9 横屏").tag("16:9") }
-                    .labelsHidden().pickerStyle(.segmented).frame(width: 220)
-            }
-            GridRow {
-                Text("主播").foregroundStyle(.secondary)
-                if maker.hosts.isEmpty {
-                    Text("没有找到存好的数字人形象。").foregroundStyle(.secondary)
-                } else {
-                    Picker("主播", selection: $maker.host) { ForEach(maker.hosts) { h in Text(h.name).tag(Optional(h)) } }
-                        .labelsHidden().frame(width: 260)
+        HStack {
+            Text("比例").font(.headline)
+            Spacer()
+            Picker("比例", selection: $maker.ratio) { Text("9:16 竖屏").tag("9:16"); Text("16:9 横屏").tag("16:9") }
+                .labelsHidden().pickerStyle(.segmented).frame(width: 240)
+        }
+        Divider()
+        VStack(alignment: .leading, spacing: 10) {
+            Text("主播").font(.headline)
+            if maker.hosts.isEmpty {
+                NoHostCard { addingHost = true }
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(maker.hosts) { h in
+                            HostCard(host: h, picked: maker.host?.id == h.id,
+                                     onPick: { maker.host = h },
+                                     onRename: { renameText = h.name; renaming = h },
+                                     onRemove: { removing = h })
+                        }
+                        AddHostCard { addingHost = true }
+                    }
+                    .padding(2)
+                }
+                if let h = maker.host, let t = h.faceText {
+                    Text("「\(h.name)」\(t)。Renoise 审核通过后才能用它生成；审核没通过就换一张照片。")
+                        .font(.caption).foregroundStyle(Theme.accent).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            GridRow {
-                Text("出镜模型").foregroundStyle(.secondary)
+        }
+        if !maker.hosts.isEmpty {
+            HStack {
+                Text("出镜模型").font(.headline)
+                Spacer()
                 Picker("出镜模型", selection: $maker.model) {
                     Text("Wan 3.0（推荐，长镜头更稳）").tag("wan3.0-video")
                     Text("Grok Video 1.5（自拍随手感）").tag("grok-video-1.5")
                 }
-                .labelsHidden().frame(width: 260)
+                .labelsHidden().frame(width: 300)
             }
         }
         if maker.claudeAppMissing {
@@ -534,32 +535,52 @@ struct VideoSheet: View {
             }
         }
         if !maker.setupNote.isEmpty { Text(maker.setupNote).font(.callout).foregroundStyle(.secondary) }
+        Divider()
         HStack {
-            Text("会在 Claude 桌面版新开一个会话，话已经填好，按发送开始。报价出来后在 Claude 里确认才花积分。")
-                .font(.caption).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
+            Text(maker.hosts.isEmpty ? "先添加一个主播" : "会在 Claude 桌面版新开一个会话，报价确认后才花积分")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button("先不做") { dismiss() }
             Button("交给 Claude 做") { maker.start(store: store) }
-                .buttonStyle(.glassProminent).disabled(maker.host == nil || maker.claudeAppMissing)
+                .buttonStyle(.glassProminent).disabled(maker.host?.usable != true || maker.claudeAppMissing)
         }
         .controlSize(.large)
+        .sheet(isPresented: $addingHost) {
+            AddHostSheet { h in maker.host = h }.environment(maker.library)
+        }
+        .alert("给主播改名", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("名字", text: $renameText)
+            Button("取消", role: .cancel) { renaming = nil }
+            Button("好") {
+                if let h = renaming { maker.library.rename(h, to: renameText.trimmingCharacters(in: .whitespaces)); maker.loadHosts() }
+                renaming = nil
+            }
+        }
+        .confirmationDialog("从豆仓移除「\(removing?.name ?? "")」？", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
+            Button("移除", role: .destructive) {
+                if let h = removing { maker.library.remove(h); if maker.host?.id == h.id { maker.host = nil }; maker.loadHosts() }
+                removing = nil
+            }
+        } message: {
+            Text("只从豆仓里去掉。这张照片在你 Renoise 账号里的素材不会被删除。")
+        }
     }
 
     private func styleCard(_ s: VideoMaker.Style) -> some View {
         let picked = maker.style == s
         return Button { maker.style = s } label: {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(spacing: 8) {
+                StylePreview(style: s).frame(height: 92).clipShape(.rect(cornerRadius: 8))
                 Text(s.name).font(.callout.weight(.semibold))
-                Text(s.fits).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
-            .padding(10)
-            .background(picked ? Theme.accent.opacity(0.14) : Color.clear, in: .rect(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(picked ? Theme.accent : Color.secondary.opacity(0.25), lineWidth: picked ? 1.5 : 0.5))
+            .padding(8)
+            .background(Color(nsColor: .controlBackgroundColor).opacity(picked ? 1 : 0.6), in: .rect(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(picked ? Theme.accent : Color.secondary.opacity(0.22), lineWidth: picked ? 2 : 0.5))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .help(s.fits)
+        .accessibilityLabel("\(s.name)\(picked ? "，已选中" : "")")
     }
 
     private var waiting: some View {
@@ -698,5 +719,44 @@ struct VideoSheet: View {
                 Button("关闭") { dismiss() }
             }
         }
+    }
+}
+
+/// 包装风格的小示意图：只画版式，不放人物（豆仓不带默认人物）。
+private struct StylePreview: View {
+    let style: VideoMaker.Style
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [Color(white: 0.9), Color(white: 0.78)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            Circle().fill(.white.opacity(0.35)).frame(width: 120).offset(x: 60, y: 40)
+            switch style {
+            case .premium:
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("3 个关键数字").font(.system(size: 13, weight: .heavy)).foregroundStyle(Color(white: 0.12))
+                    Rectangle().fill(Theme.accent).frame(width: 46, height: 3)
+                    Text("要点 01").font(.system(size: 9, weight: .bold)).padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Color(white: 0.12), in: .capsule).foregroundStyle(.white)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(12)
+            case .restrained:
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("标题").font(.system(size: 18, weight: .regular, design: .serif)).foregroundStyle(Color(white: 0.2))
+                    Rectangle().fill(Color(white: 0.4)).frame(width: 30, height: 1)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(12)
+            case .variety:
+                Text("太好用了！").font(.system(size: 17, weight: .black)).foregroundStyle(Theme.accent)
+                    .shadow(color: .white, radius: 0, x: 1.5, y: 1.5).shadow(color: .white, radius: 0, x: -1.5, y: -1.5)
+                    .rotationEffect(.degrees(-8))
+            }
+            VStack {
+                Spacer()
+                Capsule().fill(.black.opacity(0.18)).frame(height: 3).overlay(alignment: .leading) {
+                    Capsule().fill(Theme.accent).frame(width: 34, height: 3)
+                }
+                .padding(.horizontal, 10).padding(.bottom, 8)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }

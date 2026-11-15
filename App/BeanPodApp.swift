@@ -119,6 +119,10 @@ struct BeanPodApp: App {
             CommandMenu("小豆") {
                 Button("跟着真实状态") { store.mascotPreview = nil }
                 Button("看看：「录好了」卡片") { store.offerKeep(id: 0, seconds: 25, from: "这台 Mac", onMac: true) }
+                Button("看看：做成视频（选主播）") {
+                    if !maker.busy { maker.prepare(text: "这是一段示例口播稿。", recording: 0, title: "示例", template: "口播稿") }
+                    openWindow(id: "video-preview")
+                }
                 Divider()
                 Button("看看：待命") { store.mascotPreview = (.idle, .mid) }
                 Button("看看：满电") { store.mascotPreview = (.idle, .full) }
@@ -141,6 +145,12 @@ struct BeanPodApp: App {
                 .frame(minWidth: 620, minHeight: 520)
         }
         .defaultSize(width: 720, height: 760)
+
+        // 「做成视频」单开一个窗口看（小豆菜单里的预览用；正常入口是录音「改写」页里的按钮，弹出单）
+        Window("做成视频", id: "video-preview") {
+            VideoSheet().environment(store).environment(maker)
+        }
+        .windowResizability(.contentSize)
 
         Window("诊断日志", id: "log") {
             LogView().environment(store)

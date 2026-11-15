@@ -168,7 +168,9 @@ beanpod todos
 
 - Claude 桌面版，并且已添加 Renoise MCP
 - Renoise 账号和积分。生成前会先报价，你在 Claude 里确认了才会花积分
-- 数字人形象配置：装 [digital-human-koubo](https://github.com/andyhuo520/digital-human-koubo) skill，并在它的 `persona.json` 里设好主播形象。没有这份配置时，「做成视频」没有可选的主播
+- 至少一个主播。豆仓不带任何默认人物：在「做成视频」里点「添加主播」，上传一张你自己的正面半身照（会传到你自己的 Renoise 账号，不花积分），或者填一个你 Renoise 账号里已有的人像素材编号。添加时要确认「这是我本人，或者我已获得照片中本人的授权」。Renoise 会对人像做审核，审核通过前这个主播不能用
+
+主播记录和缩略图存在 `~/Library/Application Support/BeanPod/Hosts/`。从豆仓移除主播不会删除 Renoise 账号里的素材。
 
 连接页底部的「创作工具」卡片可以帮你安装、登录 Renoise 命令行。
 
