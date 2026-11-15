@@ -285,17 +285,11 @@ struct MaterialVideoCard: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text(recording.origin ?? "视频素材").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.warm900)
                 Text(detail(has)).font(.callout).foregroundStyle(Theme.warm500).monospacedDigit()
-                HStack(spacing: 8) {
-                    if let s = recording.source, let url = URL(string: s) {
-                        Button { NSWorkspace.shared.open(url) } label: { Label("打开原链接", systemImage: "arrow.up.right.square") }
-                    }
-                    if has {
-                        Button { store.saveVideoToDownloads(recording.id) } label: { Label("保存到本地", systemImage: "square.and.arrow.down") }
-                            .help("存一份到「下载」文件夹，并在访达里打开")
-                        Button { confirmRemove = true } label: { Label("删掉画面", systemImage: "trash") }
-                    }
+                // 按钮文字不截断：一行放得下就横排，放不下就竖排（窗口窄、横屏视频时右边只剩一条）
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { actionButtons(has) }
+                    VStack(alignment: .leading, spacing: 8) { actionButtons(has) }
                 }
-                .buttonStyle(.glass).controlSize(.large)
                 Text("删掉画面后声音和文字稿都还在。").font(.caption).foregroundStyle(Theme.warm400)
             }
             .padding(.top, 6)
@@ -309,6 +303,21 @@ struct MaterialVideoCard: View {
         } message: {
             Text("只删画面，声音、文字稿和纪要都留着。以后可以在「⋯」菜单里重新下载画面（要原链接还能打开）。")
         }
+    }
+
+    @ViewBuilder
+    private func actionButtons(_ has: Bool) -> some View {
+        Group {
+            if let s = recording.source, let url = URL(string: s) {
+                Button { NSWorkspace.shared.open(url) } label: { Label("打开原链接", systemImage: "arrow.up.right.square") }
+            }
+            if has {
+                Button { store.saveVideoToDownloads(recording.id) } label: { Label("保存到本地", systemImage: "square.and.arrow.down") }
+                    .help("存一份到「下载」文件夹，并在访达里打开")
+                Button { confirmRemove = true } label: { Label("删掉画面", systemImage: "trash") }
+            }
+        }
+        .buttonStyle(.glass).controlSize(.large).fixedSize()
     }
 
     private func detail(_ has: Bool) -> String {

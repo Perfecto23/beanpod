@@ -9,11 +9,13 @@ enum Route: Hashable {
     case materials
     /// 一个项目里的录音和素材。
     case project(UUID)
+    /// 带某个标签的录音和素材。
+    case tag(String)
 
     /// 是不是录音列表那一类页面（全部、素材、项目、场景）。
     var isList: Bool {
         switch self {
-        case .all, .starred, .scene, .materials, .project: true
+        case .all, .starred, .scene, .materials, .project, .tag: true
         default: false
         }
     }
@@ -60,7 +62,7 @@ struct RootView: View {
             case .dashboard: DashboardView().background(Backdrop())
             case .knowledge: KnowledgeView().background(Backdrop())
             case .device: DeviceView().background(Backdrop())
-            case .all, .starred, .scene, .materials, .project: RecordingsView().background(Backdrop())
+            case .all, .starred, .scene, .materials, .project, .tag: RecordingsView().background(Backdrop())
             }
         }
         .accessibilityHidden(nav.stageOpen && store.recState != .idle)
@@ -307,7 +309,7 @@ struct Sidebar: View {
         case .all, .starred, .scene: 1
         case .knowledge: 2
         case .materials: 3
-        case .device, .project: -1
+        case .device, .project, .tag: -1
         }
     }
 
@@ -340,6 +342,7 @@ struct Sidebar: View {
                 item("知识库", "book.closed.fill", 2) { nav.route = .knowledge }
             }
             projectList.padding(.top, 20)
+            SidebarTags().padding(.top, 16)
             Spacer(minLength: 0)
             Divider().overlay(Theme.warm200.opacity(0.6)).padding(.horizontal, -16).padding(.bottom, 14)
             DeviceChip()
@@ -708,6 +711,7 @@ struct RecordingsView: View {
             base = store.recordings.filter(\.isMaterial)
             if let platform { base = base.filter { Self.platform(of: $0) == platform } }
         case .project(let id): base = store.recordings.filter { $0.project == id }
+        case .tag(let t): base = store.recordings(tagged: t)
         default: base = store.ownRecordings
         }
         switch quick {
@@ -755,6 +759,7 @@ struct RecordingsView: View {
         case .scene(let s): s.name
         case .materials: "素材库"
         case .project(let id): store.project(id)?.name ?? "项目"
+        case .tag(let t): "#\(t)"
         default: "全部录音"
         }
     }
@@ -965,6 +970,7 @@ struct RecordingsView: View {
         switch nav.route {
         case .materials: return "play.rectangle"
         case .project: return "folder"
+        case .tag: return "number"
         default: return "line.3.horizontal.decrease.circle"
         }
     }
@@ -975,6 +981,7 @@ struct RecordingsView: View {
         switch nav.route {
         case .materials: return "还没有素材"
         case .project: return "「\(title)」里还没有东西"
+        case .tag: return "没有带「\(title)」的录音了"
         default: return "这个场景下还没有录音"
         }
     }
@@ -985,6 +992,7 @@ struct RecordingsView: View {
         switch nav.route {
         case .materials: return "把抖音、B 站、YouTube 这些视频链接贴到左边的框里，豆仓会下载声音、转成文字稿，再整理成纪要。"
         case .project: return "在任意一条录音上右键「移到项目」，或者在「全部录音」里点「选择」，一次放好几条进来。"
+        case .tag: return "在录音详情的标题下面点「＋ 标签」，就能给它加上。"
         default: return "整理过的录音会自动归到对应的场景。"
         }
     }
@@ -992,7 +1000,7 @@ struct RecordingsView: View {
     private var emptyLine: String {
         switch nav.route {
         // 素材库、项目空着时，右边已经有完整的说明，这里不再重复一遍
-        case .materials, .project: ""
+        case .materials, .project, .tag: ""
         default: store.ownRecordings.isEmpty ? "还没有录音" : "这个条件下没有录音"
         }
     }
@@ -1108,6 +1116,7 @@ struct RecordingsView: View {
 /// 列表里的一行：左边一个场景色块，右边两层——AI 起的标题，和一行小信息（时间、时长、场合、关键词、待办和重点的个数）。
 struct RecordingRow: View {
     @Environment(BeanStore.self) private var store
+    @Environment(Navigator.self) private var nav
     let recording: Recording
     var selected = false
     /// 多选时：勾了没有（不在多选就是 nil）。
@@ -1199,17 +1208,21 @@ struct RecordingRow: View {
     private func tags(_ count: Int) -> some View {
         HStack(spacing: 6) {
             ForEach(Array(shortTags.prefix(count)), id: \.self) { tag in
+                // 正在看某个标签：这个标签排第一个，用强调色
+                let on = nav.route == .tag(tag)
                 Text(tag).lineLimit(1).fixedSize()
                     .padding(.horizontal, 6).padding(.vertical, 2)
-                    .foregroundStyle(Theme.warm600)
-                    .background(Theme.warm100, in: .rect(cornerRadius: 4))
+                    .foregroundStyle(on ? Theme.accent : Theme.warm600)
+                    .background(on ? Theme.accent.opacity(0.12) : Theme.warm100, in: .rect(cornerRadius: 4))
             }
         }
     }
 
     /// 关键词：去掉井号，太长的不要（放不下，也说明它不是个词）。
     private var shortTags: [String] {
-        recording.tags.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "# ")) }.filter { !$0.isEmpty && $0.count <= 6 }
+        let all = recording.tags.map(BeanStore.cleanTag).filter { !$0.isEmpty && $0.count <= 6 }
+        if case .tag(let t) = nav.route, all.contains(t) { return [t] + all.filter { $0 != t } }
+        return all
     }
 
     /// 日期已经写在分组标题上了，这里只写几点、多长、什么场合。
@@ -1356,6 +1369,7 @@ struct RecordingDetail: View {
                     PaneSwitch(selection: $tab, titles: ["纪要", "文字稿", "改写"])
                 }
             }
+            if recording.downloaded { TagBar(recording: recording) }
         }
         .padding(24)
         .background(Theme.surface.opacity(0.9))

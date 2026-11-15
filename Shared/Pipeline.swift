@@ -207,7 +207,7 @@ extension BeanStore {
         // 重新整理时保留已经勾掉的待办
         let done = Set(recordings[j].todos.filter(\.done).map(\.text))
         recordings[j].todos = result.todos.map { Todo(text: $0, done: done.contains($0)) }
-        recordings[j].tags = result.tags
+        if !recordings[j].tagsEdited { recordings[j].tags = result.tags }   // 自己改过的标签不覆盖
         recordings[j].people = result.people
         recordings[j].analyzedBy = result.source
         saveLibrary()
@@ -359,9 +359,13 @@ extension BeanStore {
         }
     }
 
+    /// 所有标签和各自用在几条上，多的排前面（去掉井号，同一条里重复的只算一次）。
     var allTags: [(tag: String, count: Int)] {
-        Dictionary(recordings.flatMap(\.tags).map { ($0, 1) }, uniquingKeysWith: +)
-            .map { (tag: $0.key, count: $0.value) }.sorted { ($0.count, $1.tag) > ($1.count, $0.tag) }
+        var counts: [String: Int] = [:]
+        for r in recordings {
+            for t in Set(r.tags.map(Self.cleanTag)) where !t.isEmpty { counts[t, default: 0] += 1 }
+        }
+        return counts.map { (tag: $0.key, count: $0.value) }.sorted { ($0.count, $1.tag) > ($1.count, $0.tag) }
     }
 
     var openTodos: [(recording: Recording, todo: Todo)] {

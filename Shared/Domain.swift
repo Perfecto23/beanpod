@@ -284,6 +284,8 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
     var title: String?
     /// 标题是用户自己改过的，整理时不再覆盖。
     var titleEdited = false
+    /// 用户自己改过标签：重新整理时不再用 AI 的标签覆盖。
+    var tagsEdited = false
     var downloaded = false
     var onDevice = false
     /// 设备还在往这条里录，现在下载只能拿到一半。运行时状态，不存盘。
@@ -337,7 +339,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, size, date, duration, title, titleEdited, downloaded, onDevice, transcript, segments, transcribedBy, speakers, rewrites
+        case id, size, date, duration, title, titleEdited, tagsEdited, downloaded, onDevice, transcript, segments, transcribedBy, speakers, rewrites
         case scene, sceneLocked, summary, sections, todos, tags, people, analyzedBy, starred, origin, source, project, translation, textOnly, marks, videos
     }
 
@@ -350,6 +352,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
         duration = try c.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 0
         title = try c.decodeIfPresent(String.self, forKey: .title)
         titleEdited = try c.decodeIfPresent(Bool.self, forKey: .titleEdited) ?? false
+        tagsEdited = try c.decodeIfPresent(Bool.self, forKey: .tagsEdited) ?? false
         downloaded = try c.decodeIfPresent(Bool.self, forKey: .downloaded) ?? false
         onDevice = try c.decodeIfPresent(Bool.self, forKey: .onDevice) ?? false
         transcript = try c.decodeIfPresent(String.self, forKey: .transcript)
