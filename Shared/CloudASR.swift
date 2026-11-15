@@ -18,6 +18,7 @@ nonisolated enum CloudASRError: LocalizedError {
             switch code {
             case 401, 403: "云端转写的密钥不对，或者没有权限（\(code)）"
             case 429: "云端转写被限流了，过一会儿再试（429）"
+            case 404: "这个地址没有转写接口（404）。检查一下接口地址，或者在设置里换一家能转写的服务。"
             default: "云端转写返回错误 \(code)：\(body.prefix(160))"
             }
         case .noText: "云端转写没有返回文字"
@@ -32,6 +33,7 @@ nonisolated enum CloudASRError: LocalizedError {
 /// 服务商给不给时间戳不一定：给了就用它的分句，没给就按标点自己分句、按字数估时间。
 nonisolated enum CloudASR {
     static let presets: [(name: String, url: String, model: String)] = [
+        ("小米 MiMo", "https://api.xiaomimimo.com/v1", "mimo-v2.5-asr"),
         ("硅基流动", "https://api.siliconflow.cn/v1", "FunAudioLLM/SenseVoiceSmall"),
         ("OpenAI", "https://api.openai.com/v1", "whisper-1"),
         ("Groq", "https://api.groq.com/openai/v1", "whisper-large-v3-turbo"),
@@ -79,7 +81,45 @@ nonisolated enum CloudASR {
 
     // MARK: 一次请求
 
+    /// 小米 MiMo 没有「/audio/transcriptions」（会回 404），转写走对话接口：把音频放进 user 消息，模型用 mimo-v2.5-asr。
+    static func isMiMo(_ baseURL: String) -> Bool {
+        URL(string: baseURL.trimmingCharacters(in: .whitespaces))?.host?.hasSuffix("xiaomimimo.com") == true
+    }
+
+    /// MiMo 填成了对话模型（比如 mimo-v2.6-pro）时，转写还是用它的转写模型。
+    static func mimoModel(_ model: String) -> String {
+        model.lowercased().contains("asr") ? model : "mimo-v2.5-asr"
+    }
+
+    private static func requestMiMo(_ samples: [Float], config: ASRConfig) async throws -> [Segment] {
+        guard let endpoint = URL(string: config.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) + "/chat/completions") else {
+            throw CloudASRError.badURL
+        }
+        let seconds = Double(samples.count) / 16000
+        // 只收 wav 和 mp3；user 消息里只能放音频，不能带文字
+        let audio: [String: Any] = ["type": "input_audio", "input_audio": ["data": QwenASR.wav(samples).base64EncodedString(), "format": "wav"]]
+        let payload: [String: Any] = ["model": mimoModel(config.model), "messages": [["role": "user", "content": [audio]]]]
+        var req = URLRequest(url: endpoint)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 180
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if !config.key.isEmpty { req.setValue("Bearer \(config.key)", forHTTPHeaderField: "Authorization") }
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        let (data, response) = try await URLSession.shared.upload(for: req, from: body)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(code) else { throw CloudASRError.http(code, String(decoding: data, as: UTF8.self)) }
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = object["choices"] as? [[String: Any]],
+              let message = choices.first?["message"] as? [String: Any],
+              let text = (message["content"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+            throw CloudASRError.noText
+        }
+        // 没有时间戳：按标点分句、按字数估时间
+        return sentences(clean(text), seconds: seconds)
+    }
+
     private static func request(_ samples: [Float], config: ASRConfig, language: String, rich: Bool) async throws -> [Segment] {
+        if isMiMo(config.baseURL) { return try await requestMiMo(samples, config: config) }
         guard let endpoint = URL(string: config.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) + "/audio/transcriptions") else {
             throw CloudASRError.badURL
         }

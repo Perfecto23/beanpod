@@ -789,7 +789,7 @@ private struct CloudASRSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("云端转写").font(.title2.bold())
-                Text("兼容 OpenAI「/audio/transcriptions」接口的服务都能用。用它转写时，录音会发给这家服务商。密钥存在系统钥匙串里。")
+                Text("兼容 OpenAI「/audio/transcriptions」接口的服务都能用；小米 MiMo 走它自己的转写模型。用它转写时，录音会发给这家服务商。密钥存在系统钥匙串里。")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 8) {
@@ -812,7 +812,13 @@ private struct CloudASRSheet: View {
                 }
                 GridRow {
                     Text("模型")
-                    TextField("模型", text: $settings.asrModel, prompt: Text("比如 whisper-1")).textFieldStyle(.roundedBorder)
+                    VStack(alignment: .leading, spacing: 4) {
+                        TextField("模型", text: $settings.asrModel, prompt: Text("比如 whisper-1")).textFieldStyle(.roundedBorder)
+                        if CloudASR.isMiMo(settings.asrBaseURL), CloudASR.mimoModel(settings.asrModel) != settings.asrModel {
+                            Text("「\(settings.asrModel)」是对话模型，不能转写。转写会用 \(CloudASR.mimoModel(settings.asrModel))。")
+                                .font(.caption).foregroundStyle(Theme.amber).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
                 GridRow {
                     Text("密钥")

@@ -76,6 +76,8 @@ struct BeanPodApp: App {
                 .disabled(chosen == nil)
                 Button("让 AI 给选中的录音重新起标题") { if let id = chosen?.id { store.retitle(id) } }
                     .disabled(chosen?.transcript == nil || !store.analysisAvailable)
+                Button("重新转写选中的录音") { if let id = chosen?.id { store.process(id, retranscribe: true) } }
+                    .disabled(chosen?.downloaded != true || chosen?.textOnly == true || chosen.map { store.stages[$0.id] != nil } == true)
                 // 视频素材的画面（VideoKeep.swift）
                 if let c = chosen, c.isMaterial, store.videoRevision >= 0, store.hasVideo(c.id) {
                     Button("删掉选中素材的画面") { store.removeVideo(c.id) }
