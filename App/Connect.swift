@@ -253,8 +253,18 @@ struct ConnectView: View {
                 }
 
                 if !connector.cliInstalled {
-                    Label("豆仓的命令行工具还没装好（应该在 ~/.local/bin/beanpod），下面的连接暂时都用不了。", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(Theme.accent).padding(12).frame(maxWidth: .infinity, alignment: .leading).panel(radius: 12)
+                    HStack(spacing: 12) {
+                        Label("豆仓的命令行工具还没装好（应该在 ~/.local/bin/beanpod），下面的连接暂时都用不了。", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Theme.accent).frame(maxWidth: .infinity, alignment: .leading)
+                        if BeanStore.bundledCLI != nil {
+                            Button("装上") {
+                                if store.installCLI() { Task { await connector.refresh() } }
+                                else { store.toast("exclamationmark.triangle", "没装上，详情看日志") }
+                            }
+                            .buttonStyle(.glassProminent).fixedSize()
+                        }
+                    }
+                    .padding(12).panel(radius: 12)
                 }
 
                 ForEach(Assistant.allCases) { card($0) }

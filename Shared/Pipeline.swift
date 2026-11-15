@@ -803,6 +803,31 @@ extension BeanStore {
     static var mcpAddress: String { "http://127.0.0.1:\(mcpPort)/mcp" }
     #if os(macOS)
     static var cliPath: String { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/beanpod").path }
+    /// App 包里带的那份（Contents/Helpers/beanpod）。
+    static var bundledCLI: URL? {
+        let url = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/beanpod")
+        return FileManager.default.isExecutableFile(atPath: url.path) ? url : nil
+    }
+
+    /// 把 App 自带的命令行工具装到 ~/.local/bin/beanpod（AI 助手的 MCP 配置指向这里）。
+    /// 没装或和自带的不一样（App 升级了）才复制。要先删再拷：原地覆盖会让新文件一启动就被系统杀掉。
+    @discardableResult
+    func installCLI() -> Bool {
+        guard let src = Self.bundledCLI else { return FileManager.default.isExecutableFile(atPath: Self.cliPath) }
+        let fm = FileManager.default
+        let dst = URL(fileURLWithPath: Self.cliPath)
+        if fm.contentsEqual(atPath: src.path, andPath: dst.path) { return true }
+        do {
+            try fm.createDirectory(at: dst.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if fm.fileExists(atPath: dst.path) { try fm.removeItem(at: dst) }
+            try fm.copyItem(at: src, to: dst)
+            addLog("命令行工具已装到 \(Self.cliPath)")
+            return true
+        } catch {
+            addLog("命令行工具没装上：\(error.localizedDescription)")
+            return false
+        }
+    }
 
     /// 豆仓开着的时候，顺带把 MCP 的网址入口也开着，给只认网址的工具（比如 Grok Bot）用。只监听本机。
     func startMCPServer() {

@@ -244,6 +244,7 @@ final class BeanStore {
         refreshASRAvailability()
         watchInbox()
         #if os(macOS)
+        installCLI()
         startMCPServer()
         #endif
         Task { [weak self] in

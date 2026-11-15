@@ -1,53 +1,91 @@
 # 豆仓 BeanPod
 
-一个原生 macOS App，用来在电脑上管理 AI 录音豆（型号 D3200）：把录音拉到本地、播放、转成文字。全程在本机完成，不经过任何云服务。
+一个原生 macOS App，用来在电脑上管理 AI 录音豆（型号 D3200）。它能把录音拉到本地并转成文字，再整理成纪要和待办，之后可以直接提问。转写在本机完成，录音不上传。
 
-> 非官方项目，与设备厂商及其合作方没有任何关系。仅用于管理你自己设备上的你自己的录音。
+> 非官方项目，与设备厂商及其合作方没有任何关系，仅用于管理你自己设备上的你自己的录音。产品名和商标归各自的所有者。
 
 ## 能做什么
 
-**设备**
+**录音豆**
 - 搜索并连接录音豆，之后自动回连；查看电量、存储、固件
-- 在电脑上开始、暂停录音；把录音下载到 Mac 并自动解密成通用的 `.ogg`
+- 在电脑上开始、暂停、继续、结束录音；在录音豆上按键开始录音，豆仓也能跟上
+- 下载录音并自动解密成通用的 `.ogg`。连上就自动同步还没下载的录音
+- 蓝牙下载较慢，长录音可以走 **Wi‑Fi 快传**（约 500 KB/s，过程中电脑会暂时断网约 40 秒）
+- 录音时可以打重点标记，回听时能跳到标记的地方
 
 **转写**
-- 默认用 [Qwen3‑ASR 0.6B](https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF) 经 llama.cpp 在本机转写，带时间戳，点任意一句可以从那里开始听
+- 默认用 [Qwen3‑ASR 0.6B](https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF) 经 llama.cpp 在本机转写，带时间戳，点任意一句就从那里开始听
+- 边录边出字：录音舞台里显示实时字幕，可以投屏给现场看
 - 没装模型时自动改用系统自带的语音识别；两种都不上传录音
+- 纠错词库：在文字稿里改过的词，以后转写会自动替换
 
 **整理**
-- 自动判断场景：会议、访谈、销售、沟通、电话、自媒体、大会、课程、灵感，每种场景有自己的纪要栏目（比如销售会抽出客户需求、异议、预算与决策人、下一步）
-- 可以设定自己的职业，整理时的侧重点随之变化
-- 生成标题、摘要、分栏要点、待办、标签、人物
-- 分析模型可配置：任何兼容 OpenAI 接口的服务都行。用本机的 Ollama 或 LM Studio 时，文字稿也不出这台电脑
+- 自动判断场景：会议、访谈、销售、沟通、电话、自媒体、大会、课程、灵感等，每种场景有自己的纪要栏目
+- 生成标题、摘要、分栏要点、待办、人物；可以设定你的职业，整理的侧重点会跟着变
+- 改写成口播稿、短视频脚本、社媒长帖、公众号、会后邮件；外语内容可以翻译成双语对照
+- 分析模型可以自己选：本机的 Ollama / LM Studio / llama.cpp，或任何兼容 OpenAI 接口的云端服务（填你自己的密钥）。用本机模型时，文字稿也不出这台电脑
 
-**总览与知识库**
-- 总览：录音数量与时长、近 14 天趋势、场景分布、未完成待办、常出现的话题
-- 知识库：所有录音的要点自动汇总，可按场景和话题筛选、全文搜索（命中文字稿时可直接跳到那一句），也可以直接提问，回答会标出依据的录音
-- 导出为 Markdown，每条录音一个文件，带 frontmatter，可直接放进 Obsidian
+**找回来**
+- 总览：待处理、待办、最近的录音
+- 知识库：直接提问，回答会标出依据的录音；也可以按时间、场景、人物筛选
+- 项目：把多条录音归到一个项目里
+- 导出 Markdown（带 frontmatter，可以直接放进 Obsidian）和 M4A / WAV 音频
 
-没有做：Wi‑Fi 批量导出、边录边转写、说话人区分、固件升级、绑定与解绑。
+**别的来源**
+- 没连录音豆时用 Mac 录：麦克风、电脑里的声音，或者两路一起
+- 导入音频文件，或贴视频、播客链接只取声音（YouTube、B 站、抖音、小红书、视频号、微博、喜马拉雅、Apple 播客等）。只用于你有权使用的公开内容
+- 语音输入：按住一个键对着录音豆说话，松开后文字打进当前正在用的软件
+
+**接上 AI 助手**
+- 豆仓自带 MCP 服务。Claude Code、Codex、Claude 桌面版、OpenClaw 等可以一键连接，连上后在助手里就能查录音、纪要和待办
+- 只认网址的工具，可以填 `http://127.0.0.1:8791/mcp`（豆仓开着时才有，只在本机可用）
 
 ## 使用前要知道
 
-- 录音豆同一时间只连一台设备。手机连着时电脑搜不到，先关掉手机蓝牙。
-- 蓝牙下载不快：实测 26 秒的录音约 7 秒传完，一小时的录音要十几分钟。
-- 只在固件 04.92 上测过。
+- 需要 **macOS 26** 和一颗录音豆。iPhone 版在 `Mobile/`，还在试验阶段。
+- 录音豆同一时间只能连一台设备。手机连着时电脑搜不到，先关掉手机蓝牙。
+- 只在固件 04.92 上测过。只用已经在官方 App 里开通过的设备测过；全新、从没开通过的设备能不能直接连，还不知道。
+- 蓝牙下载：26 秒的录音约 7 秒传完，一小时的录音要十几分钟。长录音用 Wi‑Fi 快传。
 
-## 构建
+## 安装
 
-需要 macOS 14 以上、Xcode 26、[XcodeGen](https://github.com/yonaskolb/XcodeGen)。
+目前没有发布编译好的安装包，需要从源码编译。
+
+**1. 准备**
+
+```bash
+brew install xcodegen llama.cpp ffmpeg
+```
+
+还需要 Xcode 26。导入链接要用到 `yt-dlp`（`brew install yt-dlp`），小红书、抖音、视频号的下载器第一次用时会自动装进一个独立的 Python 环境。
+
+**2. 编译**
 
 ```bash
 xcodegen generate
 ```
 
 ```bash
-xcodebuild -project BeanPod.xcodeproj -scheme BeanPod -derivedDataPath build build
+xcodebuild -project BeanPod.xcodeproj -scheme BeanPod -derivedDataPath build build CODE_SIGN_IDENTITY="Apple Development" CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=<你的团队号>
+```
+
+建议用自己的 Apple 开发证书签名（免费的 Apple ID 也可以，团队号在 Xcode → Settings → Accounts 里找）。不签名也能编译，但每次重新编译后系统都会重新要蓝牙授权，授权前搜不到设备。
+
+```bash
+cp -R build/Build/Products/Debug/BeanPod.app /Applications/
 ```
 
 ```bash
-open build/Build/Products/Debug/BeanPod.app
+open /Applications/BeanPod.app
 ```
+
+请从「应用程序」文件夹或访达打开，不要在终端里直接运行 App 里的可执行文件，否则会因为没有权限而崩溃。
+
+**3. 第一次打开**
+
+- 允许蓝牙权限，然后按引导连接录音豆
+- 到「设置 → 模型」一键下载转写模型（约 1 GB），再选一个整理用的模型
+- 豆仓会把自带的命令行工具装到 `~/.local/bin/beanpod`，「连接 AI 助手」就是用它
 
 核心逻辑的测试：
 
@@ -55,9 +93,13 @@ open build/Build/Products/Debug/BeanPod.app
 swift test
 ```
 
-## 代码结构
+## 隐私
 
-转写需要 llama.cpp（`brew install llama.cpp`）和模型文件，模型可以在 App 的设置里一键下载。
+- 录音、文字稿、纪要都保存在这台 Mac 上：`~/Library/Application Support/BeanPod/`
+- 转写在本机进行。只有你在设置里配了云端模型时，文字稿才会发给你配置的那家服务
+- 豆仓不收集任何使用数据，也没有自己的服务器
+
+## 代码结构
 
 ```
 Sources/BeanKit/   协议与音频，不依赖界面，可单独测试
@@ -67,33 +109,29 @@ Sources/BeanKit/   协议与音频，不依赖界面，可单独测试
   Crypto.swift       密钥协商、文件解密、切片解析
   OggOpus.swift      把裸 Opus 帧装进 Ogg 容器
   OpusDecoder.swift  解码成 WAV
-App/               SwiftUI 界面与业务
-  BLEClient.swift    蓝牙连接
-  BeanStore.swift    设备状态、录音库
-  Pipeline.swift     转写 → 整理的流水线，知识库检索、问答、导出
-  QwenASR.swift      本机 Qwen3‑ASR（llama-server）
-  Analyzer.swift     场景判断与纪要生成
-  Domain.swift       场景、职业、录音的数据结构
-docs/PROTOCOL.md   协议笔记，逐条标注了哪些是真机实测、哪些尚未独立核实
+Sources/beanpod/   命令行工具与 MCP 服务（随 App 打包在 Contents/Helpers）
+Shared/            Mac 和 iPhone 共用：蓝牙、录音库、转写与整理流程、知识库
+App/               Mac 界面与 Mac 专属功能（Wi‑Fi 快传、链接导入、刘海面板、连接 AI 助手等）
+  SocialDL/          小红书、抖音、视频号等平台的下载器（Python）
+Mobile/            iPhone 版界面（试验中）
+docs/PROTOCOL.md   协议笔记，逐条标注了来源
+design/            界面设计稿与「小豆」形象素材
 ```
 
-录音保存在 `~/Library/Application Support/BeanPod/Recordings/`，运行日志在 `~/Library/Logs/BeanPod.log`。
+运行日志在 `~/Library/Logs/BeanPod.log`。
 
-## 致谢与来源
+## 协议
 
-协议方面参考了 [tacshi/Soundcore](https://github.com/tacshi/Soundcore) 的协议笔记，它是第一个把这台设备的协议整理出来的项目。本项目的代码是用 Swift 独立编写的，没有使用该项目的代码；在真机上核对时发现并修正了其中几处字段含义，详见 [docs/PROTOCOL.md](docs/PROTOCOL.md)。
+[docs/PROTOCOL.md](docs/PROTOCOL.md) 记录了豆仓与录音豆通信用到的全部协议：帧格式、命令、录音列表、下载与解密、Wi‑Fi 快传。每一条都标了来源：真机实测、对照官方客户端核对，或者取自前人的笔记、尚未独立核实。
 
-本仓库不包含任何厂商的代码、固件或密钥。
+这份协议是为了让你能在自己的电脑上使用自己的设备而整理的。本仓库不包含任何厂商的代码、固件或密钥，也不包含反编译得到的代码。
+
+## 致谢
+
+协议方面参考了 [tacshi/Soundcore](https://github.com/tacshi/Soundcore) 的协议笔记，它是第一个把这台设备的协议整理出来的项目。本项目的代码是用 Swift 独立编写的，没有使用该项目的代码；在真机上核对时发现并修正了其中几处字段含义，详见协议笔记。
+
+转写模型是 Qwen3‑ASR（GGUF 版来自 [ggml-org/Qwen3-ASR-0.6B-GGUF](https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF)），本机推理用 [llama.cpp](https://github.com/ggml-org/llama.cpp)。
 
 ## 许可证
 
 [MIT](LICENSE)
-
-## iPhone 版（进行中）
-
-`Mobile/` 是 iPhone 版的界面，和 Mac 版共用 `Shared/` 里的同一套核心：蓝牙协议、下载解密、录音库、整理流程、提问。
-手机上不跑本机模型，转写走云端（兼容 OpenAI `/audio/transcriptions` 的服务，或系统语音识别），整理也走云端。
-
-- 用 Xcode 打开工程，选 `BeanPodMobile` 目标即可运行，需要装好 iOS 平台组件。
-- 没装平台组件时，`Mobile/build-sim.sh run` 可以绕过 Xcode 工程，直接编译并装进模拟器；`Mobile/shots.sh` 逐页截图。
-- 模拟器没有蓝牙，连接录音豆只能在真机上试。

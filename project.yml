@@ -22,6 +22,17 @@ targets:
     sources: [App, Shared]
     dependencies:
       - package: BeanKit
+      - target: beanpod-cli
+        link: false
+        embed: false
+    postBuildScripts:
+      # 命令行工具（MCP 服务）随 App 一起带上，放 Contents/Helpers；App 启动时装到 ~/.local/bin。
+      # 不能放 Contents/MacOS：大小写不敏感的磁盘上 beanpod 和 BeanPod 会撞名。
+      - name: Embed beanpod CLI
+        basedOnDependencyAnalysis: false
+        script: |
+          mkdir -p "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers"
+          cp -f "$BUILT_PRODUCTS_DIR/beanpod" "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/beanpod"
     info:
       path: App/Info.plist
       properties:
@@ -43,6 +54,20 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  beanpod-cli:
+    type: tool
+    platform: macOS
+    sources: [Sources/beanpod]
+    settings:
+      base:
+        PRODUCT_NAME: beanpod
+        PRODUCT_BUNDLE_IDENTIFIER: com.andyhu.beanpod.cli
+        SWIFT_VERSION: "5.0"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: NO
+        SKIP_INSTALL: YES
   BeanPodMobile:
     type: application
     platform: iOS
