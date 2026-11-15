@@ -30,6 +30,21 @@ final class AppSettings {
         var name: String { self == .system ? "跟随系统" : self == .light ? "浅色" : "深色" }
     }
 
+    /// 从链接导入视频时，要不要连画面一起留着。
+    enum KeepVideo: String, CaseIterable, Identifiable {
+        case short, always, never
+        var id: String { rawValue }
+        var name: String {
+            switch self {
+            case .short: "短视频"
+            case .always: "都保留"
+            case .never: "都不保留"
+            }
+        }
+    }
+    /// 「短视频」的界线：这么长以内的视频保留画面。
+    static let shortVideoSeconds: TimeInterval = 5 * 60
+
     /// 整理纪要用哪边的模型。
     enum AnalysisMode: String, CaseIterable, Identifiable {
         case auto, cloud, local
@@ -83,6 +98,8 @@ final class AppSettings {
     var autoTranslate: Bool { didSet { save("autoTranslate", autoTranslate) } }
     /// 剪贴板里出现视频链接时提示导入。
     var watchClipboard: Bool { didSet { save("watchClipboard", watchClipboard) } }
+    /// 视频素材保留画面的规则（默认：5 分钟以内的保留 720p 画面）。
+    var keepVideo: KeepVideo { didSet { save("keepVideo", keepVideo.rawValue) } }
 
     /// 云端转写：任何兼容 OpenAI「/audio/transcriptions」接口的服务。
     var asrBaseURL: String { didSet { save("asrBaseURL", asrBaseURL) } }
@@ -135,6 +152,7 @@ final class AppSettings {
         translatePrompt = d.string(forKey: "translatePrompt") ?? ""
         autoTranslate = d.object(forKey: "autoTranslate") as? Bool ?? true
         watchClipboard = d.object(forKey: "watchClipboard") as? Bool ?? true
+        keepVideo = KeepVideo(rawValue: d.string(forKey: "keepVideo") ?? "") ?? .short
         asrBaseURL = d.string(forKey: "asrBaseURL") ?? ""
         asrModel = d.string(forKey: "asrModel") ?? ""
         asrKey = Keychain.migrate("asrKey")

@@ -170,6 +170,10 @@ private struct GeneralPane: View {
                 }
             }
 
+            SettingsGroup("视频素材") {
+                VideoKeepSettings().padding(.vertical, 6)
+            }
+
             SettingsGroup("录音的时候和录完之后") {
                 SettingRow(icon: "captions.bubble", title: "边录边出字", detail: "录音时在舞台上实时显示文字。") {
                     Toggle("边录边出字", isOn: $settings.liveTranscribe).labelsHidden().toggleStyle(.switch)

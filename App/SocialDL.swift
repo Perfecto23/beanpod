@@ -31,8 +31,10 @@ extension BeanStore {
         }
         // 在豆仓登录窗口里登录过这个平台：把登录状态交给它（小红书没有登录常常只给低清）
         let cookie = Self.cookieHeader(platform)
+        var env: [String: String] = cookie.isEmpty ? [:] : ["BEANPOD_COOKIE": cookie]
+        if mightKeepVideo(linkJobs.first { $0.id == id }) { env["BEANPOD_WANT_VIDEO"] = "1" }   // 要留画面：小红书别只挑纯音频流
         let run = await Self.runTool(python, ["-B", SocialDL.home.appendingPathComponent("beanpod_social.py").path, url, work.path],
-                                     env: cookie.isEmpty ? [:] : ["BEANPOD_COOKIE": cookie], onLine: onLine)
+                                     env: env, onLine: onLine)
         let result = run.output.split(separator: "\n").reversed().lazy.compactMap { SocialDL.event(String($0)) }.first { $0["type"] as? String == "result" }
         guard let result, result["ok"] as? Bool == true else {
             let why = (result?["error"] as? String) ?? String(run.errors.suffix(300))
@@ -70,7 +72,7 @@ extension BeanStore {
         let douyinId = platform == "抖音" ? (result["id"] as? String ?? "") : ""
         finishLinkImport(id, audio: audio, title: title, author: author,
                          page: douyinId.isEmpty ? url : "https://www.douyin.com/video/\(douyinId)",
-                         platform: platform, cues: [])
+                         platform: platform, cues: [], video: media)
         return true
     }
 

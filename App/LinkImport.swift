@@ -11,12 +11,15 @@ import WebKit
 /// 要登录才能看的：弹一个登录窗口，用户自己在里面登录（扫码或输入，豆仓不经手密码），
 /// 登录状态只存在这台 Mac 上，以后下载这个平台时带上。不读浏览器里的登录状态。
 extension BeanStore {
-    func importLinks(_ text: String) {
+    /// keepVideo：导入窗口里单独勾过「保留画面」的链接（没勾过的按设置）。
+    func importLinks(_ text: String, keepVideo: [String: Bool] = [:]) {
         var skipped: [Recording] = []
         for url in LinkTools.urls(in: text) where !linkJobs.contains(where: { $0.url == url }) {
             // 导入过的同一条作品不再下一份（库里已经有好几份一样的，就是这么来的）
             if let old = importedRecording(for: url) { skipped.append(old); continue }
-            linkJobs.append(LinkJob(url: url, platform: LinkTools.platform(of: url)))
+            var job = LinkJob(url: url, platform: LinkTools.platform(of: url))
+            job.keepVideo = keepVideo[url]
+            linkJobs.append(job)
         }
         if let first = skipped.first {
             addLog("跳过导入过的 \(skipped.count) 条：\(skipped.map(\.id))")
@@ -129,11 +132,13 @@ extension BeanStore {
             (order.firstIndex { a.lastPathComponent.contains(".\($0).") } ?? 99) < (order.firstIndex { b.lastPathComponent.contains(".\($0).") } ?? 99)
         }
         let cues = best.flatMap { try? String(contentsOf: $0, encoding: .utf8) }.map(SubtitleParser.parse) ?? []
-        finishLinkImport(id, audio: audio, title: title, author: author, page: page, platform: platform, cues: cues)
+        finishLinkImport(id, audio: audio, title: title, author: author, page: page, platform: platform, cues: cues, fetchVideo: true)
     }
 
     /// 声音拿到之后：放进录音库，标好来源，交给整理。
-    func finishLinkImport(_ id: UUID, audio: URL, title: String, author: String, page: String, platform: String, cues: [SubtitleParser.Cue]) {
+    /// video：手上已有的视频文件（按规则决定留不留画面）；fetchVideo：只下了声音，要留画面时另外去下一份（yt-dlp 那一路）。
+    func finishLinkImport(_ id: UUID, audio: URL, title: String, author: String, page: String, platform: String, cues: [SubtitleParser.Cue],
+                          video: URL? = nil, fetchVideo: Bool = false) {
         if let k = linkJobs.firstIndex(where: { $0.id == id }) { linkJobs[k].title = title; linkJobs[k].progress = 1 }
         // 贴的是短链时，导入前认不出是哪条；解析出作品页后再查一次，导入过的不再放一份
         if let old = importedRecording(for: page) {
@@ -160,6 +165,13 @@ extension BeanStore {
         saveLibrary()
         addLog("链接导入完成：\(rid)「\(title)」\(cues.count >= 3 ? "，用了平台字幕 \(cues.count) 句" : "")")
         toast("checkmark.circle.fill", "导入好了：\(title.isEmpty ? platform : String(title.prefix(18)))")
+        // 画面：按设置（和导入时的勾选）决定留不留
+        let override = linkJobs.first { $0.id == id }?.keepVideo
+        if let video, video != audio {
+            adoptVideo(video, for: rid, override: override)
+        } else if fetchVideo, wantsVideo(duration: recordings.first { $0.id == rid }?.duration, override: override) {
+            self.fetchVideo(rid)
+        }
         if settings.autoProcess { process(rid) }
     }
 
@@ -271,6 +283,11 @@ struct LinkImportSheet: View {
     @State private var login: LinkLoginRequest?
     /// 登录窗口关上后加一，让「已登录」重新看一遍
     @State private var loginTick = 0
+    /// 单独勾过「保留画面」的链接；没勾过的按设置（设计稿 design/ui/ui_video_import.png）
+    @State private var keep: [String: Bool] = [:]
+
+    /// 只有声音的平台不给「保留画面」
+    private static func audioOnly(_ platform: String) -> Bool { ["喜马拉雅", "小宇宙", "播客"].contains { platform.contains($0) } }
 
     private var urls: [String] { LinkTools.urls(in: text) }
 
@@ -311,6 +328,12 @@ struct LinkImportSheet: View {
                                     Text("已导入过").font(.caption.weight(.medium)).foregroundStyle(.secondary)
                                 } else {
                                     loginState(platform: platform, url: url, logged: logged)
+                                    if !Self.audioOnly(platform) {
+                                        Toggle("保留画面", isOn: Binding(get: { keep[url] ?? (store.settings.keepVideo != .never) },
+                                                                      set: { keep[url] = $0 }))
+                                            .toggleStyle(.checkbox).font(.caption).fixedSize()
+                                            .help(keep[url] == nil && store.settings.keepVideo == .short ? "按设置：5 分钟以内的才留画面；勾选或取消就按你选的" : "保留 720p 画面")
+                                    }
                                 }
                             }
                             if let old {
@@ -331,14 +354,16 @@ struct LinkImportSheet: View {
             } else if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Label("这段文字里没有找到链接。", systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.secondary)
             }
-            Text("只导入你有权保存的公开内容。下载下来的只有声音，用来转成文字。")
+            Text(store.settings.keepVideo == .short
+                 ? "只导入你有权保存的公开内容。画面按设置保留（5 分钟以内的留 720p，没单独勾过的照这个来），声音用来转成文字。"
+                 : "只导入你有权保存的公开内容。勾了「保留画面」的留 720p 画面，声音用来转成文字。")
                 .font(.callout).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
                 Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
                 let fresh = urls.filter { store.importedRecording(for: $0) == nil }.count
                 Button(fresh > 1 ? "导入 \(fresh) 条" : "导入") {
-                    store.importLinks(text)
+                    store.importLinks(text, keepVideo: keep)
                     dismiss()
                 }
                 .buttonStyle(.glassProminent).keyboardShortcut(.defaultAction)
@@ -346,7 +371,7 @@ struct LinkImportSheet: View {
             }
         }
         .padding(24)
-        .frame(width: 520)
+        .frame(width: 600)
         .onAppear {
             // 剪贴板里正好是链接，就先替人贴上
             if let clip = NSPasteboard.general.string(forType: .string), clip.count < 2000, !LinkTools.urls(in: clip).isEmpty { text = clip }
@@ -623,9 +648,10 @@ extension BeanStore {
         try? FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: work) }
 
-        // 地址按「纯音频 → 带声音的视频」排好了，挨个试，下到一个能用的就停
+        // 地址按「纯音频 → 带声音的视频」排好了，挨个试，下到一个能用的就停；要留画面时反过来，先要带画面的
         var media: URL?
-        for link in found.media {
+        let wantVideo = mightKeepVideo(linkJobs.first { $0.id == id })
+        for link in wantVideo ? found.media.reversed() : found.media {
             var request = URLRequest(url: link, timeoutInterval: 60)
             request.setValue("https://www.douyin.com/", forHTTPHeaderField: "Referer")
             request.setValue(DouyinPage.agent, forHTTPHeaderField: "User-Agent")
@@ -643,7 +669,7 @@ extension BeanStore {
 
         let audio = await audioTrack(of: media, in: work) ?? media
         finishLinkImport(id, audio: audio, title: found.title, author: found.author,
-                         page: "https://www.douyin.com/video/\(found.awemeId)", platform: "抖音", cues: [])
+                         page: "https://www.douyin.com/video/\(found.awemeId)", platform: "抖音", cues: [], video: media)
         return true
     }
 }

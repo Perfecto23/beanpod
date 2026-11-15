@@ -69,7 +69,7 @@ extension BeanStore {
                 return
             }
             finishLinkImport(id, audio: audio, title: title, author: author,
-                             page: "https://weixin.qq.com/sph/\(sph)", platform: platform, cues: [])
+                             page: "https://weixin.qq.com/sph/\(sph)", platform: platform, cues: [], video: media)
         }
     }
 

@@ -2,6 +2,7 @@
 
     python beanpod_social.py <链接> <保存目录>
     环境变量 BEANPOD_COOKIE：豆仓登录窗口里这个平台的登录状态（可以没有）
+    环境变量 BEANPOD_WANT_VIDEO=1：要带画面的视频（豆仓要保留画面时），不然小红书只下纯音频流
 
 只用 social-dl 自己写的平台解析器（小红书、抖音、快手、TikTok），把作品的音视频下到保存目录：
 - 不走它的 yt-dlp 后备：那条默认去读 Chrome 里的登录状态，豆仓不读浏览器的登录状态。
@@ -193,7 +194,9 @@ def main() -> int:
 
     use_system_dns()
     tolerate_js_collections(dl)
-    prefer_small_audio(dl)
+    # 豆仓要保留画面时（BEANPOD_WANT_VIDEO=1）照 social-dl 原来的顺序下带画面的；否则只挑声音
+    if os.environ.get("BEANPOD_WANT_VIDEO") != "1":
+        prefer_small_audio(dl)
 
     def no_ytdlp(*args, **kwargs):
         raise dl.FetchError("这一步交给豆仓自己的 yt-dlp")

@@ -76,6 +76,13 @@ struct BeanPodApp: App {
                 .disabled(chosen == nil)
                 Button("让 AI 给选中的录音重新起标题") { if let id = chosen?.id { store.retitle(id) } }
                     .disabled(chosen?.transcript == nil || !store.analysisAvailable)
+                // 视频素材的画面（VideoKeep.swift）
+                if let c = chosen, c.isMaterial, store.videoRevision >= 0, store.hasVideo(c.id) {
+                    Button("删掉选中素材的画面") { store.removeVideo(c.id) }
+                } else {
+                    Button("下载选中素材的画面（最高 720p）") { if let id = chosen?.id { store.fetchVideo(id) } }
+                        .disabled(chosen?.isMaterial != true || chosen?.source == nil || chosen.map { store.videoWorking.contains($0.id) } == true)
+                }
                 Button("从这台 Mac 删除选中的录音…") { nav.confirmLocalDelete = true }
                     .keyboardShortcut(.delete, modifiers: .command)
                     .disabled(chosen?.downloaded != true || store.recState != .idle)

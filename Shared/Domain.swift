@@ -260,6 +260,8 @@ nonisolated struct LinkJob: Identifiable, Equatable {
     /// 0…1；还不知道就是 nil。
     var progress: Double?
     var working = false
+    /// 导入时单独勾的「保留画面」；nil 表示按设置里的规则。
+    var keepVideo: Bool?
 }
 
 nonisolated struct NoteSection: Codable, Equatable, Identifiable {

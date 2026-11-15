@@ -118,6 +118,10 @@ final class BeanStore {
     var llmJob: DownloadJob?
     var modelDownload: Double? { asrJob?.fraction }
     var llmDownload: Double? { llmJob?.fraction }
+    /// 正在保存或下载画面的素材（VideoKeep.swift）。
+    var videoWorking: Set<UInt32> = []
+    /// 画面文件有变化时加一，界面据此刷新「有没有画面」和占用。
+    var videoRevision = 0
     /// 正在用 Homebrew 装 llama.cpp 时的进度说明；nil 表示没在装。
     var serverInstall: String?
     var localLLMReady = false
@@ -959,6 +963,10 @@ final class BeanStore {
         if playingID == id { stop() }
         try? FileManager.default.removeItem(at: oggURL(id))
         try? FileManager.default.removeItem(at: wavURL(id))
+        #if os(macOS)
+        try? FileManager.default.removeItem(at: videoURL(id))
+        try? FileManager.default.removeItem(at: videoThumbURL(id))
+        #endif
         if let i = recordings.firstIndex(where: { $0.id == id }) {
             if recordings[i].onDevice { recordings[i] = Recording(id: id, size: recordings[i].size, date: recordings[i].date, duration: recordings[i].duration, onDevice: true) }
             else { recordings.remove(at: i) }

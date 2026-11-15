@@ -1126,12 +1126,21 @@ struct RecordingRow: View {
                         .frame(width: 24, height: 28)
                         .accessibilityLabel(checked ? "已选" : "未选")
                 }
-                Image(systemName: recording.isMaterial ? "play.fill" : (recording.scene ?? .other).icon)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(tint)
-                    .frame(width: 28, height: 28)
-                    .background(tint.opacity(selected ? 0.1 : 0.12), in: .rect(cornerRadius: 8))
-                    .help(recording.isMaterial ? "从链接导入的素材" : (recording.scene ?? .other).name)
+                let _ = store.videoRevision
+                if recording.isMaterial, let thumb = NSImage(contentsOf: store.videoThumbURL(recording.id)) {
+                    // 留了画面的视频素材：用画面第 1 秒当小封面
+                    Image(nsImage: thumb).resizable().scaledToFill()
+                        .frame(width: 28, height: 28).clipShape(.rect(cornerRadius: 8))
+                        .overlay(Image(systemName: "play.fill").font(.system(size: 9, weight: .bold)).foregroundStyle(.white).shadow(radius: 2))
+                        .help("从链接导入的视频素材，留了画面")
+                } else {
+                    Image(systemName: recording.isMaterial ? "play.fill" : (recording.scene ?? .other).icon)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(tint)
+                        .frame(width: 28, height: 28)
+                        .background(tint.opacity(selected ? 0.1 : 0.12), in: .rect(cornerRadius: 8))
+                        .help(recording.isMaterial ? "从链接导入的素材" : (recording.scene ?? .other).name)
+                }
                 Text(recording.displayTitle)
                     .font(.system(size: 14, weight: selected ? .bold : .medium))
                     .foregroundStyle(selected || hover ? Theme.warm900 : Theme.warm800)
@@ -1250,6 +1259,11 @@ struct RecordingDetail: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     if recording.downloaded {
+                        // 视频素材留了画面（或正在保存画面）：顶上放画面，跟着播放条走
+                        let _ = store.videoRevision
+                        if recording.isMaterial, store.hasVideo(recording.id) || store.videoWorking.contains(recording.id) {
+                            MaterialVideoCard(recording: recording)
+                        }
                         if let stage = store.stages[recording.id] { processing(stage) }
                         if recording.transcript != nil {
                             switch tab {
@@ -1380,6 +1394,15 @@ struct RecordingDetail: View {
                         store.process(recording.id, retranscribe: true, cloud: true)
                     }
                     .disabled(recording.textOnly || store.settings.asrConfig == nil || store.settings.engine == .cloud)
+                    if recording.isMaterial {
+                        Divider()
+                        if store.hasVideo(recording.id) {
+                            Button("删掉画面（保留声音和文字稿）") { store.removeVideo(recording.id) }
+                        } else {
+                            Button(store.videoWorking.contains(recording.id) ? "正在下载画面…" : "下载画面（最高 720p）") { store.fetchVideo(recording.id) }
+                                .disabled(store.videoWorking.contains(recording.id) || recording.source == nil)
+                        }
+                    }
                     Divider()
                     if let source = recording.source, let url = URL(string: source) {
                         Button("打开原链接") { NSWorkspace.shared.open(url) }
