@@ -386,7 +386,10 @@ final class VideoMaker {
     BeanPod watches this folder for ./quote.json, ./progress.json and ./result.json, so always write them exactly as below.
 
     ## 0. Renoise MCP
-    Use the Renoise MCP tools (mcp__renoise__*). If they are not available or the server needs sign-in, tell the user in one line: 输入 /mcp，选 renoise 登录授权，好了回我一句。 Then wait. Never ask for or use API keys yourself.
+    Use the Renoise MCP tools (mcp__renoise__*). If they are not available or the server needs sign-in:
+    - First check the Renoise CLI: run `renoise account status` (it may be at ~/.local/bin/renoise). If it shows a balance, the CLI is already signed in: do not wait for the MCP. Read `renoise contract` and `renoise model` to learn the commands and prices, and do the same job with the CLI (`renoise task create`, `renoise task wait`/`get`, `renoise upload`); do the edit locally in this folder instead of the cloud sandbox. If ~/.claude/skills/digital-human-koubo/SKILL.md exists, follow that skill for writing, takes, generation, checks and packaging instead of ai-avatar / talking-head-editor. The quote-before-spending rule below still applies, and so do the files BeanPod watches.
+    - Only if the CLI is missing or not signed in, tell the user in one line: 输入 /mcp，选 renoise 登录授权，好了回我一句。 Then wait.
+    Never ask for, print or store API keys or tokens yourself.
 
     ## 1. Plan and quote (no credits)
     get_account. load_skill ai-avatar, then the files it tells you to read for planning, and load_skill talking-head-editor so the plan covers the edit.
