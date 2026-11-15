@@ -41,15 +41,25 @@ extension SettingsView {
 // MARK: 搭页面用的零件
 
 /// 一页设置的外框：固定宽度，高度跟着内容走，窗口会自己变高变矮。
+/// 每个页签的外框：窗口高度跟着内容走，但不超过屏幕；内容更高时在里面滚动（模型页就比一屏高）。
 private struct PaneFrame<Content: View>: View {
     @ViewBuilder var content: Content
+    @State private var contentHeight: CGFloat = 0
+
+    /// 留出菜单栏、标题栏、页签和程序坞的位置。
+    private var maxHeight: CGFloat { max(360, min((NSScreen.main?.visibleFrame.height ?? 900) - 150, 860)) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) { content }
-            .padding(.horizontal, 28).padding(.top, 22).padding(.bottom, 26)
-            .frame(width: 640)
-            .fixedSize(horizontal: false, vertical: true)
-            .background(Backdrop())
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 22) { content }
+                .padding(.horizontal, 28).padding(.top, 22).padding(.bottom, 26)
+                .frame(width: 640)
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(width: 640, height: contentHeight > 0 ? min(contentHeight, maxHeight) : nil)
+        .background(Backdrop())
     }
 }
 
