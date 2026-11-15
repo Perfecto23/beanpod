@@ -1376,6 +1376,10 @@ struct RecordingDetail: View {
                     Divider()
                     Button("重新整理纪要") { store.process(recording.id) }.disabled(recording.transcript == nil)
                     Button("重新转写") { store.process(recording.id, retranscribe: true) }.disabled(recording.textOnly)
+                    Button(store.settings.asrConfig == nil ? "交给云端重转（先在设置里配好云端转写）" : "交给云端重转") {
+                        store.process(recording.id, retranscribe: true, cloud: true)
+                    }
+                    .disabled(recording.textOnly || store.settings.asrConfig == nil || store.settings.engine == .cloud)
                     Divider()
                     if let source = recording.source, let url = URL(string: source) {
                         Button("打开原链接") { NSWorkspace.shared.open(url) }

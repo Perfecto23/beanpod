@@ -52,10 +52,11 @@ extension BeanStore {
     }
 
     /// 转写并整理一条录音。已有文字稿时只重新整理。
-    func process(_ id: UInt32, retranscribe: Bool = false) {
+    func process(_ id: UInt32, retranscribe: Bool = false, cloud: Bool = false) {
         guard recordings.contains(where: { $0.id == id && $0.downloaded }), stages[id] == nil else { return }
         // 重新转写：旧文字稿先留着，新的转出来了再换；转失败了旧的还在
         if retranscribe { retranscribing.insert(id) }
+        if cloud { viaCloud.insert(id) }
         stages[id] = .queued
         workQueue.append(id)
         guard worker == nil else { return }
@@ -65,6 +66,7 @@ extension BeanStore {
                     let next = self.workQueue.removeFirst()
                     await self.run(next)
                     self.retranscribing.remove(next)
+                    self.viaCloud.remove(next)
                     self.stages[next] = nil
                     self.announceDone(next)
                     // 外语素材：整理完顺手译成目标语言
@@ -123,7 +125,7 @@ extension BeanStore {
             do {
                 let segments: [Segment], engine: String
                 refreshASRAvailability()
-                if settings.engine == .cloud, let asr = settings.asrConfig {
+                if settings.engine == .cloud || viaCloud.contains(id), let asr = settings.asrConfig {
                     // 云端转写：录音会发给用户自己填的那家服务商
                     segments = try await CloudASR.transcribe(wavURL(id), config: asr, language: settings.language) { fraction in
                         Task { @MainActor [weak self] in
@@ -966,72 +968,78 @@ extension BeanStore {
 
     // MARK: 模型下载
 
-    /// 下载本机分析模型（约 2.5 GB）。
+    /// 转写模型：Qwen3‑ASR 0.6B（约 1 GB），固定版本，SHA‑256 校验。
+    static let asrFiles = [
+        ModelFile(name: QwenASR.projectorName, repo: "ggml-org/Qwen3-ASR-0.6B-GGUF", revision: "928ab958557df9aa2ef1c93e0e83c7ad0933fae2",
+                  size: 214_392_480, sha256: "41a342b5e4c514e968cb756de6cd1b7be39eff43c44c57a2ef5fc6522e36603d"),
+        ModelFile(name: QwenASR.modelName, repo: "ggml-org/Qwen3-ASR-0.6B-GGUF", revision: "928ab958557df9aa2ef1c93e0e83c7ad0933fae2",
+                  size: 804_749_248, sha256: "bca259818b50ca7c4c05e9bdb35a5dc04fa039653a6d6f3f0f331f96f6aa1971"),
+    ]
+    /// 本机整理模型：Qwen3‑4B Q4_K_M（约 2.5 GB）。
+    static let llmFiles = [
+        ModelFile(name: LocalLLM.fileName, repo: "Qwen/Qwen3-4B-GGUF", revision: "bc640142c66e1fdd12af0bd68f40445458f3869b",
+                  size: 2_497_280_256, sha256: "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5"),
+    ]
+
+    /// 下载（或接着下载）转写模型。断了从断点接着下，HuggingFace 慢就换国内镜像。
+    func downloadASRModel() {
+        if let job = asrJob { job.start(); return }
+        let job = DownloadJob(files: Self.asrFiles, folder: QwenASR.modelFolder)
+        job.onFinish = { [weak self] ok in self?.asrJob = nil; self?.refreshASRAvailability(); if ok { self?.addLog("转写模型下载好了") } }
+        asrJob = job
+        job.start()
+    }
+
+    /// 下载（或接着下载）本机整理模型。
     func downloadLocalLLM() {
-        guard llmDownload == nil else { return }
-        llmDownload = 0
-        Task {
-            defer { llmDownload = nil; refreshASRAvailability() }
-            try? FileManager.default.createDirectory(at: LocalLLM.folder, withIntermediateDirectories: true)
-            let target = LocalLLM.folder.appendingPathComponent(LocalLLM.fileName)
-            let result: URL? = await withCheckedContinuation { c in
-                let t = URLSession.shared.downloadTask(with: URL(string: LocalLLM.downloadBase + LocalLLM.fileName)!) { url, _, _ in
-                    guard let url else { c.resume(returning: nil); return }
-                    let keep = url.deletingLastPathComponent().appendingPathComponent(UUID().uuidString)
-                    c.resume(returning: (try? FileManager.default.moveItem(at: url, to: keep)) != nil ? keep : nil)
-                }
-                t.resume()
-                Task { @MainActor [weak self] in
-                    while t.state == .running {
-                        self?.llmDownload = Double(t.countOfBytesReceived) / LocalLLM.downloadSize
-                        try? await Task.sleep(for: .milliseconds(500))
-                    }
-                }
-            }
-            guard let result, (try? FileManager.default.moveItem(at: result, to: target)) != nil else {
-                problem = Problem(title: "模型没下载下来", detail: "网络中途断了。已经下的部分不会保留，检查网络后到设置里重新点下载。", action: .settings)
-                return
-            }
+        if let job = llmJob { job.start(); return }
+        let job = DownloadJob(files: Self.llmFiles, folder: LocalLLM.folder)
+        job.onFinish = { [weak self] ok in self?.llmJob = nil; self?.refreshASRAvailability(); if ok { self?.addLog("本机整理模型下载好了") } }
+        llmJob = job
+        job.start()
+    }
+
+    /// 上次没下完的（模型文件夹里有 .part），打开设置时显示成「已暂停」，点继续就接着下。
+    func restorePausedDownloads() {
+        func paused(_ files: [ModelFile], _ folder: URL) -> DownloadJob? {
+            guard files.contains(where: { FileManager.default.fileExists(atPath: DownloadJob.part($0, in: folder).path) }) else { return nil }
+            let job = DownloadJob(files: files, folder: folder)
+            job.state = .paused
+            return job
+        }
+        if asrJob == nil, let j = paused(Self.asrFiles, QwenASR.modelFolder) {
+            j.onFinish = { [weak self] _ in self?.asrJob = nil; self?.refreshASRAvailability() }
+            asrJob = j
+        }
+        if llmJob == nil, let j = paused(Self.llmFiles, LocalLLM.folder) {
+            j.onFinish = { [weak self] _ in self?.llmJob = nil; self?.refreshASRAvailability() }
+            llmJob = j
         }
     }
 
-    /// 从 Hugging Face 官方仓库下载 Qwen3‑ASR（约 1 GB），按固定版本取文件。
-    func downloadASRModel() {
-        guard modelDownload == nil else { return }
-        modelDownload = 0
-        let base = "https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF/resolve/928ab958557df9aa2ef1c93e0e83c7ad0933fae2/"
-        let files = [(QwenASR.projectorName, 214_392_480.0), (QwenASR.modelName, 804_749_248.0)]
-        let total = files.reduce(0) { $0 + $1.1 }
+    #if os(macOS)
+    static var brewPath: String? {
+        ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"].first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    /// 用 Homebrew 装 llama.cpp（本机转写和本机整理模型都靠它）。用户在设置里点「安装」才会跑。
+    func installLlamaServer() {
+        guard serverInstall == nil, let brew = Self.brewPath else { return }
+        serverInstall = "正在安装…"
+        addLog("开始用 Homebrew 安装 llama.cpp")
         Task {
-            defer { modelDownload = nil; refreshASRAvailability() }
-            try? FileManager.default.createDirectory(at: QwenASR.modelFolder, withIntermediateDirectories: true)
-            var finished = 0.0
-            for (name, size) in files {
-                let target = QwenASR.modelFolder.appendingPathComponent(name)
-                if FileManager.default.fileExists(atPath: target.path) { finished += size; continue }
-                let result: URL? = await withCheckedContinuation { c in
-                    let t = URLSession.shared.downloadTask(with: URL(string: base + name)!) { url, _, _ in
-                        // 回调结束后临时文件会被删，所以在这里先挪走
-                        guard let url else { c.resume(returning: nil); return }
-                        let keep = url.deletingLastPathComponent().appendingPathComponent(UUID().uuidString)
-                        c.resume(returning: (try? FileManager.default.moveItem(at: url, to: keep)) != nil ? keep : nil)
-                    }
-                    t.resume()
-                    Task { @MainActor [weak self] in
-                        while t.state == .running {
-                            self?.modelDownload = (finished + Double(t.countOfBytesReceived)) / total
-                            try? await Task.sleep(for: .milliseconds(500))
-                        }
-                    }
-                }
-                guard let result, (try? FileManager.default.moveItem(at: result, to: target)) != nil else {
-                    problem = Problem(title: "模型没下载下来", detail: "网络中途断了。已经下的部分不会保留，检查网络后到设置里重新点下载。", action: .settings)
-                    return
-                }
-                finished += size
+            let r = await VideoMaker.shell("'\(brew)' install llama.cpp 2>&1 | tail -20")
+            serverInstall = nil
+            refreshASRAvailability()
+            if QwenASR.locateServer(custom: settings.llamaServerPath) != nil {
+                addLog("llama.cpp 装好了")
+            } else {
+                addLog("llama.cpp 没装上：\(VideoMaker.tail(r.output))")
+                problem = Problem(title: "llama.cpp 没装上", detail: "可以在终端里运行 brew install llama.cpp 看看报什么错。\n" + VideoMaker.tail(r.output), action: .settings)
             }
         }
     }
+    #endif
 }
 
 /// 点系统通知时，把人带到那条录音。

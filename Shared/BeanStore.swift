@@ -113,8 +113,13 @@ final class BeanStore {
     var queue: [UInt32] = []
     /// 每条录音当前处在流水线的哪一步；不在表里就是空闲。
     var stages: [UInt32: Stage] = [:]
-    var modelDownload: Double?
-    var llmDownload: Double?
+    /// 模型下载（ModelDownloader.swift）：转写模型、本机整理模型各一个。
+    var asrJob: DownloadJob?
+    var llmJob: DownloadJob?
+    var modelDownload: Double? { asrJob?.fraction }
+    var llmDownload: Double? { llmJob?.fraction }
+    /// 正在用 Homebrew 装 llama.cpp 时的进度说明；nil 表示没在装。
+    var serverInstall: String?
     var localLLMReady = false
     var asrAvailable = false
 
@@ -213,6 +218,8 @@ final class BeanStore {
     @ObservationIgnored var workQueue: [UInt32] = []
     /// 要重新转写的录音：旧文字稿留到新的转出来为止
     @ObservationIgnored var retranscribing: Set<UInt32> = []
+    /// 这几条重新转写时走云端（录音页「交给云端重转」），不管平时用哪个引擎。
+    @ObservationIgnored var viaCloud: Set<UInt32> = []
 
     private struct PullJob {
         let id: UInt32

@@ -14,10 +14,10 @@ final class AppSettings {
             case .cloud: "云端转写"
             }
         }
-        /// 这台机器上能选的引擎。手机上跑不动本机模型；Mac 上的云端转写还没有做设置界面，先不摆出来。
+        /// 这台机器上能选的引擎。手机上跑不动本机模型。
         static var available: [Engine] {
             #if os(macOS)
-            [.qwen, .apple]
+            [.qwen, .apple, .cloud]
             #else
             [.cloud, .apple]
             #endif
@@ -73,7 +73,8 @@ final class AppSettings {
     /// 分析模型：任何兼容 OpenAI 接口的服务，本机的 Ollama、LM Studio 或云端都行。
     var llmBaseURL: String { didSet { save("llmBaseURL", llmBaseURL) } }
     var llmModel: String { didSet { save("llmModel", llmModel) } }
-    var llmKey: String { didSet { save("llmKey", llmKey) } }
+    /// 密钥存在钥匙串里（Keychain.swift），不进 UserDefaults。
+    var llmKey: String { didSet { Keychain.set(llmKey, for: "llmKey") } }
 
     /// 翻译：译成什么语言、默认用哪种风格、自定义风格的提示词、外语素材导入后要不要自动翻译。
     var translateTo: String { didSet { save("translateTo", translateTo) } }
@@ -86,7 +87,7 @@ final class AppSettings {
     /// 云端转写：任何兼容 OpenAI「/audio/transcriptions」接口的服务。
     var asrBaseURL: String { didSet { save("asrBaseURL", asrBaseURL) } }
     var asrModel: String { didSet { save("asrModel", asrModel) } }
-    var asrKey: String { didSet { save("asrKey", asrKey) } }
+    var asrKey: String { didSet { Keychain.set(asrKey, for: "asrKey") } }
     var asrConfig: ASRConfig? {
         asrBaseURL.isEmpty || asrModel.isEmpty ? nil : ASRConfig(baseURL: asrBaseURL, model: asrModel, key: asrKey)
     }
@@ -128,7 +129,7 @@ final class AppSettings {
         deviceAlias = d.string(forKey: "deviceAlias") ?? ""
         llmBaseURL = d.string(forKey: "llmBaseURL") ?? ""
         llmModel = d.string(forKey: "llmModel") ?? ""
-        llmKey = d.string(forKey: "llmKey") ?? ""
+        llmKey = Keychain.migrate("llmKey")
         translateTo = d.string(forKey: "translateTo") ?? "简体中文"
         translateStyle = TranslateStyle(rawValue: d.string(forKey: "translateStyle") ?? "") ?? .general
         translatePrompt = d.string(forKey: "translatePrompt") ?? ""
@@ -136,19 +137,39 @@ final class AppSettings {
         watchClipboard = d.object(forKey: "watchClipboard") as? Bool ?? true
         asrBaseURL = d.string(forKey: "asrBaseURL") ?? ""
         asrModel = d.string(forKey: "asrModel") ?? ""
-        asrKey = d.string(forKey: "asrKey") ?? ""
+        asrKey = Keychain.migrate("asrKey")
         llamaServerPath = d.string(forKey: "llamaServerPath") ?? ""
         exportFolder = d.string(forKey: "exportFolder") ?? ""
     }
 
     private func save(_ key: String, _ value: Any) { UserDefaults.standard.set(value, forKey: key) }
 
-    static let presets: [(name: String, url: String)] = [
-        ("Ollama（本机）", "http://127.0.0.1:11434/v1"),
-        ("LM Studio（本机）", "http://127.0.0.1:1234/v1"),
-        ("DeepSeek", "https://api.deepseek.com/v1"),
-        ("智谱 GLM", "https://open.bigmodel.cn/api/paas/v4"),
-        ("硅基流动", "https://api.siliconflow.cn/v1"),
-        ("OpenAI", "https://api.openai.com/v1"),
+    /// 整理用的云端服务预设。都是兼容 OpenAI 接口的地址（11-15 逐个探测过：不带密钥时都回 401，地址是对的）。
+    /// model 是选了这家之后先填上的模型，空着就让用户从列表里挑；keyPage 是「去获取密钥」打开的页面。
+    struct Provider: Identifiable, Hashable {
+        var name: String
+        var url: String
+        var model = ""
+        var keyPage = ""
+        var local = false
+        var id: String { url }
+        var badge: String { String(name.first(where: { $0.isLetter && $0.isASCII }) ?? name.first ?? "?").uppercased() }
+    }
+
+    static let presets: [Provider] = [
+        Provider(name: "小米 MiMo", url: "https://api.xiaomimimo.com/v1", model: "mimo-v2.6-pro", keyPage: "https://platform.xiaomimimo.com"),
+        Provider(name: "DeepSeek", url: "https://api.deepseek.com/v1", model: "deepseek-chat", keyPage: "https://platform.deepseek.com/api_keys"),
+        Provider(name: "通义千问", url: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus", keyPage: "https://bailian.console.aliyun.com"),
+        Provider(name: "Kimi", url: "https://api.moonshot.cn/v1", keyPage: "https://platform.moonshot.cn/console/api-keys"),
+        Provider(name: "豆包", url: "https://ark.cn-beijing.volces.com/api/v3", keyPage: "https://console.volcengine.com/ark"),
+        Provider(name: "智谱 GLM", url: "https://open.bigmodel.cn/api/paas/v4", keyPage: "https://open.bigmodel.cn"),
+        Provider(name: "MiniMax", url: "https://api.minimaxi.com/v1", keyPage: "https://platform.minimaxi.com"),
+        Provider(name: "硅基流动", url: "https://api.siliconflow.cn/v1", keyPage: "https://cloud.siliconflow.cn/account/ak"),
+        Provider(name: "OpenRouter", url: "https://openrouter.ai/api/v1", keyPage: "https://openrouter.ai/keys"),
+        Provider(name: "Gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai", keyPage: "https://aistudio.google.com/apikey"),
+        Provider(name: "Claude", url: "https://api.anthropic.com/v1", keyPage: "https://console.anthropic.com/settings/keys"),
+        Provider(name: "OpenAI", url: "https://api.openai.com/v1", keyPage: "https://platform.openai.com/api-keys"),
+        Provider(name: "本机 Ollama", url: "http://127.0.0.1:11434/v1", local: true),
+        Provider(name: "本机 LM Studio", url: "http://127.0.0.1:1234/v1", local: true),
     ]
 }

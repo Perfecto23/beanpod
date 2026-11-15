@@ -128,9 +128,9 @@ private struct StatusPill: View {
     var body: some View {
         Label(text, systemImage: ok ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
             .font(.callout.weight(.medium))
-            .foregroundStyle(ok ? Theme.ok : Theme.accent)
+            .foregroundStyle(ok ? Theme.ok : Theme.amber)
             .padding(.horizontal, 9).padding(.vertical, 3)
-            .background((ok ? Theme.ok : Theme.accent).opacity(0.14), in: .capsule)
+            .background((ok ? Theme.ok : Theme.amber).opacity(0.14), in: .capsule)
     }
 }
 
@@ -349,50 +349,84 @@ private struct ModelsPane: View {
     @Environment(BeanStore.self) private var store
     @State private var advanced = false
     @State private var cloudSheet = false
+    @State private var asrSheet = false
+    @State private var testNote: String?
+    @State private var testing = false
 
     var body: some View {
         @Bindable var settings = store.settings
-        let asrOK = store.asrAvailable || settings.engine == .apple
+        let server = QwenASR.locateServer(custom: settings.llamaServerPath)
+        let asrOK: Bool = switch settings.engine {
+        case .qwen: store.asrAvailable
+        case .apple: true
+        case .cloud: settings.asrConfig != nil
+        }
         PaneFrame {
-            ModelCard(icon: "waveform", title: "转写：把声音变成文字", ok: asrOK, status: asrOK ? "已就绪" : "还差模型") {
-                line("引擎") {
-                    Picker("引擎", selection: $settings.engine) {
-                        ForEach(AppSettings.Engine.available) { Text($0.name).tag($0) }
-                    }
-                    .labelsHidden().fixedSize()
-                }
-                Divider()
-                if settings.engine == .qwen {
-                    line("模型") {
-                        if let progress = store.modelDownload {
-                            ProgressView(value: progress).frame(width: 130)
-                            Text("\(Int(progress * 100))%").font(.callout).monospacedDigit().foregroundStyle(.secondary)
-                        } else if QwenASR.locateModel() != nil {
-                            Text("\(QwenASR.displayName) · 已下载").foregroundStyle(.secondary)
+            // 设计稿 design/ui/ui_models2.png
+            ModelCard(icon: "cpu", title: "本机运行环境", ok: server != nil, status: server != nil ? "已就绪" : "需要安装") {
+                line("推理程序 llama.cpp") {
+                    if let note = store.serverInstall {
+                        ProgressView().controlSize(.small)
+                        Text(note).foregroundStyle(.secondary)
+                    } else if let server {
+                        Text(server.path.hasPrefix("/Applications/") ? "借用 " + (server.pathComponents.dropFirst(2).first ?? "其他 App") : "已安装")
+                            .foregroundStyle(.secondary)
+                        Button("重新检查") { store.refreshASRAvailability() }
+                    } else {
+                        Text("没找到").foregroundStyle(.secondary)
+                        if BeanStore.brewPath != nil {
+                            Button("安装") { store.installLlamaServer() }.buttonStyle(.glassProminent).tint(Theme.accent)
                         } else {
-                            Button("下载（约 1 GB）") { store.downloadASRModel() }
+                            Link("怎么安装", destination: URL(string: "https://github.com/ggml-org/llama.cpp#quick-start")!)
                         }
                     }
-                    if !store.asrAvailable {
-                        Text("还没准备好之前，暂时用系统语音识别顶上。").font(.callout).foregroundStyle(Theme.accent)
+                }
+                Text(serverHint(server)).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                DisclosureGroup("高级", isExpanded: $advanced) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(server?.path ?? "没找到").font(.callout.monospaced()).foregroundStyle(.secondary)
+                            .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                        TextField("自己指定 llama-server 的位置（可不填）", text: $settings.llamaServerPath).textFieldStyle(.roundedBorder)
+                            .onSubmit { store.refreshASRAvailability() }
                     }
-                } else {
+                    .padding(.top, 8)
+                }
+            }
+
+            ModelCard(icon: "waveform", title: "转写：把声音变成文字", ok: asrOK, status: asrOK ? "已就绪" : "还差一步") {
+                line("引擎") {
+                    Picker("引擎", selection: $settings.engine) {
+                        Text("本机 Qwen3‑ASR").tag(AppSettings.Engine.qwen)
+                        Text("系统识别").tag(AppSettings.Engine.apple)
+                        Text("云端").tag(AppSettings.Engine.cloud)
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+                switch settings.engine {
+                case .qwen:
+                    line("模型") { downloadView(store.asrJob, ready: QwenASR.locateModel() != nil,
+                                               readyText: "\(QwenASR.displayName) · 已下载 · 1.0 GB", size: "约 1 GB") { store.downloadASRModel() } }
+                    Text(store.asrAvailable ? "在这台 Mac 上运行，录音不会上传。" : "还没准备好之前，暂时用系统语音识别顶上。")
+                        .font(.callout).foregroundStyle(store.asrAvailable ? Color.secondary : Theme.amber)
+                case .apple:
                     line("语言") {
                         Picker("语言", selection: $settings.language) {
                             ForEach(Transcriber.languages, id: \.id) { Text($0.name).tag($0.id) }
                         }
                         .labelsHidden().fixedSize()
                     }
+                    Text("用 macOS 自带的语音识别，在这台 Mac 上运行。").font(.callout).foregroundStyle(.secondary)
+                case .cloud:
+                    Text(settings.asrConfig == nil ? "还没设置云端转写服务，先点下面的「设置…」。" : "录音会发给你设置的云端服务转写。")
+                        .font(.callout).foregroundStyle(settings.asrConfig == nil ? Theme.amber : Color.secondary)
                 }
-                Text("两种引擎都在这台 Mac 上运行，录音不会上传。").font(.callout).foregroundStyle(.secondary)
-                DisclosureGroup("高级", isExpanded: $advanced) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        line("本机推理程序") { Button("重新检查") { store.refreshASRAvailability() } }
-                        Text(QwenASR.locateServer(custom: settings.llamaServerPath)?.path ?? "没找到。本机转写和本机模型都靠它运行。")
-                            .font(.callout.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
-                        TextField("自己指定它的位置（可不填）", text: $settings.llamaServerPath).textFieldStyle(.roundedBorder)
-                    }
-                    .padding(.top, 8)
+                Divider()
+                line(settings.engine == .cloud ? "云端转写服务" : "云端重转") {
+                    Text(asrSummary).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    Button(settings.asrConfig == nil ? "设置…" : "更改…") { asrSheet = true }
+                }
+                if settings.engine != .cloud {
+                    Text("本机转得不准的录音，可以在录音页的「⋯」菜单里按需交给云端再转一遍。").font(.callout).foregroundStyle(.secondary)
                 }
             }
 
@@ -408,14 +442,13 @@ private struct ModelsPane: View {
                 }
                 HStack(alignment: .top, spacing: 18) {
                     half("本机模型", dim: settings.analysisMode == .cloud) {
-                        if let progress = store.llmDownload {
-                            Text("正在下载 \(Int(progress * 100))%").font(.body.weight(.medium)).monospacedDigit()
-                            ProgressView(value: progress)
-                        } else if store.localLLMReady {
+                        if let job = store.llmJob {
+                            jobDetail(job, title: "Qwen3‑4B")
+                        } else if store.localLLMReady || LocalLLM.modelURL != nil {
                             Text(LocalLLM.modelLabel).font(.body.weight(.medium)).lineLimit(1).truncationMode(.middle)
                             Button("打开模型文件夹", action: openFolder)
                         } else {
-                            Text("还没下载").font(.body.weight(.medium))
+                            Text("Qwen3‑4B · 还没下载").font(.body.weight(.medium))
                             HStack {
                                 Button("下载（约 2.5 GB）") { store.downloadLocalLLM() }
                                 Button("打开模型文件夹", action: openFolder)
@@ -423,13 +456,20 @@ private struct ModelsPane: View {
                         }
                     }
                     Divider()
-                    half("云端或自建服务", dim: settings.analysisMode == .local) {
+                    half("云端服务", dim: settings.analysisMode == .local) {
                         Text(cloudSummary).font(.body.weight(.medium)).lineLimit(1).truncationMode(.middle)
-                        Button(settings.llmConfigured ? "更改…" : "设置…") { cloudSheet = true }
+                        HStack {
+                            Button(settings.llmConfigured ? "更改…" : "设置…") { cloudSheet = true }
+                            if settings.llmConfigured {
+                                Button("测试") { test() }.disabled(testing)
+                                if testing { ProgressView().controlSize(.small) }
+                            }
+                        }
+                        if let testNote { Text(testNote).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
                     }
                 }
                 .fixedSize(horizontal: false, vertical: true)
-                Text("本机模型不联网，文字稿不出这台电脑。云端纪要质量更高，但文字稿会发给服务商，录音本身不会。")
+                Text("下载断了会从断点接着下；HuggingFace 太慢时自动换国内镜像，下完按 SHA‑256 校验。本机模型不联网；云端纪要质量更高，但文字稿会发给服务商，录音本身不会。")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
 
@@ -458,6 +498,68 @@ private struct ModelsPane: View {
             }
         }
         .sheet(isPresented: $cloudSheet) { CloudServiceSheet() }
+        .sheet(isPresented: $asrSheet) { CloudASRSheet() }
+        .onAppear { store.restorePausedDownloads(); store.refreshASRAvailability() }
+    }
+
+    private func serverHint(_ server: URL?) -> String {
+        if store.serverInstall != nil { return "正在用 Homebrew 安装 llama.cpp，大约 1 分钟，装好会自动检测。" }
+        if let server, server.path.hasPrefix("/Applications/") {
+            return "本机转写和本机整理模型都靠它运行。现在借用的是别的 App 里带的那份，那个 App 删掉就用不了了；建议点「高级」看看位置，或者用 Homebrew 装一份（brew install llama.cpp）。"
+        }
+        if server != nil { return "本机转写和本机整理模型都靠它运行。" }
+        return BeanStore.brewPath != nil
+            ? "本机转写和本机整理模型都靠它运行。点「安装」会用 Homebrew 装，大约 1 分钟。"
+            : "本机转写和本机整理模型都靠它运行。这台 Mac 上没有 Homebrew，先按链接里的说明装好 llama.cpp。"
+    }
+
+    /// 模型下载那一格：没下 → 下载按钮；下载中 → 进度、来源、速度、暂停/取消；下好了 → 一行字。
+    @ViewBuilder
+    private func downloadView(_ job: DownloadJob?, ready: Bool, readyText: String, size: String, start: @escaping () -> Void) -> some View {
+        if let job {
+            VStack(alignment: .trailing, spacing: 6) { jobDetail(job, title: nil) }.frame(width: 300)
+        } else if ready {
+            Text(readyText).foregroundStyle(.secondary)
+        } else {
+            Button("下载（\(size)）", action: start)
+        }
+    }
+
+    @ViewBuilder
+    private func jobDetail(_ job: DownloadJob, title: String?) -> some View {
+        let gb = { (b: Int64) in String(format: "%.1f", Double(b) / 1_000_000_000) }
+        let head: String = switch job.state {
+        case .running: "正在下载 \(Int(job.fraction * 100))%"
+        case .paused: "已暂停 \(Int(job.fraction * 100))%"
+        case .verifying: "正在校验…"
+        case .failed: "没下完"
+        }
+        Text([title, head].compactMap { $0 }.joined(separator: " · ")).font(.body.weight(.medium)).monospacedDigit()
+        ProgressView(value: job.fraction).tint(Theme.accent)
+        if case .failed(let why) = job.state {
+            Text(why).font(.caption).foregroundStyle(Theme.amber).fixedSize(horizontal: false, vertical: true)
+        } else {
+            Text("\(gb(job.received)) / \(gb(job.total)) GB · \(job.source.name)" + (job.state == .running && job.speed > 0 ? String(format: " · %.1f MB/s", job.speed / 1_000_000) : ""))
+                .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+        }
+        HStack {
+            switch job.state {
+            case .running: Button("暂停") { job.pause() }
+            case .paused, .failed: Button("继续") { job.start() }
+            case .verifying: EmptyView()
+            }
+            Button("取消") { job.cancel() }.disabled(job.state == .verifying)
+        }
+        .controlSize(.small)
+    }
+
+    private func test() {
+        guard let config = store.cloudConfig else { return }
+        testing = true; testNote = nil
+        Task {
+            defer { testing = false }
+            testNote = await CloudServiceSheet.runTest(config, store: store)
+        }
     }
 
     private func line<Trailing: View>(_ title: String, @ViewBuilder trailing: () -> Trailing) -> some View {
@@ -496,76 +598,138 @@ private struct ModelsPane: View {
         let name = AppSettings.presets.first { $0.url == s.llmBaseURL }?.name ?? "自定义服务"
         return "\(name) · \(s.llmModel)"
     }
+
+    private var asrSummary: String {
+        let s = store.settings
+        guard s.asrConfig != nil else { return "未设置" }
+        let name = CloudASR.presets.first { $0.url == s.asrBaseURL }?.name ?? "自定义服务"
+        return "\(name) · \(s.asrModel)"
+    }
 }
 
-/// 云端或自建服务的填写单。平时用不到这几个框，所以从模型页里拿出来，要改的时候再弹。
+/// 云端整理服务（设计稿 design/ui/ui_cloud_providers.png）：选一家 → 地址自动填好 → 选模型、填密钥 → 测试。
 private struct CloudServiceSheet: View {
     @Environment(BeanStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var models: [String] = []
+    @State private var loadingModels = false
     @State private var testing = false
-    @State private var testResult: String?
+    @State private var testResult: (ok: Bool, text: String)?
+    @State private var custom = false
+
+    private var cloud: [AppSettings.Provider] { AppSettings.presets.filter { !$0.local } }
+    private var local: [AppSettings.Provider] { AppSettings.presets.filter(\.local) }
+    private var current: AppSettings.Provider? { AppSettings.presets.first { $0.url == store.settings.llmBaseURL } }
 
     var body: some View {
         @Bindable var settings = store.settings
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("云端或自建服务").font(.title3.bold())
-                Text("任何兼容 OpenAI 接口的服务都行。密钥只存在这台 Mac 上。").font(.callout).foregroundStyle(.secondary)
+                Text("云端服务").font(.title2.bold())
+                Text("任何兼容 OpenAI 接口的服务都能用。密钥存在系统钥匙串里。").font(.callout).foregroundStyle(.secondary)
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
+                ForEach(cloud) { p in tile(p) }
+            }
+            HStack(spacing: 8) {
+                ForEach(local) { p in chip(p.name, picked: settings.llmBaseURL == p.url) { pick(p) } }
+                chip("自定义…", picked: custom || (current == nil && !settings.llmBaseURL.isEmpty)) {
+                    custom = true; settings.llmBaseURL = ""; settings.llmModel = ""; models = []; testResult = nil
+                }
             }
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 12) {
                 GridRow {
-                    Text("服务").gridColumnAlignment(.trailing)
-                    Picker("服务", selection: Binding(get: { settings.llmBaseURL }, set: { settings.llmBaseURL = $0; models = []; testResult = nil })) {
-                        Text("未设置").tag("")
-                        ForEach(AppSettings.presets, id: \.url) { Text($0.name).tag($0.url) }
-                        if !settings.llmBaseURL.isEmpty, !AppSettings.presets.contains(where: { $0.url == settings.llmBaseURL }) {
-                            Text("自定义").tag(settings.llmBaseURL)
-                        }
-                    }
-                    .labelsHidden().fixedSize()
+                    Text("接口地址").gridColumnAlignment(.leading)
+                    TextField("接口地址", text: $settings.llmBaseURL, prompt: Text("https://…/v1")).textFieldStyle(.roundedBorder)
+                    Text(current != nil && !custom ? "已自动填好" : "").font(.caption).foregroundStyle(.secondary).frame(width: 70, alignment: .leading)
                 }
                 GridRow {
-                    Text("接口地址")
-                    TextField("接口地址", text: $settings.llmBaseURL, prompt: Text("https://api.deepseek.com/v1")).textFieldStyle(.roundedBorder)
-                }
-                GridRow {
-                    Text("模型名")
-                    HStack {
-                        TextField("模型名", text: $settings.llmModel).textFieldStyle(.roundedBorder)
-                        Menu("从列表里选") {
+                    Text("模型")
+                    HStack(spacing: 6) {
+                        TextField("模型", text: $settings.llmModel, prompt: Text(models.isEmpty ? "填模型名，或点右边从列表里选" : "从右边的列表里选")).textFieldStyle(.roundedBorder)
+                        Menu {
                             ForEach(models, id: \.self) { m in Button(m) { settings.llmModel = m } }
-                            if models.isEmpty { Text("正在获取，或这个服务不提供列表") }
-                        }
-                        .fixedSize()
-                        .disabled(settings.llmBaseURL.isEmpty)
+                            if models.isEmpty { Text(loadingModels ? "正在获取…" : "这个服务没给列表（可能要先填密钥）") }
+                        } label: { Image(systemName: "chevron.down") }
+                        .menuIndicator(.hidden).fixedSize().disabled(settings.llmBaseURL.isEmpty)
                     }
+                    Button("刷新列表") { Task { await loadModels() } }.buttonStyle(.link).foregroundStyle(Theme.accent).disabled(settings.llmBaseURL.isEmpty)
                 }
                 if !settings.llmIsLocal {
                     GridRow {
                         Text("密钥")
                         SecureField("API Key", text: $settings.llmKey).textFieldStyle(.roundedBorder)
+                        if let page = current?.keyPage, !page.isEmpty, let url = URL(string: page) {
+                            Link("去获取密钥", destination: url).foregroundStyle(Theme.accent)
+                        } else { Text("") }
                     }
                 }
             }
-            if let testResult {
-                Text(testResult).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            HStack {
-                Button("测试一下") { test() }.disabled(!settings.llmConfigured || testing)
-                if testing { ProgressView().controlSize(.small) }
+            .padding(14).panel(radius: 12)
+            HStack(alignment: .center) {
+                if let testResult {
+                    Text(testResult.text).font(.callout).foregroundStyle(testResult.ok ? Theme.ok : Theme.amber)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Spacer()
+                if testing { ProgressView().controlSize(.small) }
+                Button("测试一下") { test() }.disabled(!settings.llmConfigured || testing)
                 Button("完成") { dismiss() }.buttonStyle(.glassProminent).keyboardShortcut(.defaultAction)
             }
+            .controlSize(.large)
         }
         .padding(24)
-        .frame(width: 520)
+        .frame(width: 620)
         .task(id: settings.llmBaseURL + settings.llmKey) {
             guard !settings.llmBaseURL.isEmpty else { return }
             try? await Task.sleep(for: .seconds(0.8))
             guard !Task.isCancelled else { return }
-            models = await Analyzer.listModels(baseURL: settings.llmBaseURL, key: settings.llmKey)
+            await loadModels()
         }
+    }
+
+    private func pick(_ p: AppSettings.Provider) {
+        let s = store.settings
+        custom = false
+        guard s.llmBaseURL != p.url else { return }
+        s.llmBaseURL = p.url
+        s.llmModel = p.model
+        models = []; testResult = nil
+    }
+
+    private func tile(_ p: AppSettings.Provider) -> some View {
+        let picked = store.settings.llmBaseURL == p.url && !custom
+        return Button { pick(p) } label: {
+            VStack(spacing: 8) {
+                Text(p.badge).font(.system(size: 15, weight: .semibold)).foregroundStyle(.secondary)
+                    .frame(width: 34, height: 34).background(Color.secondary.opacity(0.14), in: .circle)
+                Text(p.name).font(.callout.weight(.medium)).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity).padding(.vertical, 12)
+            .background(Color(nsColor: .controlBackgroundColor).opacity(picked ? 1 : 0.6), in: .rect(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(picked ? Theme.accent : Color.secondary.opacity(0.22), lineWidth: picked ? 2 : 0.5))
+            .overlay(alignment: .topTrailing) {
+                if picked { Image(systemName: "checkmark.circle.fill").foregroundStyle(.white, Theme.accent).padding(5) }
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(p.name + (picked ? "，已选中" : ""))
+    }
+
+    private func chip(_ title: String, picked: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.callout).padding(.horizontal, 14).padding(.vertical, 6)
+                .overlay(Capsule().strokeBorder(picked ? Theme.accent : Color.secondary.opacity(0.3), lineWidth: picked ? 1.5 : 0.5))
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func loadModels() async {
+        loadingModels = true
+        models = await Analyzer.listModels(baseURL: store.settings.llmBaseURL, key: store.settings.llmKey)
+        loadingModels = false
     }
 
     private func test() {
@@ -573,17 +737,94 @@ private struct CloudServiceSheet: View {
         testing = true; testResult = nil
         Task {
             defer { testing = false }
-            do {
-                let a = try await Analyzer.analyze(
-                    transcript: "王总您好，我是小李。这套系统年费三万八，含五个席位。您说预算三万以内，我申请到这个月签可以三万二，再送两个月服务。除了您还要财务张姐确认对吧？我周四把合同发您邮箱，周五再给您打电话。",
-                    duration: 40, profession: store.settings.profession, fixedScene: nil, config: config)
-                store.upgradeRoughNotes()
-                testResult = a.scene == .sales || a.scene == .call
-                    ? "可用。把一段销售通话判成了「\(a.scene.name)」，标题：\(a.title)"
-                    : "能连上，但把一段销售通话判成了「\(a.scene.name)」，这个模型可能偏弱。"
-            } catch {
-                testResult = error.localizedDescription
+            let text = await Self.runTest(config, store: store)
+            testResult = (text.hasPrefix("测试通过"), text)
+        }
+    }
+
+    /// 拿一段销售通话试整理，看判对场景没有。模型页的「测试」也用它。
+    static func runTest(_ config: LLMConfig, store: BeanStore) async -> String {
+        let t0 = Date()
+        do {
+            let a = try await Analyzer.analyze(
+                transcript: "王总您好，我是小李。这套系统年费三万八，含五个席位。您说预算三万以内，我申请到这个月签可以三万二，再送两个月服务。除了您还要财务张姐确认对吧？我周四把合同发您邮箱，周五再给您打电话。",
+                duration: 40, profession: store.settings.profession, fixedScene: nil, config: config)
+            store.upgradeRoughNotes()
+            let secs = String(format: "%.1f", Date().timeIntervalSince(t0))
+            return a.scene == .sales || a.scene == .call
+                ? "测试通过 · \(secs) 秒 · 把销售通话判成了「\(a.scene.name)」"
+                : "能连上（\(secs) 秒），但把销售通话判成了「\(a.scene.name)」，这个模型可能偏弱。"
+        } catch {
+            return error.localizedDescription
+        }
+    }
+}
+
+/// 云端转写服务（Mac 上之前没有界面）：兼容 OpenAI「/audio/transcriptions」接口的服务。
+private struct CloudASRSheet: View {
+    @Environment(BeanStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var testing = false
+    @State private var result: (ok: Bool, text: String)?
+
+    var body: some View {
+        @Bindable var settings = store.settings
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("云端转写").font(.title2.bold())
+                Text("兼容 OpenAI「/audio/transcriptions」接口的服务都能用。用它转写时，录音会发给这家服务商。密钥存在系统钥匙串里。")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
+            HStack(spacing: 8) {
+                ForEach(CloudASR.presets, id: \.url) { p in
+                    let picked = settings.asrBaseURL == p.url
+                    Button {
+                        settings.asrBaseURL = p.url; settings.asrModel = p.model; result = nil
+                    } label: {
+                        Text(p.name).font(.callout).padding(.horizontal, 14).padding(.vertical, 6)
+                            .overlay(Capsule().strokeBorder(picked ? Theme.accent : Color.secondary.opacity(0.3), lineWidth: picked ? 1.5 : 0.5))
+                            .contentShape(.capsule)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 12) {
+                GridRow {
+                    Text("接口地址")
+                    TextField("接口地址", text: $settings.asrBaseURL, prompt: Text("https://…/v1")).textFieldStyle(.roundedBorder)
+                }
+                GridRow {
+                    Text("模型")
+                    TextField("模型", text: $settings.asrModel, prompt: Text("比如 whisper-1")).textFieldStyle(.roundedBorder)
+                }
+                GridRow {
+                    Text("密钥")
+                    SecureField("API Key", text: $settings.asrKey).textFieldStyle(.roundedBorder)
+                }
+            }
+            .padding(14).panel(radius: 12)
+            HStack {
+                if let result {
+                    Text(result.text).font(.callout).foregroundStyle(result.ok ? Theme.ok : Theme.amber).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                if testing { ProgressView().controlSize(.small) }
+                Button("测试一下") { test() }.disabled(settings.asrConfig == nil || testing)
+                Button("完成") { dismiss() }.buttonStyle(.glassProminent).keyboardShortcut(.defaultAction)
+            }
+            .controlSize(.large)
+        }
+        .padding(24)
+        .frame(width: 560)
+    }
+
+    private func test() {
+        guard let config = store.settings.asrConfig else { return }
+        testing = true; result = nil
+        Task {
+            defer { testing = false }
+            do { try await CloudASR.test(config); result = (true, "测试通过，接口能用。") }
+            catch { result = (false, error.localizedDescription) }
         }
     }
 }
