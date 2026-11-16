@@ -345,7 +345,11 @@ struct Sidebar: View {
             SidebarTags().padding(.top, 16)
             Spacer(minLength: 0)
             Divider().overlay(Theme.warm200.opacity(0.6)).padding(.horizontal, -16).padding(.bottom, 14)
-            DeviceChip()
+            HStack(spacing: 6) {
+                DeviceChip()
+                SettingsChip()
+            }
+            .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 16)
     }
@@ -500,6 +504,29 @@ struct SourceLine: View {
     }
 }
 
+/// 侧栏底部、设备卡右边的设置按钮：和设备卡一样高的方块，点一下打开设置（停在上次看的那一页）。
+struct SettingsChip: View {
+    @Environment(\.openSettings) private var openSettings
+    @State private var hover = false
+
+    var body: some View {
+        Button { openSettings() } label: {
+            Image(systemName: "gearshape")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(hover ? Theme.warm900 : Theme.warm500)
+                .frame(width: 36).frame(maxHeight: .infinity)
+                .background(Theme.surface.opacity(hover ? 1 : 0.7), in: .rect(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.warm200.opacity(0.6), lineWidth: 1))
+                .shadow(color: .black.opacity(0.03), radius: 2, y: 1)
+                .contentShape(.rect(cornerRadius: 12))
+        }
+        .buttonStyle(PressScale())
+        .onHover { hover = $0 }
+        .help("设置（⌘,）")
+        .accessibilityLabel("设置")
+    }
+}
+
 /// 侧栏底部的设备卡，点一下进设备页。
 struct DeviceChip: View {
     @Environment(BeanStore.self) private var store
@@ -510,10 +537,10 @@ struct DeviceChip: View {
         Button { nav.route = .device } label: {
             // 侧栏窄：名字要整行放得下（「soundcore Work」原先被右边的箭头挤成「soundcor…」）。
             // 整张卡本身就是按钮、选中时有描边，不再放箭头；只有正在下载时右边放进度圈
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Image(systemName: "headphones")
                     .font(.system(size: 13, weight: .medium)).foregroundStyle(store.link == .ready ? Theme.amber : Theme.warm500)
-                    .frame(width: 30, height: 30).background((store.link == .ready ? Theme.amber : Theme.warm400).opacity(0.16), in: .rect(cornerRadius: 8))
+                    .frame(width: 28, height: 28).background((store.link == .ready ? Theme.amber : Theme.warm400).opacity(0.16), in: .rect(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(store.link == .ready ? store.displayDeviceName : "录音豆").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.warm900)
                         .lineLimit(1).minimumScaleFactor(0.8).truncationMode(.middle)
@@ -525,7 +552,7 @@ struct DeviceChip: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if let pull = store.pull { ProgressView(value: pull.fraction).progressViewStyle(.circular).controlSize(.small) }
             }
-            .padding(.horizontal, 11).padding(.vertical, 11)
+            .padding(.horizontal, 9).padding(.vertical, 11)
             .background(Theme.surface.opacity(0.7), in: .rect(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(on ? Theme.accent.opacity(0.6) : Theme.warm200.opacity(0.6), lineWidth: on ? 1.5 : 1))
             .shadow(color: .black.opacity(0.03), radius: 2, y: 1)
