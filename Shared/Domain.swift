@@ -344,6 +344,9 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
     var isDictation: Bool { origin == Self.dictationOrigin }
     /// 语音输入时文字打进了哪个软件（比如「微信」）。
     var typedInto: String?
+    /// 用户勾了「英语学习模式」：纪要页显示学习笔记（Study.swift）
+    var studyMode = false
+    var study: Study?
 
     /// 从哪儿来的：哪台设备录的，还是导入的。由 origin 推出来，不另存——
     /// 录音豆下载的从来不写 origin；Mac/iPhone 录的写「Mac · 麦克风」这样；录音卡、导入、语音输入各有固定的写法。
@@ -430,7 +433,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
 
     private enum CodingKeys: String, CodingKey {
         case id, size, date, duration, title, titleEdited, tagsEdited, downloaded, onDevice, transcript, segments, transcribedBy, speakers, rewrites
-        case scene, sceneLocked, summary, sections, todos, tags, people, analyzedBy, starred, origin, source, project, translation, textOnly, marks, videos, typedInto
+        case scene, sceneLocked, summary, sections, todos, tags, people, analyzedBy, starred, origin, source, project, translation, textOnly, marks, videos, typedInto, studyMode, study
     }
 
     /// 每个字段都容错读取：以后加字段，旧的记录文件照样能打开。
@@ -467,6 +470,8 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
         marks = (try? c.decodeIfPresent([TimeInterval].self, forKey: .marks)) ?? []
         videos = (try? c.decodeIfPresent([VideoClip].self, forKey: .videos)) ?? []
         typedInto = try? c.decodeIfPresent(String.self, forKey: .typedInto)
+        studyMode = (try? c.decodeIfPresent(Bool.self, forKey: .studyMode)) ?? false
+        study = try? c.decodeIfPresent(Study.self, forKey: .study)
     }
 }
 

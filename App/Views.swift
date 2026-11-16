@@ -1982,6 +1982,22 @@ struct NotesView: View {
     let recording: Recording
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // 英文为主的录音：可以勾「英语学习模式」（StudyView.swift），默认是普通纪要
+            if BeanStore.isMostlyEnglish(recording.transcript ?? "") { StudyToggle(recording: recording) }
+            if recording.studyMode {
+                if let study = recording.study { StudyView(recording: recording, study: study) }
+                else if !store.studying.contains(recording.id) {
+                    Text("还没有学习笔记。点上面的「英语学习模式」重新勾一下，或者检查整理纪要的模型是否设置好。")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            } else {
+                normal
+            }
+        }
+    }
+
+    private var normal: some View {
         VStack(alignment: .leading, spacing: 20) {
             if let summary = recording.summary {
                 Card(title: "摘要", icon: "text.alignleft") {
