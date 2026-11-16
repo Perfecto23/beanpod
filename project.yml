@@ -40,6 +40,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: 豆仓
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleIconName: AppIcon
         CFBundleDevelopmentRegion: zh-Hans
         CFBundleLocalizations: [zh-Hans, en]

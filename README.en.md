@@ -126,16 +126,16 @@ Each item in the guide has an "Open" button that jumps to the right place in Sys
 
 ## What to prepare first
 
-Split into "required" and "only when you need it". For a first install, get the four required items ready; the rest can wait.
+Split into "required" and "only when you need it". If you download the app, only macOS 26 and Homebrew are required; building from source also needs Xcode and an Apple ID. The rest can wait.
 
 **Required**
 
 | What | Why | How |
 |---|---|---|
 | A Mac on **macOS 26** | Running BeanPod | Apple silicon (M-series) recommended — local transcription and the local summarizing model are much faster on it |
-| **Xcode 26** | Building BeanPod from source | Free on the Mac App Store; open it once, accept the license and let it install components |
+| **Xcode 26** (only when building from source) | Building BeanPod from source | Free on the Mac App Store; open it once, accept the license and let it install components |
 | **Homebrew** | Installing build and runtime tools | Run the one-line installer from [brew.sh](https://brew.sh) |
-| **Apple ID** (a free one is fine) | Signing BeanPod so the Bluetooth permission survives rebuilds | Xcode → Settings → Accounts → "+" → sign in. Your Team ID (10 letters/digits) is shown there |
+| **Apple ID** (a free one is fine; only when building from source) | Signing BeanPod so the Bluetooth permission survives rebuilds | Xcode → Settings → Accounts → "+" → sign in. Your Team ID (10 letters/digits) is shown there |
 
 **Only when you need it**
 
@@ -152,7 +152,19 @@ Split into "required" and "only when you need it". For a first install, get the 
 
 ## Install
 
-There's no prebuilt download yet — build from source.
+### Option 1: download the app (recommended)
+
+1. Download the latest `BeanPod-x.y.z.dmg` from [Releases](https://github.com/andyhuo520/beanpod/releases/latest) (universal: Apple silicon and Intel; requires macOS 26)
+2. Open the DMG and drag BeanPod into Applications
+3. On first launch macOS says the developer can't be verified: the project isn't signed with a paid Apple Developer ID or notarized; it's not malware. Go to System Settings → Privacy & Security, scroll down, click "Open Anyway" and confirm. Or run in Terminal:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/BeanPod.app
+```
+
+4. Local transcription uses llama.cpp: after the first launch, click "Install" in Settings → Models (needs [Homebrew](https://brew.sh)). Link import needs `brew install yt-dlp ffmpeg`
+
+### Option 2: build from source
 
 **1. Tools**
 

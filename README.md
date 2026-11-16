@@ -124,16 +124,16 @@
 
 ## 开始前要准备的东西
 
-按用途分成「必需」和「用到才准备」。第一次装建议先把必需的四样准备好，其它的用到再说。
+按用途分成「必需」和「用到才准备」。直接下载安装包的话，必需的只有 macOS 26 和 Homebrew；从源码编译还要 Xcode 和 Apple ID。其它的用到再说。
 
 **必需**
 
 | 准备什么 | 做什么用 | 怎么准备 |
 |---|---|---|
 | 一台 Mac，**macOS 26** | 运行豆仓 | 推荐 Apple 芯片（M 系列）：本机转写和本机整理模型在 Apple 芯片上快得多 |
-| **Xcode 26** | 从源码编译豆仓 | Mac App Store 免费下载；装好后打开一次，同意许可、装完附加组件 |
+| **Xcode 26**（只在从源码编译时需要） | 从源码编译豆仓 | Mac App Store 免费下载；装好后打开一次，同意许可、装完附加组件 |
 | **Homebrew** | 装编译和运行要用的工具 | 按 [brew.sh](https://brew.sh) 首页那一行命令安装 |
-| **Apple ID**（免费的就行） | 给豆仓签名，蓝牙授权才不会每次编译后失效 | Xcode → Settings → Accounts → 点「+」登录 Apple ID；下面的「团队号」（Team ID，10 位字母数字）在这里能看到 |
+| **Apple ID**（免费的就行，只在从源码编译时需要） | 给豆仓签名，蓝牙授权才不会每次编译后失效 | Xcode → Settings → Accounts → 点「+」登录 Apple ID；下面的「团队号」（Team ID，10 位字母数字）在这里能看到 |
 
 有录音豆（D3200，并且已经在官方 App 里开通过）就能用全部设备功能；没有也能用：Mac 自己录、导入音频、贴链接导入，转写整理都一样。
 
@@ -152,7 +152,19 @@
 
 ## 安装
 
-目前没有发布编译好的安装包，需要从源码编译。
+### 方式一：下载安装包（推荐）
+
+1. 到 [Releases](https://github.com/andyhuo520/beanpod/releases/latest) 下载最新的 `BeanPod-x.y.z.dmg`（同时支持 Apple 芯片和 Intel，需要 macOS 26）
+2. 打开 DMG，把 BeanPod 拖进「应用程序」
+3. 第一次打开时 macOS 会提示「无法验证开发者」：本项目没有付费的 Apple 开发者签名和公证，不是病毒。到「系统设置 → 隐私与安全性」拉到底，点「仍要打开」再确认一次就行。也可以在终端运行：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/BeanPod.app
+```
+
+4. 本机转写要用 llama.cpp：第一次打开后在「设置 → 模型」里点「安装」（需要先装 [Homebrew](https://brew.sh)）。导入链接要 `brew install yt-dlp ffmpeg`
+
+### 方式二：从源码编译
 
 **1. 准备**
 

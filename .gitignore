@@ -8,3 +8,5 @@ design/ip/model/
 *.log
 .DS_Store
 build-ios/
+build-release/
+dist/
