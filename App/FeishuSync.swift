@@ -75,6 +75,7 @@ final class FeishuSync {
     /// 启动时调一次：先查一遍，之后每 30 分钟查一次（自动同步开着才会自己拉）。
     func attach(_ store: BeanStore) {
         self.store = store
+        guard !BeanStore.demo else { showDemo(); return }
         guard loop == nil else { return }
         loop = Task { [weak self] in
             while let self, !Task.isCancelled {
@@ -82,6 +83,24 @@ final class FeishuSync {
                 try? await Task.sleep(for: .seconds(30 * 60))
             }
         }
+    }
+
+    /// 示例数据模式：不连飞书，摆几条虚构的妙记（README 截图用）
+    private func showDemo() {
+        let now = Date.now
+        minutes = [
+            Minute(id: "demo1", title: "门店晨会：冬季新品试喝反馈", uploaded: now.addingTimeInterval(-3_000), recorded: nil, duration: 1_386, url: ""),
+            Minute(id: "demo2", title: "soundcore Work_\(Self.short(now.addingTimeInterval(-7_200)))", uploaded: now.addingTimeInterval(-6_000),
+                   recorded: now.addingTimeInterval(-7_200), duration: 42, url: ""),
+            Minute(id: "demo3", title: "供应商报价沟通", uploaded: now.addingTimeInterval(-90_000), recorded: nil, duration: 1_104, url: ""),
+        ]
+        picked = ["demo1", "demo2"]
+        lastChecked = now.addingTimeInterval(-120)
+        link = .ready
+    }
+
+    private static func short(_ d: Date) -> String {
+        let f = DateFormatter(); f.dateFormat = "MM-dd HH:mm"; return f.string(from: d)
     }
 
     // MARK: 查
@@ -110,7 +129,7 @@ final class FeishuSync {
     }
 
     func check(autoPull: Bool = false) async {
-        guard link != .checking else { return }
+        guard link != .checking, !BeanStore.demo else { return }
         link = .checking
         if tool == nil { tool = await Self.findLark() }
         guard let tool else { link = .noTool; return }

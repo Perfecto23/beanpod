@@ -260,9 +260,13 @@ final class BeanStore {
         var retried = false
     }
 
+    /// 示例数据模式（启动参数 -demo）：用 BeanPod/Demo/Recordings 里的示例录音库，不连蓝牙、不开 MCP、不同步飞书。
+    /// 给 README 截图用，不碰真实录音（示例库由 scripts/make-demo-library.py 生成）。
+    nonisolated static let demo = CommandLine.arguments.contains("-demo")
+
     let folder: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let dir = base.appendingPathComponent("BeanPod/Recordings", isDirectory: true)
+        let dir = base.appendingPathComponent(BeanStore.demo ? "BeanPod/Demo/Recordings" : "BeanPod/Recordings", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()
@@ -274,8 +278,7 @@ final class BeanStore {
         refreshASRAvailability()
         watchInbox()
         #if os(macOS)
-        installCLI()
-        startMCPServer()
+        if !Self.demo { installCLI(); startMCPServer() }
         #endif
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
@@ -293,6 +296,7 @@ final class BeanStore {
         ble.onFound = { [weak self] in self?.found = $0; self?.autoConnectIfObvious() }
         ble.onPacket = { [weak self] in self?.handle($0) }
         ble.onLog = { [weak self] in self?.addLog($0) }
+        guard !Self.demo else { addLog("示例数据模式：\(recordings.count) 条示例录音，不连设备"); return }
         ble.start()
         card.attach(self)
         // 没有记住的设备时，一打开就开始找，不用先点进设备页
