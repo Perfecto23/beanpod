@@ -94,6 +94,22 @@ extension BeanStore {
     }
 
     /// 一条录音整理好了。豆仓不在前台时发一条系统通知，点一下就打开那条录音。
+    /// 窗口顶上滑出一句；豆仓不在最前面时（比如窗口关着、在用别的软件），同时发一条系统通知，免得错过。
+    func announce(_ icon: String, _ text: String, body: String = "", seconds: Double = 5) {
+        toast(icon, text, seconds: seconds)
+        addLog("提示：\(text)")
+        guard !Self.appIsActive else { return }
+        let center = UNUserNotificationCenter.current()
+        center.delegate = NotificationRouter.shared
+        Task {
+            guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true else { return }
+            let content = UNMutableNotificationContent()
+            content.title = text
+            content.body = body
+            try? await center.add(UNNotificationRequest(identifier: "bean-connect", content: content, trigger: nil))
+        }
+    }
+
     private func announceDone(_ id: UInt32) {
         guard !Self.appIsActive, let r = recordings.first(where: { $0.id == id }), r.isAnalyzed else { return }
         let center = UNUserNotificationCenter.current()
@@ -1061,12 +1077,12 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
     static let open = Notification.Name("BeanPodOpenRecording")
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard let id = response.notification.request.content.userInfo["recording"] as? Int else { return }
+        let id = response.notification.request.content.userInfo["recording"] as? Int
         await MainActor.run {
             #if os(macOS)
             NSApp.activate(ignoringOtherApps: true)
             #endif
-            NotificationCenter.default.post(name: Self.open, object: UInt32(id))
+            if let id { NotificationCenter.default.post(name: Self.open, object: UInt32(id)) }
         }
     }
 }

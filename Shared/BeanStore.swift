@@ -38,6 +38,14 @@ final class BeanStore {
     @ObservationIgnored var wifiFallback = false
     /// 刚连上录音豆，还没把「在外面录的」同步下来。列表和密钥都到位后才动手。
     @ObservationIgnored var syncOnConnect = false
+    /// 刚连上、第一份清单还没回来：回来后一定说一句（有几条新录音 / 都同步过了 / 有录音被别处取走）。
+    @ObservationIgnored var reportOnConnect = false
+    /// 上次连接时录音豆里有哪些录音。下次连上对比：少了的又不是豆仓删的，多半是手机那边连过、同步走了。
+    @ObservationIgnored var lastDeviceFiles: Set<UInt32> = Set((UserDefaults.standard.array(forKey: "lastDeviceFiles") as? [NSNumber] ?? []).map(\.uint32Value)) {
+        didSet { UserDefaults.standard.set(lastDeviceFiles.map { NSNumber(value: $0) }, forKey: "lastDeviceFiles") }
+    }
+    /// 豆仓自己发过删除命令的录音，对比时不算「被取走」。
+    @ObservationIgnored var deletedOnDevice: Set<UInt32> = []
 
     /// 语音输入时的实时收音：录音豆边录边把音频传过来。
     struct LiveCapture {
@@ -195,11 +203,11 @@ final class BeanStore {
         }
     }
 
-    func toast(_ icon: String, _ text: String, undo: [UUID] = []) {
+    func toast(_ icon: String, _ text: String, undo: [UUID] = [], seconds: Double? = nil) {
         let b = Banner(icon: icon, text: text, undo: undo)
         banner = b
         // 能撤销的多留一会儿，给人反应的时间
-        Task { try? await Task.sleep(for: .seconds(undo.isEmpty ? 3.5 : 7)); if banner == b { banner = nil } }
+        Task { try? await Task.sleep(for: .seconds(seconds ?? (undo.isEmpty ? 3.5 : 7))); if banner == b { banner = nil } }
     }
 
     /// 录音豆是不是在充电盒里（在盒里时它在充电）。
@@ -367,6 +375,7 @@ final class BeanStore {
         if let name = ble.connectedName, !name.isEmpty { deviceName = name }
         crypto = CryptoSession()
         syncOnConnect = settings.autoDownload || wifiFallback
+        reportOnConnect = !wifiFallback
         wifiFallback = false
         scratchTried = []
         currentDeviceFile = 0
@@ -559,7 +568,7 @@ final class BeanStore {
         ble.send(Command.listFiles(page: 0))
         Task {
             try? await Task.sleep(for: .seconds(8))
-            if token == listToken, loadingList { finishList() }
+            if token == listToken, loadingList { finishList(complete: false) }
         }
     }
 
@@ -579,6 +588,7 @@ final class BeanStore {
 
     func deleteFromDevice(_ id: UInt32) {
         guard link == .ready else { return }
+        deletedOnDevice.insert(id)
         ble.send(Command.deleteFile(id))
     }
 
@@ -661,7 +671,7 @@ final class BeanStore {
                 ble.send(Command.listFiles(page: listPage))
                 Task {
                     try? await Task.sleep(for: .seconds(8))
-                    if token == listToken, loadingList { finishList() }
+                    if token == listToken, loadingList { finishList(complete: false) }
                 }
             } else {
                 finishList()
@@ -773,7 +783,8 @@ final class BeanStore {
         }
     }
 
-    private func finishList() {
+    /// complete 为 false：等清单超时了，只拿到一部分，不能拿来判断「哪些录音不见了」。
+    private func finishList(complete: Bool = true) {
         loadingList = false
         listToken += 1
         let remote = Dictionary(listPages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -814,9 +825,40 @@ final class BeanStore {
         saveLibrary()
         recordings = merged.sorted { ($0.date ?? .distantPast, $0.id) > ($1.date ?? .distantPast, $1.id) }
         // 正在录的那条，开始时间就是它的 id
+        if complete {
+            let now = Set(remote.keys)
+            let gone = lastDeviceFiles.subtracting(now).subtracting(deletedOnDevice)
+            if reportOnConnect { reportOnConnect = false; reportConnected(gone: gone) }
+            lastDeviceFiles = now
+            deletedOnDevice.formIntersection(now)
+        }
         if pullWhenListed { pullWhenListed = false; syncOnConnect = false; downloadAll() }
         syncAfterConnect()
         sweepScratch(remote: Set(remote.keys))
+    }
+
+    /// 连上后第一份清单回来时一定说一句：有新录音（自动同步那边会说「开始同步」）、都同步过了、
+    /// 或者上次在录音豆里的录音不见了又不是豆仓删的——录音豆同一时间只连一台设备，多半是手机那边连过、同步走了。
+    private func reportConnected(gone: Set<UInt32>) {
+        let open = sessionOpen ? currentDeviceFile : 0
+        let pending = recordings.filter { $0.onDevice && !$0.downloaded && !$0.inProgress && $0.id != open }.count
+        let missed = gone.filter { id in
+            !recordings.contains { $0.id == id && $0.downloaded } && !trash.contains { $0.recording.id == id }
+        }.count
+        if !gone.isEmpty {
+            addLog("上次在录音豆里的 \(gone.count) 条不在了，豆仓没删过（其中 \(missed) 条没下载过）：\(gone.sorted().map(String.init).joined(separator: " "))")
+        }
+        if pending > 0 {
+            guard !settings.autoDownload else { return }
+            announce("arrow.down.circle", "录音豆里有 \(pending) 条新录音，自动下载关着，可以在录音列表里下载")
+        } else if !gone.isEmpty {
+            announce("iphone", "录音豆里没有新录音：上次在里面的 \(gone.count) 条不见了，可能被手机同步走了",
+                     body: (missed > 0 ? "其中 \(missed) 条豆仓还没下载过。" : "")
+                        + "录音豆同一时间只连一台设备，手机上的录音豆 App 或飞书连过它的话，会把录音同步走，这期间新录的也在那边。",
+                     seconds: 10)
+        } else if info?.recording != true, open == 0 {
+            announce("checkmark.circle.fill", "录音豆已连上，录音都同步过了")
+        }
     }
 
     /// 刚连上录音豆：把在外面录的、还没下载过的录音自动拉下来。
@@ -830,7 +872,7 @@ final class BeanStore {
         let pending = recordings.filter { $0.onDevice && !$0.downloaded && !$0.inProgress && $0.id != open }
         if !pending.isEmpty {
             addLog("刚连上，自动同步 \(pending.count) 条还没下载的录音")
-            toast("arrow.down.circle.fill", "录音豆里有 \(pending.count) 条新录音，开始同步")
+            announce("arrow.down.circle.fill", "录音豆里有 \(pending.count) 条新录音，开始同步", body: "下载完会自动转写整理。")
             pending.forEach { download($0.id) }
         } else if open != 0, recordings.contains(where: { $0.id == open && !$0.downloaded }) {
             toast("pause.circle.fill", "录音豆里有一条还没结束的录音，点「结束」后会同步过来")
@@ -844,6 +886,7 @@ final class BeanStore {
         guard let next = scratchFiles.first(where: { !scratchTried.contains($0) && $0 != activeFileID }) else { return }
         scratchTried.insert(next)
         addLog("清理语音输入的临时录音 \(next)")
+        deletedOnDevice.insert(next)
         ble.send(Command.deleteFile(next))
     }
 
