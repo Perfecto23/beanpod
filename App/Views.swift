@@ -1755,8 +1755,8 @@ struct PlayerBar: View {
             .accessibilityLabel("播放速度").accessibilityValue("\(rateLabel(store.playRate).dropLast()) 倍")
         }
         .padding(12)
-        .background(Theme.warm100.opacity(0.8), in: .rect(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.warm200, lineWidth: 1))
+        .background(Theme.warm100.opacity(0.8), in: .rect(cornerRadius: Theme.Radius.panel))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel).strokeBorder(Theme.warm200, lineWidth: 1))
         .shadow(color: .black.opacity(0.03), radius: 2, y: 1)
         .onGeometryChange(for: Bool.self) { $0.size.width < 560 } action: { compact = $0 }
         .task(id: recording.id) {
@@ -2120,8 +2120,8 @@ struct TranscriptView: View {
                         .buttonStyle(.borderedProminent).disabled(!store.analysisAvailable)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(Theme.accent.opacity(0.07), in: .rect(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.accent.opacity(0.25), lineWidth: 1))
+                .background(Theme.accent.opacity(0.07), in: .rect(cornerRadius: Theme.Radius.card))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.accent.opacity(0.25), lineWidth: 1))
             }
             if recording.segments.isEmpty {
                 if view != .translated || translated(0) == nil {
@@ -2326,7 +2326,7 @@ struct TranscriptView: View {
         }
         .font(.callout)
         .padding(.horizontal, 14).padding(.vertical, 10)
-        .glassEffect(.regular, in: .rect(cornerRadius: 14))
+        .glassEffect(.regular, in: .rect(cornerRadius: Theme.Radius.panel))
     }
 
     private func row(_ seg: Segment, index: Int) -> some View {
