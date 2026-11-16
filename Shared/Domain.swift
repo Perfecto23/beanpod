@@ -344,6 +344,68 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
     var isDictation: Bool { origin == Self.dictationOrigin }
     /// 语音输入时文字打进了哪个软件（比如「微信」）。
     var typedInto: String?
+
+    /// 从哪儿来的：哪台设备录的，还是导入的。由 origin 推出来，不另存——
+    /// 录音豆下载的从来不写 origin；Mac/iPhone 录的写「Mac · 麦克风」这样；录音卡、导入、语音输入各有固定的写法。
+    enum Source: String, CaseIterable, Identifiable {
+        case bean, card, mac, iphone, imported, note, dictation, link
+        var id: String { rawValue }
+        var name: String {
+            switch self {
+            case .bean: "录音豆"
+            case .card: "录音卡"
+            case .mac: "Mac"
+            case .iphone: "iPhone"
+            case .imported: "导入"
+            case .note: "文字"
+            case .dictation: "语音输入"
+            case .link: "链接"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .bean: "headphones"
+            case .card: "rectangle.portrait"
+            case .mac: "laptopcomputer"
+            case .iphone: "iphone"
+            case .imported: "square.and.arrow.down"
+            case .note: "doc.text"
+            case .dictation: "keyboard"
+            case .link: "link"
+            }
+        }
+        /// 悬停时的一句解释。
+        var help: String {
+            switch self {
+            case .bean: "在录音豆上录的，连上后同步过来"
+            case .card: "在得到录音卡上录的，连上后同步过来"
+            case .mac: "用这台 Mac 录的"
+            case .iphone: "用 iPhone 录的"
+            case .imported: "从文件导入的音频"
+            case .note: "导入的文字笔记"
+            case .dictation: "按住快捷键说的话"
+            case .link: "从链接导入的素材"
+            }
+        }
+    }
+
+    var recordedOn: Source {
+        if isMaterial { return .link }
+        if isDictation { return .dictation }
+        guard let o = origin else { return .bean }
+        if o == "得到录音卡" { return .card }
+        if o.hasPrefix("Mac") { return .mac }
+        if o.hasPrefix("iPhone") { return .iphone }
+        if o == "文字笔记" { return .note }
+        return .imported
+    }
+
+    /// 来源后面的细节：Mac 录的写录了哪一路（「麦克风」「麦克风和电脑声音」），其它没有。
+    var sourceDetail: String? {
+        guard let o = origin, [.mac, .iphone].contains(recordedOn) else { return nil }
+        let rest = o.components(separatedBy: " · ").dropFirst().joined(separator: " · ")
+        return rest.isEmpty ? nil : rest
+    }
     var textOnly = false
     /// 重点标记：录音时在录音豆上按过标记键、或在豆仓里点过「标重点」的时刻（秒）。
     var marks: [TimeInterval] = []

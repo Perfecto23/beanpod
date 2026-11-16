@@ -761,6 +761,8 @@ struct RecordingsView: View {
     @State private var listWidth: CGFloat = 368
     /// 素材库里按平台筛。
     @State private var platform: String?
+    /// 按来源筛：录音豆、Mac、导入……（设计稿 design/ui/ui_source.png）
+    @State private var source: Recording.Source?
     @State private var linkText = ""
 
     /// 列表头上的快速筛选。星标以前是侧栏里单独的一页，没有星标时整页是空的，所以收进这里。
@@ -777,7 +779,8 @@ struct RecordingsView: View {
         }
     }
 
-    private var scoped: [Recording] {
+    /// 按来源筛之前的那一份：来源下拉里只列这里面真有的来源。
+    private var sourceBase: [Recording] {
         var base: [Recording]
         switch nav.route {
         case .starred: base = store.ownRecordings.filter(\.starred)
@@ -798,9 +801,20 @@ struct RecordingsView: View {
         return base
     }
 
-    private var narrowed: Bool { quick != .all || !query.isEmpty || { if case .scene = nav.route { return true }; return false }() }
+    private var scoped: [Recording] {
+        guard let source, nav.route != .materials else { return sourceBase }
+        return sourceBase.filter { $0.recordedOn == source }
+    }
 
-    private func showAll() { quick = .all; query = ""; nav.route = .all }
+    /// 这一页里有哪几种来源。只有一种时不显示来源下拉。
+    private var sources: [Recording.Source] {
+        let have = Set(sourceBase.map(\.recordedOn))
+        return Recording.Source.allCases.filter(have.contains)
+    }
+
+    private var narrowed: Bool { quick != .all || source != nil || !query.isEmpty || { if case .scene = nav.route { return true }; return false }() }
+
+    private func showAll() { quick = .all; source = nil; query = ""; nav.route = .all }
 
     /// 搜索：标题、摘要、文字稿、话题里有这个词就算。
     private var items: [Recording] {
@@ -867,6 +881,30 @@ struct RecordingsView: View {
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
+    /// 「来源：全部 ⌄」：只列这一页里真有的来源。选了某个来源时整块变成选中色。
+    private var sourceMenu: some View {
+        Menu {
+            Button { source = nil } label: { Text("全部来源") }
+            Divider()
+            ForEach(sources) { s in
+                Button { source = s } label: { Label(s.name, systemImage: s.icon) }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                if let source { Image(systemName: source.icon).font(.system(size: 11)) }
+                Text("来源：\(source?.name ?? "全部")")
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+            }
+            .font(.system(size: 12, weight: source == nil ? .regular : .medium))
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .foregroundStyle(source == nil ? Theme.warm700 : Theme.warm50)
+            .background(source == nil ? Theme.warm200.opacity(0.7) : Theme.warm900, in: .rect(cornerRadius: 8))
+        }
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        .help("只看某台设备录的，或者导入的")
+        .accessibilityLabel("来源：\(source?.name ?? "全部")")
+    }
+
     /// 素材库顶上的粘贴框：贴进来就导入。
     private var pasteBar: some View {
         HStack(spacing: 8) {
@@ -931,6 +969,7 @@ struct RecordingsView: View {
                                 ForEach(platforms, id: \.self) { p in chip(p, on: platform == p) { platform = p } }
                             } else {
                                 ForEach(Quick.allCases) { q in chip(q.rawValue, on: quick == q) { quick = q } }
+                                if sources.count > 1 || source != nil { sourceMenu }
                             }
                         }
                     }
@@ -1047,6 +1086,7 @@ struct RecordingsView: View {
     private var emptyTitle: String {
         if !query.isEmpty { return "没找到「\(query)」" }
         if quick != .all { return "「\(quick.rawValue)」里现在是空的" }
+        if let source { return "没有来源是「\(source.name)」的录音" }
         switch nav.route {
         case .materials: return "还没有素材"
         case .project: return "「\(title)」里还没有东西"
@@ -1058,6 +1098,7 @@ struct RecordingsView: View {
     private var emptyDetail: String {
         if !query.isEmpty { return "换个词试试，或者到知识库里直接提问。" }
         if quick != .all { return quick.emptyHint }
+        if source != nil { return "在「来源」里换回「全部来源」，就能看到其它录音。" }
         switch nav.route {
         case .materials: return "把抖音、B 站、YouTube 这些视频链接贴到左边的框里，豆仓会下载声音、转成文字稿，再整理成纪要。"
         case .project: return "在任意一条录音上右键「移到项目」，或者在「全部录音」里点「选择」，一次放好几条进来。"
@@ -1243,6 +1284,7 @@ struct RecordingRow: View {
             }
             // 标题下面只放小信息：几点、多长、什么场合，右边两个关键词。不放摘要句子，那是点开之后看的
             HStack(spacing: 6) {
+                if !recording.isMaterial { SourceBadge(recording: recording) }
                 Text(meta).lineLimit(1).monospacedDigit()
                 Spacer(minLength: 4)
                 // 归了项目的：先写项目名，再放关键词
@@ -1305,7 +1347,9 @@ struct RecordingRow: View {
             return [recording.origin ?? "素材", clock(recording.duration)].joined(separator: " • ")
         }
         if let d = recording.date { parts.append(d.formatted(.dateTime.hour().minute())) }
-        parts.append(recording.textOnly ? "文字" : clock(recording.duration))
+        // 文字笔记的来源胶囊已经写了「文字」，不再重复
+        if !recording.textOnly { parts.append(clock(recording.duration)) }
+        else if recording.recordedOn != .note { parts.append("文字") }
         if let scene = recording.scene { parts.append(scene.name) }
         else if !recording.downloaded { parts.append("还在录音豆里") }
         else if recording.transcript == nil { parts.append("还没转成文字") }
@@ -1421,6 +1465,7 @@ struct RecordingDetail: View {
                 }
                 .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
                 .help("场景是自动判断的，判断错了可以在这里改")
+                if !recording.isMaterial { SourceBadge(recording: recording, detailed: true).font(.system(size: 12, weight: .medium)) }
                 Text(subtitle).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.warm500).lineLimit(1)
                 Spacer(minLength: 8)
                 tools
@@ -1503,7 +1548,8 @@ struct RecordingDetail: View {
     private var subtitle: String {
         var parts: [String] = []
         if let p = store.project(recording.project) { parts.append("项目「\(p.name)」") }
-        if let o = recording.origin { parts.append(o) }
+        // 自己录的来源已经在前面的小胶囊里了；素材这里写平台和作者
+        if recording.isMaterial, let o = recording.origin { parts.append(o) }
         if let d = recording.date {
             // 今年的不写年份，省地方
             let thisYear = Calendar.current.isDate(d, equalTo: .now, toGranularity: .year)
@@ -2793,5 +2839,24 @@ struct ClipboardOffer: View {
                 if watch.offer?.url == offer.url { watch.offer = nil }
             }
         }
+    }
+}
+
+/// 录音来源的小胶囊：图标 + 两三个字（录音豆 / Mac / 导入…），悬停说明是怎么来的。设计稿 design/ui/ui_source.png。
+/// detailed：详情页顶上用，Mac 录的会带上录了哪一路（「Mac · 麦克风」）。
+struct SourceBadge: View {
+    let recording: Recording
+    var detailed = false
+
+    var body: some View {
+        let s = recording.recordedOn
+        let text = detailed ? ([s.name] + [recording.sourceDetail].compactMap { $0 }).joined(separator: " · ") : s.name
+        Label(text, systemImage: s.icon)
+            .labelStyle(.titleAndIcon).lineLimit(1).fixedSize()
+            .padding(.horizontal, detailed ? 9 : 5).padding(.vertical, detailed ? 4 : 1.5)
+            .foregroundStyle(Theme.warm600)
+            .background(Theme.warm100, in: .rect(cornerRadius: detailed ? 8 : 4))
+            .help(s.help)
+            .accessibilityLabel("来源：\(text)")
     }
 }

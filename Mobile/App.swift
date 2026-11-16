@@ -279,6 +279,14 @@ struct RecordingRow: View {
                 .font(.caption).foregroundStyle(Theme.warm400).monospacedDigit().padding(.top, 7)
             }
             HStack(spacing: 6) {
+                // 来源小胶囊：录音豆 / iPhone / 导入……（和 Mac 版同一套）
+                if !recording.isMaterial {
+                    let s = recording.recordedOn
+                    Label(s.name, systemImage: s.icon).labelStyle(.titleAndIcon).lineLimit(1).fixedSize()
+                        .padding(.horizontal, 5).padding(.vertical, 1.5)
+                        .foregroundStyle(Theme.warm600).background(Theme.warm100, in: .rect(cornerRadius: 4))
+                        .accessibilityLabel("来源：\(s.name)")
+                }
                 Text(meta).lineLimit(1).monospacedDigit()
                 Spacer(minLength: 4)
                 if showProject, let p = store.project(recording.project) {
@@ -320,7 +328,8 @@ struct RecordingRow: View {
         if recording.isMaterial { return [recording.origin ?? "素材", clock(recording.duration)].joined(separator: " • ") }
         var parts: [String] = []
         if let d = recording.date { parts.append(d.formatted(.dateTime.hour().minute())) }
-        parts.append(recording.textOnly ? "文字" : clock(recording.duration))
+        if !recording.textOnly { parts.append(clock(recording.duration)) }
+        else if recording.recordedOn != .note { parts.append("文字") }
         if let scene = recording.scene { parts.append(scene.name) }
         else if !recording.downloaded { parts.append("还在录音豆里") }
         else if recording.transcript == nil { parts.append("还没转成文字") }
