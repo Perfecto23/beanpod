@@ -717,6 +717,7 @@ struct RecordingsView: View {
     @State private var selecting = false
     @State private var picked: Set<UInt32> = []
     @State private var confirmBatchDelete = false
+    @State private var listWidth: CGFloat = 368
     /// 素材库里按平台筛。
     @State private var platform: String?
     @State private var linkText = ""
@@ -937,7 +938,7 @@ struct RecordingsView: View {
                 }
                 .overlay(alignment: .bottom) { if selecting { batchBar.padding(12) } }
             }
-            .frame(width: 368)
+            .frame(width: listWidth)
             .background(Theme.surface.opacity(0.5))
 
             Divider().overlay(Theme.warm200.opacity(0.7))
@@ -965,8 +966,12 @@ struct RecordingsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.surface.opacity(0.8))
+        }
+        // 窗口窄的时候列表让一点宽度给右边的详情：详情至少留 480，列表在 300～368 之间
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { total in
+            listWidth = min(368, max(300, (total - 480).rounded()))
         }
         .navigationTitle(title)
         .toolbar(removing: .title)
@@ -1809,14 +1814,25 @@ struct RewriteView: View {
     @State private var template: RewriteTemplate = .voiceover
     @State private var extra = ""
 
+    private var templatePicker: some View {
+        Picker("改成", selection: $template) {
+            ForEach(RewriteTemplate.allCases) { Text($0.name).tag($0) }
+        }
+    }
+
     var body: some View {
         let busy = store.rewriting.contains(recording.id)
         VStack(alignment: .leading, spacing: 14) {
             Card {
-                Picker("改成", selection: $template) {
-                    ForEach(RewriteTemplate.allCases) { Text($0.name).tag($0) }
+                // 七个模板一排放得下就用分段控件；窗口窄放不下时换成下拉菜单，不把整页撑出窗口
+                ViewThatFits(in: .horizontal) {
+                    templatePicker.pickerStyle(.segmented).labelsHidden()
+                    HStack(spacing: 8) {
+                        Text("改成").foregroundStyle(.secondary)
+                        templatePicker.pickerStyle(.menu).labelsHidden().fixedSize()
+                        Spacer(minLength: 0)
+                    }
                 }
-                .pickerStyle(.segmented).labelsHidden()
                 if template != .custom {
                     Text(template.instruction).font(.callout).foregroundStyle(.secondary)
                 }

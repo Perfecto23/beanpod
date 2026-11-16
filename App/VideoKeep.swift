@@ -255,45 +255,18 @@ struct MaterialVideoCard: View {
         let _ = store.videoRevision
         let has = store.hasVideo(recording.id)
         let vertical = (size.map { $0.height > $0.width }) ?? true
-        HStack(alignment: .top, spacing: 22) {
-            ZStack {
-                if has {
-                    VideoSurface(url: store.videoURL(recording.id), id: recording.id, playing: isPlaying,
-                                 time: store.playingID == recording.id ? store.playhead : 0, rate: store.playRate)
-                    if !isPlaying {
-                        Image(systemName: "play.fill").font(.system(size: 22)).foregroundStyle(.white)
-                            .frame(width: 52, height: 52).background(.black.opacity(0.35), in: .circle)
-                            .allowsHitTesting(false)
-                    }
-                } else {
-                    Color.black.opacity(0.06)
-                    VStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("正在保存画面…").font(.caption).foregroundStyle(.secondary)
-                    }
-                }
+        // 详情够宽：画面在左、说明和按钮在右；窗口窄放不下时，说明和按钮挪到画面下面
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 22) {
+                screen(has, vertical: vertical)
+                info(has).padding(.top, 6)
+                Spacer(minLength: 0)
             }
-            .frame(width: vertical ? 200 : 360, height: vertical ? 356 : 203)
-            .clipShape(.rect(cornerRadius: 12))
-            .overlay {
-                // 点画面 = 播放/暂停（用按钮而不是点按手势，读屏和键盘也能按）
-                Button { store.togglePlay(recording.id) } label: { Color.clear.contentShape(.rect) }
-                    .buttonStyle(.plain).disabled(!has)
-                    .accessibilityLabel(isPlaying ? "暂停视频" : "播放视频")
+            VStack(alignment: .leading, spacing: 14) {
+                screen(has, vertical: vertical)
+                info(has)
             }
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text(recording.origin ?? "视频素材").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.warm900)
-                Text(detail(has)).font(.callout).foregroundStyle(Theme.warm500).monospacedDigit()
-                // 按钮文字不截断：一行放得下就横排，放不下就竖排（窗口窄、横屏视频时右边只剩一条）
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) { actionButtons(has) }
-                    VStack(alignment: .leading, spacing: 8) { actionButtons(has) }
-                }
-                Text("删掉画面后声音和文字稿都还在。").font(.caption).foregroundStyle(Theme.warm400)
-            }
-            .padding(.top, 6)
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(16)
         .panel()
@@ -303,6 +276,48 @@ struct MaterialVideoCard: View {
         } message: {
             Text("只删画面，声音、文字稿和纪要都留着。以后可以在「⋯」菜单里重新下载画面（要原链接还能打开）。")
         }
+    }
+
+    private func screen(_ has: Bool, vertical: Bool) -> some View {
+        ZStack {
+            if has {
+                VideoSurface(url: store.videoURL(recording.id), id: recording.id, playing: isPlaying,
+                             time: store.playingID == recording.id ? store.playhead : 0, rate: store.playRate)
+                if !isPlaying {
+                    Image(systemName: "play.fill").font(.system(size: 22)).foregroundStyle(.white)
+                        .frame(width: 52, height: 52).background(.black.opacity(0.35), in: .circle)
+                        .allowsHitTesting(false)
+                }
+            } else {
+                Color.black.opacity(0.06)
+                VStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("正在保存画面…").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .frame(width: vertical ? 200 : 360, height: vertical ? 356 : 203)
+        .clipShape(.rect(cornerRadius: 12))
+        .overlay {
+            // 点画面 = 播放/暂停（用按钮而不是点按手势，读屏和键盘也能按）
+            Button { store.togglePlay(recording.id) } label: { Color.clear.contentShape(.rect) }
+                .buttonStyle(.plain).disabled(!has)
+                .accessibilityLabel(isPlaying ? "暂停视频" : "播放视频")
+        }
+    }
+
+    private func info(_ has: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(recording.origin ?? "视频素材").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.warm900)
+            Text(detail(has)).font(.callout).foregroundStyle(Theme.warm500).monospacedDigit()
+            // 按钮文字不截断：一行放得下就横排，放不下就竖排
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { actionButtons(has) }
+                VStack(alignment: .leading, spacing: 8) { actionButtons(has) }
+            }
+            Text("删掉画面后声音和文字稿都还在。").font(.caption).foregroundStyle(Theme.warm400)
+        }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     @ViewBuilder
