@@ -156,6 +156,8 @@ final class FeishuSync {
         minutes = found.sorted { ($0.uploaded ?? .distantPast) > ($1.uploaded ?? .distantPast) }
         lastChecked = .now
         link = .ready
+        // 以前只拉回了文字稿的，现在有音频权限就补上
+        if autoPull, !textOnlyImports.isEmpty { await fillAudio() }
         let fresh = newOnes
         // 新的默认勾上——只勾最近一天传上去的；更早的（比如几天前的会议）列着，要的话自己勾，免得第一次一下拉回几十条
         let recent = Date.now.addingTimeInterval(-86_400)
@@ -219,6 +221,32 @@ final class FeishuSync {
         if done > 0 {
             store.announce("arrow.down.circle.fill", "从飞书妙记拉回了 \(done) 条录音", body: audioDenied ? "飞书没给音频，先用飞书的文字稿整理。" : "正在转写整理。")
         }
+    }
+
+    /// 以前没有音频权限、只拉回了文字稿的：现在能下音频了就补上，重新转写（带上每句的时间，才能点句子回听）。
+    var textOnlyImports: [UInt32] {
+        imported.values.filter { id in store?.recordings.contains { $0.id == id && $0.textOnly } == true }
+    }
+
+    func fillAudio() async {
+        guard let tool, let store, !textOnlyImports.isEmpty else { return }
+        var done = 0
+        for (token, id) in imported where textOnlyImports.contains(id) {
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("feishu-audio-\(token)", isDirectory: true)
+            try? FileManager.default.removeItem(at: dir)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let dl = await BeanStore.runTool(tool, ["minutes", "+download", "--minute-tokens", token, "--output-dir", ".", "--overwrite", "--format", "json"], cwd: dir) { _ in }
+            if let err = Self.reply(dl)?["error"] as? [String: Any] {
+                if (err["subtype"] as? String) == "missing_scope" { audioDenied = true; return }
+                store.addLog("飞书妙记 \(token) 补音频失败：\(err["message"] as? String ?? "")")
+                continue
+            }
+            guard let audio = Self.firstFile(in: dir, ext: ["m4a", "mp3", "mp4", "aac", "wav", "ogg", "webm", "opus", "mov"]) else { continue }
+            audioDenied = false
+            if await store.attachFeishuAudio(audio, to: id) { done += 1 }
+        }
+        if done > 0 { store.announce("waveform", "给 \(done) 条飞书录音补上了音频", body: "正在重新转写，转完就能点句子回听。") }
     }
 
     // MARK: 解析
@@ -345,6 +373,20 @@ extension BeanStore {
     }
 
     static let feishuOrigin = "飞书妙记"
+
+    /// 给只有文字稿的飞书录音补上音频：写 wav、不再是纯文字，重新转写（纪要、标题、标签照常更新）。
+    func attachFeishuAudio(_ file: URL, to id: UInt32) async -> Bool {
+        let samples = await Task.detached { BeanStore.decodeAnyAudio(file) }.value
+        guard let samples, samples.count > 1600, let i = recordings.firstIndex(where: { $0.id == id }) else { return false }
+        do { try QwenASR.wav(samples).write(to: wavURL(id), options: .atomic) } catch { return false }
+        recordings[i].textOnly = false
+        recordings[i].duration = Double(samples.count) / 16000
+        recordings[i].size = UInt32(samples.count * 2)
+        saveLibrary()
+        addLog("飞书录音 \(id) 补上音频，重新转写")
+        process(id, retranscribe: true)
+        return true
+    }
 
     private func insertImported(_ rec: Recording) {
         recordings.append(rec)

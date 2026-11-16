@@ -145,7 +145,7 @@ struct RootView: View {
                     .frame(width: 260, alignment: .leading)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 10)
-                .glassEffect(.regular, in: .rect(cornerRadius: 16))
+                .glassEffect(.regular, in: .rect(cornerRadius: Theme.Radius.panel))
                 .padding(.top, store.banner == nil ? 10 : 56)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .accessibilityElement(children: .combine)
@@ -333,8 +333,8 @@ struct Sidebar: View {
             // 品牌卡：图标、名字、一行小字
             HStack(spacing: 11) {
                 Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 40, height: 40)
-                    .clipShape(.rect(cornerRadius: 9))
-                    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.warm300.opacity(0.5), lineWidth: 2))
+                    .clipShape(.rect(cornerRadius: Theme.Radius.card))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.warm300.opacity(0.5), lineWidth: 2))
                 VStack(alignment: .leading, spacing: 1) {
                     Text("豆仓").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.warm900)
                     Text("语音工作台").font(.system(size: 11)).foregroundStyle(Theme.warm500)
@@ -342,8 +342,8 @@ struct Sidebar: View {
                 Spacer(minLength: 0)
             }
             .padding(8)
-            .background(Theme.surface.opacity(0.6), in: .rect(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.warm200.opacity(0.5), lineWidth: 1))
+            .background(Theme.surface.opacity(0.6), in: .rect(cornerRadius: Theme.Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.warm200.opacity(0.5), lineWidth: 1))
             .shadow(color: .black.opacity(0.03), radius: 2, y: 1)
             .accessibilityElement(children: .combine)
             .padding(.bottom, 20)
@@ -379,7 +379,7 @@ struct Sidebar: View {
                         }
                     }
                     .padding(.horizontal, 12).padding(.vertical, 7)
-                    .background(on ? Theme.accent.opacity(0.12) : .clear, in: .rect(cornerRadius: 10))
+                    .background(on ? Theme.accent.opacity(0.12) : .clear, in: .rect(cornerRadius: Theme.Radius.card))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -428,7 +428,7 @@ struct Sidebar: View {
                                 Text("\(store.count(in: p.id))").font(.system(size: 11)).monospacedDigit().foregroundStyle(Theme.warm400)
                             }
                             .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(on ? Theme.warm300.opacity(0.4) : .clear, in: .rect(cornerRadius: 10))
+                            .background(on ? Theme.warm300.opacity(0.4) : .clear, in: .rect(cornerRadius: Theme.Radius.card))
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -462,7 +462,7 @@ struct Sidebar: View {
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
-            .background(on ? Theme.warm300.opacity(0.4) : .clear, in: .rect(cornerRadius: 12))
+            .background(on ? Theme.warm300.opacity(0.4) : .clear, in: .rect(cornerRadius: Theme.Radius.card))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -485,9 +485,9 @@ struct SidebarRecord: View {
                     }
                     .frame(maxWidth: .infinity).frame(height: 44)
                     .foregroundStyle(.white)
-                    .background(LinearGradient(colors: [Theme.rec, Theme.recDeep], startPoint: .leading, endPoint: .trailing), in: .rect(cornerRadius: 12))
+                    .background(LinearGradient(colors: [Theme.rec, Theme.recDeep], startPoint: .leading, endPoint: .trailing), in: .rect(cornerRadius: Theme.Radius.card))
                     .shadow(color: Theme.rec.opacity(0.25), radius: 10, y: 5)
-                    .contentShape(.rect(cornerRadius: 12))
+                    .contentShape(.rect(cornerRadius: Theme.Radius.card))
                 }
                 .buttonStyle(PressScale())
                 .help("开始录音，声音来自：\(store.sourceName)（⌘R）")
@@ -504,9 +504,9 @@ struct SidebarRecord: View {
                         Text(paused ? "已暂停" : "录音中").font(.callout).foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity).frame(height: 44)
-                    .background(Theme.rec.opacity(0.12), in: .rect(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.rec.opacity(0.35), lineWidth: 1))
-                    .contentShape(.rect(cornerRadius: 12))
+                    .background(Theme.rec.opacity(0.12), in: .rect(cornerRadius: Theme.Radius.card))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.rec.opacity(0.35), lineWidth: 1))
+                    .contentShape(.rect(cornerRadius: Theme.Radius.card))
                 }
                 .buttonStyle(.plain).help("回到录音舞台（⌘L）")
             }
@@ -557,10 +557,10 @@ struct SettingsChip: View {
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(hover ? Theme.warm900 : Theme.warm500)
                 .frame(width: 36).frame(maxHeight: .infinity)
-                .background(Theme.surface.opacity(hover ? 1 : 0.7), in: .rect(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.warm200.opacity(0.6), lineWidth: 1))
+                .background(Theme.surface.opacity(hover ? 1 : 0.7), in: .rect(cornerRadius: Theme.Radius.card))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.warm200.opacity(0.6), lineWidth: 1))
                 .shadow(color: .black.opacity(0.03), radius: 2, y: 1)
-                .contentShape(.rect(cornerRadius: 12))
+                .contentShape(.rect(cornerRadius: Theme.Radius.card))
         }
         .buttonStyle(PressScale())
         .onHover { hover = $0 }
@@ -582,7 +582,7 @@ struct DeviceChip: View {
             HStack(spacing: 8) {
                 Image(systemName: showCard ? "rectangle.fill" : "headphones")
                     .font(.system(size: 13, weight: .medium)).foregroundStyle(store.link == .ready || showCard ? Theme.amber : Theme.warm500)
-                    .frame(width: 28, height: 28).background((store.link == .ready || showCard ? Theme.amber : Theme.warm400).opacity(0.16), in: .rect(cornerRadius: 8))
+                    .frame(width: 28, height: 28).background((store.link == .ready || showCard ? Theme.amber : Theme.warm400).opacity(0.16), in: .rect(cornerRadius: Theme.Radius.card))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(showCard ? store.card.name : store.link == .ready ? store.displayDeviceName : "录音豆").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.warm900)
                         .lineLimit(1).minimumScaleFactor(0.8).truncationMode(.middle)
@@ -596,8 +596,8 @@ struct DeviceChip: View {
                 else if showCard, let p = store.card.progress { ProgressView(value: p.fraction).progressViewStyle(.circular).controlSize(.small) }
             }
             .padding(.horizontal, 9).padding(.vertical, 11)
-            .background(Theme.surface.opacity(0.7), in: .rect(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(on ? Theme.accent.opacity(0.6) : Theme.warm200.opacity(0.6), lineWidth: on ? 1.5 : 1))
+            .background(Theme.surface.opacity(0.7), in: .rect(cornerRadius: Theme.Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(on ? Theme.accent.opacity(0.6) : Theme.warm200.opacity(0.6), lineWidth: on ? 1.5 : 1))
             .shadow(color: .black.opacity(0.03), radius: 2, y: 1)
             .contentShape(Rectangle())
         }
@@ -662,15 +662,15 @@ struct Card<Content: View>: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.warm50, in: .rect(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.warm200.opacity(0.8), lineWidth: 1))
+        .background(Theme.warm50, in: .rect(cornerRadius: Theme.Radius.panel))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel).strokeBorder(Theme.warm200.opacity(0.8), lineWidth: 1))
         .shadow(color: .black.opacity(0.02), radius: 2, y: 1)
     }
 }
 
 extension View {
     /// 放内容的底板：一块半透明的实底加一圈细线。玻璃只留给浮在内容上面的控件。
-    func panel(radius: CGFloat = 16) -> some View {
+    func panel(radius: CGFloat = Theme.Radius.panel) -> some View {
         modifier(Panel(radius: radius))
     }
 }
@@ -875,7 +875,7 @@ struct RecordingsView: View {
             Text(text).font(.system(size: 12, weight: on ? .medium : .regular))
                 .padding(.horizontal, 12).padding(.vertical, 4)
                 .foregroundStyle(on ? Theme.warm50 : Theme.warm700)
-                .background(on ? Theme.warm900 : Theme.warm200.opacity(0.7), in: .rect(cornerRadius: 8))
+                .background(on ? Theme.warm900 : Theme.warm200.opacity(0.7), in: .rect(cornerRadius: Theme.Radius.card))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])
@@ -898,7 +898,7 @@ struct RecordingsView: View {
             .font(.system(size: 12, weight: source == nil ? .regular : .medium))
             .padding(.horizontal, 10).padding(.vertical, 4)
             .foregroundStyle(source == nil ? Theme.warm700 : Theme.warm50)
-            .background(source == nil ? Theme.warm200.opacity(0.7) : Theme.warm900, in: .rect(cornerRadius: 8))
+            .background(source == nil ? Theme.warm200.opacity(0.7) : Theme.warm900, in: .rect(cornerRadius: Theme.Radius.card))
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
         .help("只看某台设备录的，或者导入的")
@@ -914,13 +914,13 @@ struct RecordingsView: View {
             Button(action: importPasted) {
                 Text("导入").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
                     .padding(.horizontal, 12).padding(.vertical, 5)
-                    .background(LinkTools.urls(in: linkText).isEmpty ? Theme.warm400 : Theme.accent, in: .rect(cornerRadius: 8))
+                    .background(LinkTools.urls(in: linkText).isEmpty ? Theme.warm400 : Theme.accent, in: .rect(cornerRadius: Theme.Radius.card))
             }
             .buttonStyle(.plain).disabled(LinkTools.urls(in: linkText).isEmpty)
         }
         .padding(.leading, 12).padding(.trailing, 6).padding(.vertical, 6)
-        .background(Theme.warm100.opacity(0.7), in: .rect(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.warm200.opacity(0.8), lineWidth: 1))
+        .background(Theme.warm100.opacity(0.7), in: .rect(cornerRadius: Theme.Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.warm200.opacity(0.8), lineWidth: 1))
     }
 
     private func importPasted() {
@@ -958,8 +958,8 @@ struct RecordingsView: View {
                         }
                     }
                     .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(Theme.warm100.opacity(0.7), in: .rect(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(searching ? Theme.accent : Theme.warm200.opacity(0.8), lineWidth: searching ? 1.5 : 1))
+                    .background(Theme.warm100.opacity(0.7), in: .rect(cornerRadius: Theme.Radius.card))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(searching ? Theme.accent : Theme.warm200.opacity(0.8), lineWidth: searching ? 1.5 : 1))
                     .focused($searching)
                     // 快速筛选：素材库按平台，其他页按星标、待办、重点
                     // 来源下拉固定在最右边，不跟着前面那排一起滑：列表窄的时候前面的可以滑，它总是完整的
@@ -1145,8 +1145,8 @@ struct RecordingsView: View {
         .disabled(picked.isEmpty)
         .foregroundStyle(Theme.warm700)
         .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(Theme.surface, in: .rect(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.warm200, lineWidth: 1))
+        .background(Theme.surface, in: .rect(cornerRadius: Theme.Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.warm200, lineWidth: 1))
         .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
     }
 
@@ -1255,7 +1255,7 @@ struct RecordingRow: View {
                 if recording.isMaterial, let thumb = NSImage(contentsOf: store.videoThumbURL(recording.id)) {
                     // 留了画面的视频素材：用画面第 1 秒当小封面
                     Image(nsImage: thumb).resizable().scaledToFill()
-                        .frame(width: 28, height: 28).clipShape(.rect(cornerRadius: 8))
+                        .frame(width: 28, height: 28).clipShape(.rect(cornerRadius: Theme.Radius.card))
                         .overlay(Image(systemName: "play.fill").font(.system(size: 9, weight: .bold)).foregroundStyle(.white).shadow(radius: 2))
                         .help("从链接导入的视频素材，留了画面")
                 } else {
@@ -1263,7 +1263,7 @@ struct RecordingRow: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(tint)
                         .frame(width: 28, height: 28)
-                        .background(tint.opacity(selected ? 0.1 : 0.12), in: .rect(cornerRadius: 8))
+                        .background(tint.opacity(selected ? 0.1 : 0.12), in: .rect(cornerRadius: Theme.Radius.card))
                         .help(recording.isMaterial ? "从链接导入的素材" : (recording.scene ?? .other).name)
                 }
                 Text(recording.displayTitle)
@@ -1308,11 +1308,11 @@ struct RecordingRow: View {
             .padding(.leading, checked == nil ? 38 : 72)
         }
         .padding(14)
-        .background(Theme.surface.opacity(selected || hover ? 1 : 0.6), in: .rect(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12)
+        .background(Theme.surface.opacity(selected || hover ? 1 : 0.6), in: .rect(cornerRadius: Theme.Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card)
             .strokeBorder(selected ? Theme.accent.opacity(0.6) : Theme.warm200.opacity(0.6), lineWidth: selected ? 2 : 1))
         .shadow(color: .black.opacity(selected ? 0.06 : hover ? 0.05 : 0.02), radius: selected || hover ? 4 : 1.5, y: 1)
-        .contentShape(.rect(cornerRadius: 12))
+        .contentShape(.rect(cornerRadius: Theme.Radius.card))
         .onHover { hover = $0 }
         .animation(.easeOut(duration: 0.15), value: hover)
     }
@@ -1426,7 +1426,7 @@ struct RecordingDetail: View {
                                         Label(clock(m), systemImage: "flag.fill").font(.system(size: 12, weight: .medium).monospacedDigit())
                                             .padding(.horizontal, 10).padding(.vertical, 4)
                                             .foregroundStyle(Theme.accent)
-                                            .background(Theme.accent.opacity(0.1), in: .rect(cornerRadius: 8))
+                                            .background(Theme.accent.opacity(0.1), in: .rect(cornerRadius: Theme.Radius.card))
                                     }
                                     .buttonStyle(.plain)
                                     .help("跳到这个重点标记。右键可以删掉")
@@ -1464,7 +1464,7 @@ struct RecordingDetail: View {
                         .font(.system(size: 12, weight: .semibold)).labelStyle(.titleAndIcon)
                         .foregroundStyle(Theme.warm700)
                         .padding(.horizontal, 10).padding(.vertical, 4)
-                        .background(Theme.warm100, in: .rect(cornerRadius: 8))
+                        .background(Theme.warm100, in: .rect(cornerRadius: Theme.Radius.card))
                 }
                 .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
                 .help("场景是自动判断的，判断错了可以在这里改")
@@ -1630,7 +1630,7 @@ struct IconTool: View {
             Image(systemName: icon).font(.system(size: 13, weight: .medium))
                 .foregroundStyle(tint ?? Theme.warm600)
                 .frame(width: 36, height: 36)
-                .background(hover && enabled ? Theme.warm100 : .clear, in: .rect(cornerRadius: 12))
+                .background(hover && enabled ? Theme.warm100 : .clear, in: .rect(cornerRadius: Theme.Radius.card))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain).opacity(enabled ? 1 : 0.4)
@@ -1656,7 +1656,7 @@ struct IconMenu<Content: View>: View {
             Image(systemName: icon).font(.system(size: 13, weight: .medium))
                 .foregroundStyle(danger && hover ? Theme.accent : Theme.warm600)
                 .frame(width: 36, height: 36)
-                .background(hover ? (danger ? Theme.accent.opacity(0.1) : Theme.warm100) : .clear, in: .rect(cornerRadius: 12))
+                .background(hover ? (danger ? Theme.accent.opacity(0.1) : Theme.warm100) : .clear, in: .rect(cornerRadius: Theme.Radius.card))
                 .contentShape(Rectangle())
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
@@ -1679,7 +1679,7 @@ struct PaneSwitch: View {
                         .padding(.horizontal, 16).padding(.vertical, 6)
                         .background {
                             if selection == i {
-                                RoundedRectangle(cornerRadius: 8).fill(Theme.surface).shadow(color: .black.opacity(0.06), radius: 1.5, y: 1)
+                                RoundedRectangle(cornerRadius: Theme.Radius.card).fill(Theme.surface).shadow(color: .black.opacity(0.06), radius: 1.5, y: 1)
                             }
                         }
                         .contentShape(Rectangle())
@@ -1689,7 +1689,7 @@ struct PaneSwitch: View {
             }
         }
         .padding(4)
-        .background(Theme.warm100, in: .rect(cornerRadius: 12))
+        .background(Theme.warm100, in: .rect(cornerRadius: Theme.Radius.card))
         .fixedSize()
     }
 }
@@ -1941,7 +1941,7 @@ struct RewriteView: View {
                     Spacer()
                     Button("看进度") { makingVideo = true }
                 }
-                .padding(12).panel(radius: 12)
+                .padding(12).panel(radius: Theme.Radius.card)
             }
             // 用这条录音做出来的视频：成片、封面、口播稿、包装说明、质检都回到这里（VideoResultCard）
             ForEach(recording.videos) { clip in
@@ -2007,8 +2007,8 @@ struct NotesView: View {
                         }
                         .toggleStyle(.checkbox)
                         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Theme.surface, in: .rect(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.warm200.opacity(0.6), lineWidth: 1))
+                        .background(Theme.surface, in: .rect(cornerRadius: Theme.Radius.card))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.warm200.opacity(0.6), lineWidth: 1))
                     }
                 }
             }
@@ -2039,7 +2039,7 @@ struct NotesView: View {
         Text(icon == "number" ? "# " + text.trimmingCharacters(in: CharacterSet(charactersIn: "# ")) : text)
             .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.warm700)
             .padding(.horizontal, 10).padding(.vertical, 4)
-            .background(Theme.warm100, in: .rect(cornerRadius: 8))
+            .background(Theme.warm100, in: .rect(cornerRadius: Theme.Radius.card))
     }
 
     private var credits: String {
@@ -2066,6 +2066,10 @@ struct TranscriptView: View {
     /// 原文、双语、译文。有译文时默认双语。
     @State private var view: Shown = .both
     @State private var translateOpen = false
+    /// 逐句回听（设计稿 design/ui/ui_listen.png）：单句循环、跟着播放滚动、鼠标停在哪一句
+    @AppStorage("sentenceLoop") private var loopOn = false
+    @AppStorage("followPlayback") private var follow = true
+    @State private var hovered: TimeInterval?
 
     enum Shown: String, CaseIterable { case original = "原文", both = "双语", translated = "译文" }
 
@@ -2109,13 +2113,109 @@ struct TranscriptView: View {
                 }
                 if let t = translated(0) { translationLine(t, solo: view == .translated) }
             }
-            ForEach(Array(recording.segments.enumerated()), id: \.element.id) { i, seg in row(seg, index: i) }
+            if canListen { listenBar }
+            ScrollViewReader { proxy in
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(Array(recording.segments.enumerated()), id: \.element.id) { i, seg in row(seg, index: i).id(seg.start) }
+                }
+                // 跟着播放滚：当前句换了就把它滚到中间
+                .onChange(of: currentIndex) { _, i in
+                    guard follow, !editing, let i, store.isPlaying else { return }
+                    withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(recording.segments[i].start, anchor: .center) }
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .alert("给这位说话人起个名字", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("名字", text: $newName)
             Button("好") { if let r = renaming { store.renameSpeaker(recording.id, r, to: newName) }; renaming = nil }
             Button("取消", role: .cancel) { renaming = nil }
+        }
+    }
+
+    // MARK: 逐句回听
+
+    /// 有音频、有分句时间的才能逐句听
+    private var canListen: Bool { !recording.textOnly && !recording.segments.isEmpty }
+    private var mine: Bool { store.playingID == recording.id }
+
+    /// 第 i 句的时间段：从这句开头到下一句开头（最后一句到结尾）
+    private func span(_ i: Int) -> ClosedRange<TimeInterval> {
+        let segs = recording.segments
+        let start = segs[i].start
+        let end = i + 1 < segs.count ? segs[i + 1].start : max(start + 0.5, recording.duration)
+        return start...max(start + 0.3, end)
+    }
+
+    /// 正在播的是第几句（没在播这条时为空）
+    private var currentIndex: Int? {
+        guard mine else { return nil }
+        return recording.segments.lastIndex { $0.start <= store.playhead + 0.05 }
+    }
+
+    /// 这一句读到哪了（0…1），按时间在这句里的比例估
+    private func progress(_ i: Int) -> Double {
+        let s = span(i)
+        return max(0, min(1, (store.playhead - s.lowerBound) / max(0.3, s.upperBound - s.lowerBound)))
+    }
+
+    /// 读过的部分深色带底色，没读的浅色。按字数比例推进；英文推到当前单词结尾，不把一个词切成两半。
+    private func spoken(_ text: String, fraction: Double) -> AttributedString {
+        let chars = Array(text)
+        var k = Int((Double(chars.count) * fraction).rounded())
+        while k > 0, k < chars.count, chars[k - 1].isASCII, chars[k - 1].isLetter, chars[k].isASCII, chars[k].isLetter { k += 1 }
+        var a = AttributedString(text)
+        let cut = a.index(a.startIndex, offsetByCharacters: min(k, chars.count))
+        a[a.startIndex..<cut].foregroundColor = Theme.warm900
+        a[a.startIndex..<cut].backgroundColor = Theme.accent.opacity(0.16)
+        a[cut..<a.endIndex].foregroundColor = Theme.warm500
+        return a
+    }
+
+    /// 点一句：开着单句循环就循环这句，否则从这句一直往下播
+    private func listen(_ i: Int) {
+        if loopOn { store.playSpan(recording.id, span(i), loop: true) }
+        else { store.play(recording.id, at: recording.segments[i].start) }
+    }
+
+    private func step(_ delta: Int) {
+        let n = recording.segments.count
+        guard n > 0 else { return }
+        let i = max(0, min(n - 1, (currentIndex ?? -1) + delta))
+        listen(i)
+    }
+
+    private func replayCurrent() {
+        guard let i = currentIndex ?? (recording.segments.isEmpty ? nil : 0) else { return }
+        store.playSpan(recording.id, span(i), loop: loopOn)
+    }
+
+    /// 文字稿上面的一排：单句循环、上一句 / 下一句 / 这句再听、跟着滚动，和快捷键提示。
+    private var listenBar: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Toggle(isOn: Binding(get: { loopOn }, set: { on in
+                    loopOn = on
+                    if on, mine, let i = currentIndex { store.loopSpan = span(i); store.loopCount = 1 } else if !on { store.endLoop() }
+                })) { Label("单句循环", systemImage: "repeat") }
+                    .toggleStyle(.switch).controlSize(.small).tint(Theme.accent).fixedSize()
+                    .keyboardShortcut("l", modifiers: .option)
+                    .help("开着时点哪句就一直重复那句，适合听不清、跟读（⌥L）")
+                Divider().frame(height: 16)
+                Button { step(-1) } label: { Label("上一句", systemImage: "arrow.up") }
+                    .keyboardShortcut(.upArrow, modifiers: .option).help("上一句（⌥↑）")
+                Button { step(1) } label: { Label("下一句", systemImage: "arrow.down") }
+                    .keyboardShortcut(.downArrow, modifiers: .option).help("下一句（⌥↓）")
+                Button { replayCurrent() } label: { Label("这句再听", systemImage: "gobackward") }
+                    .keyboardShortcut("r", modifiers: .option).help("从句首再听一遍这句（⌥R）")
+                Spacer(minLength: 8)
+                Toggle(isOn: $follow) { Text("跟着滚动") }
+                    .toggleStyle(.checkbox).fixedSize()
+                    .help("播放时把正在播的那句滚到中间")
+            }
+            .buttonStyle(.glass).controlSize(.small)
+            Text("点一句就从那里播 · 空格 暂停 · ⌥↑ ⌥↓ 换句 · ⌥R 这句再听 · ⌥L 单句循环")
+                .font(.caption).foregroundStyle(.tertiary)
         }
     }
 
@@ -2217,6 +2317,8 @@ struct TranscriptView: View {
         let useClean = showClean && seg.clean != nil
         let line = translated(index)
         let marked = isMarked(seg)
+        let playingThis = canListen && currentIndex == index
+        let looping = playingThis && store.loopSpan != nil
         return HStack(alignment: .firstTextBaseline, spacing: 12) {
             Button(clock(seg.start)) { store.play(recording.id, at: seg.start) }
                 .buttonStyle(.plain).foregroundStyle(Theme.accent).font(.callout.monospacedDigit())
@@ -2233,16 +2335,48 @@ struct TranscriptView: View {
             } else {
                 VStack(alignment: .leading, spacing: 4) {
                     if view != .translated || line == nil {
-                        Text(useClean ? (seg.clean ?? seg.text) : seg.text).textSelection(.enabled).lineSpacing(5)
-                            .foregroundStyle(isCurrent(seg) ? .primary : .secondary)
+                        let shown = useClean ? (seg.clean ?? seg.text) : seg.text
+                        if playingThis {
+                            // 正在读的这句：读过的部分跟着进度变深、带底色（像卡拉 OK 歌词）
+                            Text(spoken(shown, fraction: progress(index))).lineSpacing(5)
+                        } else {
+                            // 能逐句听的时候单击是「从这句播」，可选中的文字会把单击吞掉；拷贝走右键「拷贝这句」
+                            Text(shown).modifier(Selectable(on: !canListen)).lineSpacing(5)
+                                .foregroundStyle(isCurrent(seg) ? .primary : .secondary)
+                        }
                     }
                     if let line { translationLine(line, solo: view == .translated) }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                // 点句子本身就从这句播（文字还能拖选拷贝）
+                .contentShape(.rect)
+                .onTapGesture { if canListen, !editing { listen(index) } }
+                .accessibilityAction(named: "从这句播") { if canListen { listen(index) } }
+                if looping {
+                    Label("第 \(store.loopCount) 遍", systemImage: "repeat").labelStyle(.titleAndIcon)
+                        .font(.caption.weight(.medium)).monospacedDigit().foregroundStyle(Theme.accent)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Theme.accent.opacity(0.12), in: .capsule).fixedSize()
+                } else if canListen, hovered == seg.start, !editing {
+                    HStack(spacing: 6) {
+                        Button { store.play(recording.id, at: seg.start) } label: { Label("从这句播", systemImage: "play.fill") }
+                        Button { store.playSpan(recording.id, span(index), loop: false) } label: { Label("这句再听", systemImage: "gobackward") }
+                    }
+                    .buttonStyle(.glass).controlSize(.small).labelStyle(.titleAndIcon).fixedSize()
+                }
             }
         }
-        .padding(.vertical, marked ? 6 : 0).padding(.horizontal, marked ? 8 : 0)
-        .background(marked ? Theme.accent.opacity(0.12) : .clear, in: .rect(cornerRadius: 8))
-        .padding(.horizontal, marked ? -8 : 0)
+        .padding(.vertical, marked || playingThis || hovered == seg.start ? 6 : 0)
+        .padding(.horizontal, marked || playingThis || hovered == seg.start ? 8 : 0)
+        .background(playingThis ? Theme.accent.opacity(0.09) : marked ? Theme.accent.opacity(0.12) : hovered == seg.start && canListen && !editing ? Theme.warm100 : .clear,
+                    in: .rect(cornerRadius: 8))
+        .overlay(alignment: .leading) {
+            if playingThis { Rectangle().fill(Theme.accent).frame(width: 3).padding(.vertical, 4) }
+        }
+        .padding(.horizontal, marked || playingThis || hovered == seg.start ? -8 : 0)
+        .onHover { inside in
+            if inside { hovered = seg.start } else if hovered == seg.start { hovered = nil }
+        }
         .contextMenu {
             if marked {
                 Button("取消重点标记") { for m in marksIn(seg) { store.removeMark(recording.id, m) } }
@@ -2250,6 +2384,14 @@ struct TranscriptView: View {
                 Button("标为重点") { store.addMark(recording.id, at: seg.start + 0.5) }
             }
             Button("从这里开始播放") { store.play(recording.id, at: seg.start) }
+            Button("拷贝这句") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(useClean ? (seg.clean ?? seg.text) : seg.text, forType: .string)
+            }
+            if canListen {
+                Button("这句再听一遍") { store.playSpan(recording.id, span(index), loop: false) }
+                Button("循环这一句") { loopOn = true; store.playSpan(recording.id, span(index), loop: true) }
+            }
         }
     }
 
@@ -2295,6 +2437,14 @@ struct TranscriptView: View {
     }
 }
 
+/// 文字能不能拖选：逐句听的时候关掉，单击留给「从这句播」。
+struct Selectable: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View {
+        if on { content.textSelection(.enabled) } else { content.textSelection(.disabled) }
+    }
+}
+
 /// 一句话的编辑框：改完按回车或点到别处才提交。
 struct SegmentEditor: View {
     @State private var draft: String
@@ -2310,7 +2460,7 @@ struct SegmentEditor: View {
         TextField("", text: $draft, axis: .vertical)
             .textFieldStyle(.plain).lineSpacing(5)
             .padding(.horizontal, 8).padding(.vertical, 5)
-            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: Theme.Radius.card))
             .focused($focused)
             .onSubmit { commit(draft) }
             .onChange(of: focused) { _, now in if !now { commit(draft) } }
@@ -2389,7 +2539,7 @@ struct DeviceView: View {
                             Spacer()
                             Text("连接").foregroundStyle(Theme.accent)
                         }
-                        .padding(10).glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12)).contentShape(Rectangle())
+                        .padding(10).glassEffect(.regular.interactive(), in: .rect(cornerRadius: Theme.Radius.card)).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .transition(.scale(scale: 0.9).combined(with: .opacity))
@@ -2611,7 +2761,7 @@ struct KeepCard: View {
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(just.discardAt == nil ? Theme.accent : Theme.rec)
                     .frame(width: 46, height: 46)
-                    .background((just.discardAt == nil ? Theme.accent : Theme.rec).opacity(0.14), in: .rect(cornerRadius: 12))
+                    .background((just.discardAt == nil ? Theme.accent : Theme.rec).opacity(0.14), in: .rect(cornerRadius: Theme.Radius.card))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(just.discardAt == nil ? "录好了" : "这条不要了").font(.title3.weight(.semibold))
@@ -2659,8 +2809,8 @@ struct KeepCard: View {
         }
         .padding(18)
         .frame(width: 340)
-        .background(.ultraThickMaterial, in: .rect(cornerRadius: 20))   // 要厚：后面是正文，透出来会跟卡片上的字打架
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
+        .background(.ultraThickMaterial, in: .rect(cornerRadius: Theme.Radius.panel))   // 要厚：后面是正文，透出来会跟卡片上的字打架
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel).strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
         .shadow(color: .black.opacity(0.18), radius: 24, y: 10)
         .animation(.spring(response: 0.35, dampingFraction: 0.9), value: just.discardAt != nil)
     }
@@ -2756,7 +2906,7 @@ struct TranslatePanel: View {
                             Text(s.name).font(.system(size: 12, weight: style == s ? .semibold : .regular))
                                 .frame(maxWidth: .infinity).padding(.vertical, 5)
                                 .foregroundStyle(style == s ? Theme.warm50 : Theme.warm700)
-                                .background(style == s ? Theme.warm900 : Theme.warm200.opacity(0.7), in: .rect(cornerRadius: 8))
+                                .background(style == s ? Theme.warm900 : Theme.warm200.opacity(0.7), in: .rect(cornerRadius: Theme.Radius.card))
                         }
                         .buttonStyle(.plain)
                     }
@@ -2819,7 +2969,7 @@ struct ClipboardOffer: View {
         if let offer = watch.offer {
             HStack(spacing: 12) {
                 Image(systemName: "link").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accent)
-                    .frame(width: 28, height: 28).background(Theme.accent.opacity(0.1), in: .rect(cornerRadius: 8))
+                    .frame(width: 28, height: 28).background(Theme.accent.opacity(0.1), in: .rect(cornerRadius: Theme.Radius.card))
                 VStack(alignment: .leading, spacing: 1) {
                     Text("剪贴板里有一条\(offer.platform)链接").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.warm900)
                     Text(offer.url.replacingOccurrences(of: #"^https?://(www\.)?"#, with: "", options: .regularExpression))
@@ -2836,8 +2986,8 @@ struct ClipboardOffer: View {
                     .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Theme.warm500)
             }
             .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(Theme.surface, in: .rect(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.warm200, lineWidth: 1))
+            .background(Theme.surface, in: .rect(cornerRadius: Theme.Radius.panel))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel).strokeBorder(Theme.warm200, lineWidth: 1))
             .shadow(color: .black.opacity(0.12), radius: 16, y: 6)
             .task(id: offer.url) {
                 // 不理它的话，二十秒后自己收起来

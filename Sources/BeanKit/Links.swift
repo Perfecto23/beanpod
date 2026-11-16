@@ -31,7 +31,7 @@ public enum LinkTools {
             ("channels.weixin.qq.com", "视频号"), ("weixin.qq.com", "视频号"),
             ("weibo.com", "微博"), ("weibo.cn", "微博"),
             ("ximalaya.com", "喜马拉雅"), ("xiaoyuzhoufm.com", "小宇宙"),
-            ("podcasts.apple.com", "播客"), ("vimeo.com", "Vimeo"),
+            ("podcasts.apple.com", "Apple 播客"), ("vimeo.com", "Vimeo"),
         ]
         for (suffix, name) in table where host == suffix || host.hasSuffix("." + suffix) { return name }
         return "网页视频"

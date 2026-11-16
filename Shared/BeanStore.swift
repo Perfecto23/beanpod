@@ -1062,6 +1062,24 @@ final class BeanStore {
 
     func seek(_ time: TimeInterval) { player?.currentTime = time; playhead = time }
 
+    // MARK: 逐句回听（文字稿里点句子、单句循环、这句再听）
+
+    /// 单句循环的那一句：播到句尾跳回句首。loopCount 是第几遍（从 1 起）。
+    var loopSpan: ClosedRange<TimeInterval>?
+    var loopCount = 0
+    /// 「这句再听」：播到这里自己停。
+    @ObservationIgnored var stopAt: TimeInterval?
+
+    /// 播一句：loop 为真就一直循环这句，否则播完这句自己停（「这句再听」）。
+    func playSpan(_ id: UInt32, _ span: ClosedRange<TimeInterval>, loop: Bool) {
+        loopSpan = loop ? span : nil
+        loopCount = loop ? 1 : 0
+        stopAt = loop ? nil : span.upperBound
+        play(id, at: span.lowerBound)
+    }
+
+    func endLoop() { loopSpan = nil; loopCount = 0 }
+
     /// 往前或往后跳几秒。
     func skip(_ id: UInt32, by delta: TimeInterval) {
         guard let r = recordings.first(where: { $0.id == id }) else { return }
@@ -1069,7 +1087,8 @@ final class BeanStore {
         play(id, at: max(0, min(r.duration - 0.2, from + delta)))
     }
 
-    static let rates: [Float] = [0.75, 1, 1.25, 1.5, 2]
+    /// 0.5、0.75 给听外语跟读用
+    static let rates: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 2]
 
     func setRate(_ rate: Float) {
         playRate = rate
@@ -1132,12 +1151,16 @@ final class BeanStore {
 
     /// 从文字稿的某一句开始播。
     func play(_ id: UInt32, at time: TimeInterval) {
+        // 跳到循环那句外面去了：不再循环 / 不再到句尾停
+        if let s = loopSpan, !s.contains(time) { endLoop() }
+        if let e = stopAt, time >= e { stopAt = nil }
         if playingID != id { togglePlay(id) }
         seek(time)
         if !isPlaying { player?.play(); isPlaying = true; tick() }
     }
 
     func stop() {
+        loopSpan = nil; loopCount = 0; stopAt = nil
         ticker?.cancel(); player?.stop(); player = nil
         playingID = nil; isPlaying = false; playhead = 0
     }
@@ -1147,6 +1170,15 @@ final class BeanStore {
         ticker = Task { [weak self] in
             while !Task.isCancelled, let self, let player = self.player {
                 self.playhead = player.currentTime
+                // 单句循环：到句尾回句首，记一遍
+                if let span = self.loopSpan, self.playhead >= span.upperBound - 0.05 {
+                    player.currentTime = span.lowerBound; self.playhead = span.lowerBound; self.loopCount += 1
+                }
+                // 这句再听：播完这句停在句尾
+                if let end = self.stopAt, self.playhead >= end {
+                    player.pause(); self.isPlaying = false; self.stopAt = nil
+                    return
+                }
                 if !player.isPlaying {
                     if self.isPlaying { self.isPlaying = false; self.playhead = 0 }  // 自然播完
                     return

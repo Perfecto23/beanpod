@@ -37,7 +37,7 @@ struct FeishuPanel: View {
     private var header: some View {
         HStack(alignment: .top, spacing: 12) {
             Text("飞").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.warm700)
-                .frame(width: 40, height: 40).background(Theme.warm100, in: .rect(cornerRadius: 10))
+                .frame(width: 40, height: 40).background(Theme.warm100, in: .rect(cornerRadius: Theme.Radius.card))
             VStack(alignment: .leading, spacing: 4) {
                 Text("飞书妙记").font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.warm900)
                 Text("手机上的录音豆 App 把录音同步到飞书后，录音豆上就没有了。豆仓从飞书把它们拉回来。")
@@ -164,6 +164,12 @@ struct FeishuPanel: View {
             }
             .buttonStyle(.glassProminent).tint(Theme.accent)
             .disabled(toPull.isEmpty || !sync.pulling.isEmpty || sync.link != .ready)
+            if !sync.textOnlyImports.isEmpty {
+                Button("补上音频（\(sync.textOnlyImports.count) 条）") { Task { await sync.fillAudio() } }
+                    .buttonStyle(.glass)
+                    .help("之前没有音频权限、只拉回了文字稿的，现在把音频下下来重新转写")
+                    .disabled(!sync.pulling.isEmpty || sync.link != .ready)
+            }
             Button("现在检查") { Task { await sync.check() } }
                 .buttonStyle(.glass)
                 .disabled(sync.link == .checking || !sync.pulling.isEmpty)
