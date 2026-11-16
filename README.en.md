@@ -4,7 +4,11 @@
 
 [![macOS 26](https://img.shields.io/badge/macOS-26-black)](#what-to-prepare-first) [![MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE) [![Renoise MCP](https://img.shields.io/badge/video-Renoise%20MCP-ff7a1a)](https://renoise.ai/mcp?utm_medium=xcom&utm_source=official)
 
-A native macOS app for managing the AI voice recorder "bean" (model D3200) on your computer. It pulls recordings to your Mac, transcribes them, turns them into notes and to-dos, and lets you ask questions about everything you've recorded. Transcription runs on your Mac — recordings are not uploaded.
+A native macOS app for managing the **Anker AI voice recorder "bean" (soundcore, model D3200)** on your computer. It pulls recordings to your Mac, transcribes them, turns them into notes and to-dos, and lets you ask questions about everything you've recorded. Transcription runs on your Mac — recordings are not uploaded.
+
+**No recorder? It still works on its own** as a free, open-source recording and learning app: record with your Mac, import audio files, or paste podcast and video links (Apple Podcasts, Xiaoyuzhou, Ximalaya, Bilibili, YouTube, …), then transcribe locally and get notes. For language learning, click a sentence to jump back to it, loop a sentence, follow the live highlight, and tick "English study mode" for leveled vocabulary, phrases and hard-sentence breakdowns.
+
+> A personal open-source project made for **learning, research and testing** — free to use, no commercial purpose. If you find it useful, a ⭐ **Star** is much appreciated; issues and PRs are welcome.
 
 > The app's interface is available in **English** and **Simplified Chinese** (Chinese is the default). It follows your system language — English on a non-Chinese system — and can be set in Settings → General → Language.
 

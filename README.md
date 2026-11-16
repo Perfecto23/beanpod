@@ -4,7 +4,11 @@
 
 [![macOS 26](https://img.shields.io/badge/macOS-26-black)](#开始前要准备的东西) [![MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE) [![Renoise MCP](https://img.shields.io/badge/video-Renoise%20MCP-ff7a1a)](https://renoise.ai/mcp?utm_medium=xcom&utm_source=official)
 
-一个原生 macOS App，用来在电脑上管理 AI 录音豆（型号 D3200）。它能把录音拉到本地并转成文字，再整理成纪要和待办，之后可以直接提问。转写在本机完成，录音不上传。
+一个原生 macOS App，用来在电脑上管理 **Anker 录音豆（soundcore，型号 D3200）**。它能把录音拉到本地并转成文字，再整理成纪要和待办，之后可以直接提问。转写在本机完成，录音不上传。
+
+**没有录音豆也能用**：它本身就是一个免费、开源的录音和学习软件。用 Mac 自己录音、导入音频文件、贴播客和视频链接（小宇宙、Apple 播客、喜马拉雅、B 站、YouTube……），在本机转成文字、整理成纪要；听外语播客时点一句就回到那句、单句循环、跟着高亮，还能勾上「英语学习模式」整理出单词分级、短语和难句解析。
+
+> 本项目是个人出于**学习、研究和测试**目的做的开源项目，免费使用，不做任何商业用途。觉得有用的话，欢迎点个 ⭐ **Star** 支持一下，也欢迎提 Issue 和 PR。
 
 [![豆仓宣传片（点开看完整视频）](docs/media/beanpod-promo.gif)](docs/media/beanpod-promo.mp4)
 
