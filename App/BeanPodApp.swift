@@ -209,7 +209,7 @@ struct MenuBarContent: View {
                 Button("结束录音") { store.finishRecording() }
             }
         }
-        if !store.stages.isEmpty { Text("正在处理 \(store.stages.count) 条录音") }
+        if !store.stages.isEmpty { Text("正在处理 \(store.stages.count) 条录音 · 还要\(BeanStore.spokenSpan(store.processingPlan().total, rough: true))") }
         Divider()
         Button("打开豆仓") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
         Button("退出豆仓") { NSApp.terminate(nil) }

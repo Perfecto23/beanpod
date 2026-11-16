@@ -126,7 +126,11 @@ final class BeanStore {
     var pull: PullProgress?
     var queue: [UInt32] = []
     /// 每条录音当前处在流水线的哪一步；不在表里就是空闲。
-    var stages: [UInt32: Stage] = [:]
+    var stages: [UInt32: Stage] = [:] { didSet { trackStages(from: oldValue) } }
+    /// 每条录音当前这一步是什么时候开始的（ProcessingETA.swift 估剩余时间用）
+    @ObservationIgnored var stageSince: [UInt32: Date] = [:]
+    /// 这一批从什么时候开始处理的；都处理完了为空
+    var batchSince: Date?
     /// 模型下载（ModelDownloader.swift）：转写模型、本机整理模型各一个。
     var asrJob: DownloadJob?
     var llmJob: DownloadJob?

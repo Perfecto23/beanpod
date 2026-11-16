@@ -213,7 +213,8 @@ struct DashboardView: View {
                     }
                 }
                 if working > 0 {
-                    Label("正在处理 \(working) 条录音", systemImage: "gearshape.2").foregroundStyle(.secondary)
+                    // 每条在哪一步、用了多久、还要多久（ProcessingView.swift）
+                    ProcessingList()
                 }
                 if !store.analysisAvailable {
                     HStack {
