@@ -13,6 +13,8 @@ enum Route: Hashable {
     case tag(String)
     /// 最近删除（TrashView.swift）。
     case trash
+    /// 语音输入记下的话（DictationView.swift）。
+    case dictation
 
     /// 是不是录音列表那一类页面（全部、素材、项目、场景）。
     var isList: Bool {
@@ -65,6 +67,7 @@ struct RootView: View {
             case .knowledge: KnowledgeView().background(Backdrop())
             case .device: DeviceView().background(Backdrop())
             case .trash: TrashView().background(Backdrop())
+            case .dictation: DictationView().background(Backdrop())
             case .all, .starred, .scene, .materials, .project, .tag: RecordingsView().background(Backdrop())
             }
         }
@@ -320,6 +323,7 @@ struct Sidebar: View {
         case .all, .starred, .scene: 1
         case .knowledge: 2
         case .materials: 3
+        case .dictation: 4
         case .device, .project, .tag, .trash: -1
         }
     }
@@ -350,6 +354,10 @@ struct Sidebar: View {
                 item("总览", "house.fill", 0) { nav.route = .dashboard }
                 item("录音", "waveform", 1, count: store.ownRecordings.count) { nav.route = .all }
                 item("素材", "play.rectangle.fill", 3, count: store.recordings.filter(\.isMaterial).count) { nav.route = .materials }
+                // 语音输入：开着「记下说过的话」或者已经记过才出现
+                if store.settings.dictationSave || !store.dictations.isEmpty {
+                    item("语音输入", "keyboard", 4, count: store.dictations.count) { nav.route = .dictation }
+                }
                 item("知识库", "book.closed.fill", 2) { nav.route = .knowledge }
             }
             projectList.padding(.top, 20)

@@ -185,7 +185,7 @@ struct DashboardView: View {
     /// 还有事情没做完时才出现的一栏。
     @ViewBuilder private var pending: some View {
         let toDownload = store.recordings.filter { $0.onDevice && !$0.downloaded && !$0.inProgress }.count
-        let toProcess = store.recordings.filter { $0.downloaded && !$0.isAnalyzed && store.stages[$0.id] == nil }.count
+        let toProcess = store.recordings.filter { $0.downloaded && !$0.isAnalyzed && !$0.isDictation && store.stages[$0.id] == nil }.count
         let working = store.stages.count
         let rough = store.roughCount
         if toDownload > 0 || toProcess > 0 || working > 0 || !store.analysisAvailable || rough > 0 {

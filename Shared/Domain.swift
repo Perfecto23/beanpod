@@ -339,6 +339,11 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
     var translation: Translation?
     /// 是从链接导入的素材，不是自己录的。
     var isMaterial: Bool { source != nil }
+    /// 按住键说话（语音输入）记下的：像输入法的历史，不进录音列表、不做 AI 整理（DictationHistory.swift）。
+    static let dictationOrigin = "语音输入"
+    var isDictation: Bool { origin == Self.dictationOrigin }
+    /// 语音输入时文字打进了哪个软件（比如「微信」）。
+    var typedInto: String?
     var textOnly = false
     /// 重点标记：录音时在录音豆上按过标记键、或在豆仓里点过「标重点」的时刻（秒）。
     var marks: [TimeInterval] = []
@@ -359,7 +364,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
 
     private enum CodingKeys: String, CodingKey {
         case id, size, date, duration, title, titleEdited, tagsEdited, downloaded, onDevice, transcript, segments, transcribedBy, speakers, rewrites
-        case scene, sceneLocked, summary, sections, todos, tags, people, analyzedBy, starred, origin, source, project, translation, textOnly, marks, videos
+        case scene, sceneLocked, summary, sections, todos, tags, people, analyzedBy, starred, origin, source, project, translation, textOnly, marks, videos, typedInto
     }
 
     /// 每个字段都容错读取：以后加字段，旧的记录文件照样能打开。
@@ -395,6 +400,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
         textOnly = try c.decodeIfPresent(Bool.self, forKey: .textOnly) ?? false
         marks = (try? c.decodeIfPresent([TimeInterval].self, forKey: .marks)) ?? []
         videos = (try? c.decodeIfPresent([VideoClip].self, forKey: .videos)) ?? []
+        typedInto = try? c.decodeIfPresent(String.self, forKey: .typedInto)
     }
 }
 

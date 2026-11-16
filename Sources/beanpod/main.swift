@@ -52,7 +52,10 @@ struct Rec {
 func load() -> [Rec] {
     guard let data = try? Data(contentsOf: libraryURL),
           let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
-    return list.map(Rec.init).sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
+    // 语音输入（按住键说的话）默认不给 AI 助手查，和豆仓里知识库的设置一致
+    let withDictation = UserDefaults(suiteName: "com.andyhu.beanpod")?.bool(forKey: "dictationInKnowledge") ?? false
+    return list.filter { withDictation || ($0["origin"] as? String) != "语音输入" }
+        .map(Rec.init).sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
 }
 
 func stamp(_ d: Date) -> String {

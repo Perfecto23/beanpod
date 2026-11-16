@@ -310,9 +310,20 @@ private struct DictationPane: View {
                 SettingRow(icon: "text.badge.checkmark", title: "把口语理顺再输入", detail: "去掉嗯啊和重复，句子更通顺。要多等几秒。") {
                     Toggle("把口语理顺再输入", isOn: $settings.dictationPolish).labelsHidden().toggleStyle(.switch)
                 }
-                SettingRow(icon: "tray.and.arrow.down", title: "同时存进「录音」", detail: "打字的同时，把这段话也存成一条录音（声音 + 文字），之后能回听、搜索、整理。") {
-                    Toggle("同时存进录音", isOn: $settings.dictationSave).labelsHidden().toggleStyle(.switch)
+                SettingRow(icon: "keyboard", title: "记下说过的话", detail: "打字的同时，把这句话记进侧栏的「语音输入」（声音 + 文字），能回听、拷贝、搜索。不进录音列表，也不做 AI 整理。") {
+                    Toggle("记下说过的话", isOn: $settings.dictationSave).labelsHidden().toggleStyle(.switch)
                 }
+                SettingRow(icon: "waveform.badge.minus", title: "原声保留", detail: "到期只删声音，文字一直留着。") {
+                    Picker("原声保留", selection: $settings.dictationAudioDays) {
+                        Text("7 天").tag(7); Text("30 天").tag(30); Text("90 天").tag(90); Text("一直留着").tag(0)
+                    }
+                    .labelsHidden().fixedSize()
+                }
+                .disabled(!settings.dictationSave)
+                SettingRow(icon: "books.vertical", title: "知识库里也搜", detail: "问知识库、AI 助手查询时，把语音输入说过的话也算进去。默认不算，免得零碎的话干扰回答。") {
+                    Toggle("知识库里也搜", isOn: $settings.dictationInKnowledge).labelsHidden().toggleStyle(.switch)
+                }
+                .disabled(!settings.dictationSave)
                 SettingRow(icon: "play.circle", title: "先试一次", detail: "录 5 秒，只显示识别结果，不会打进别的 App。") {
                     Button("试一次") { dictation.tryOnce() }
                 }

@@ -195,8 +195,6 @@ final class Dictation {
             let samples = try QwenASR.loadMono16k(wav)
             var text = try await QwenASR.shared.transcribe(samples: samples, serverPath: store.settings.llamaServerPath)
             guard !text.isEmpty else { store.addLog("语音输入：没识别出文字"); flash(.failed("没听清")); return }
-            // 打字之外，把这段话也存成一条录音（设置里可关；「试一次」不存）
-            if !dryRun, store.settings.dictationSave { store.saveDictation(samples: samples, text: text) }
             if store.settings.dictationPolish, store.analysisAvailable {
                 let raw = text
                 if let polished = try? await store.withLLM({ config in
@@ -207,7 +205,11 @@ final class Dictation {
             }
             lastText = text
             store.addLog("语音输入结果：\(text)")
+            // 打进了哪个软件：豆仓的提示框不抢前台，这时最前面的就是要打字的那个
+            let target = NSWorkspace.shared.frontmostApplication.flatMap { $0.bundleIdentifier == Bundle.main.bundleIdentifier ? nil : $0.localizedName }
             if !dryRun { insert(text) }
+            // 打字之外，把这段话也记进侧栏的「语音输入」（设置里可关；「试一次」不记）
+            if !dryRun, store.settings.dictationSave { store.saveDictation(samples: samples, text: text, app: target) }
             flash(.done(text))
         } catch {
             store.addLog("语音输入失败：\(error.localizedDescription)")
@@ -323,7 +325,7 @@ struct DictationHUD: View {
 
 extension BeanStore {
     /// 语音输入说的一段话存成一条录音：声音 + 识别出的文字（原话，没润色），场合先记成「灵感」，再交给整理。
-    func saveDictation(samples: [Float], text: String) {
+    func saveDictation(samples: [Float], text: String, app: String? = nil) {
         var id = UInt32(Date.now.timeIntervalSince1970)
         while recordings.contains(where: { $0.id == id }) { id += 1 }
         do { try QwenASR.wav(samples).write(to: wavURL(id), options: .atomic) } catch {
@@ -332,7 +334,9 @@ extension BeanStore {
         }
         var rec = Recording(id: id, size: UInt32(samples.count * 2), date: .now, duration: Double(samples.count) / 16000)
         rec.downloaded = true
-        rec.origin = "语音输入"
+        rec.origin = Recording.dictationOrigin
+        rec.typedInto = app
+        rec.title = String(text.prefix(40))
         rec.scene = .memo
         rec.segments = [Segment(start: 0, text: applyVocabulary(text))]
         rec.transcript = rec.segments.map(\.text).joined(separator: "\n")
@@ -340,6 +344,6 @@ extension BeanStore {
         recordings.insert(rec, at: 0)
         saveLibrary()
         addLog("语音输入存成录音 \(id)（\(Int(rec.duration)) 秒）")
-        if settings.autoProcess { process(id) }
+        // 不做 AI 整理：它就是打出去的那句话。想整理的话在「语音输入」里点「转成录音」
     }
 }

@@ -111,7 +111,7 @@ extension BeanStore {
     }
 
     func processAllPending() {
-        recordings.filter { $0.downloaded && !$0.isAnalyzed }.forEach { process($0.id) }
+        recordings.filter { $0.downloaded && !$0.isAnalyzed && !$0.isDictation }.forEach { process($0.id) }
     }
 
     private func index(_ id: UInt32) -> Int? { recordings.firstIndex { $0.id == id } }
@@ -400,7 +400,7 @@ extension BeanStore {
         guard !words.isEmpty || !filter.isEmpty else { return [] }
         let since = filter.days.map { Calendar.current.date(byAdding: .day, value: -$0, to: Calendar.current.startOfDay(for: .now))! }
         var hits: [SearchHit] = []
-        for r in recordings {
+        for r in knowledgeRecordings {
             let scene = r.scene ?? .other
             if let s = filter.scene, s != scene { continue }
             if let p = filter.person, !(r.people.contains(p) || (r.transcript ?? "").contains(p)) { continue }
@@ -437,7 +437,7 @@ extension BeanStore {
         let q = question.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return }
         let grams = Self.bigrams(q)
-        let ranked = recordings.filter(\.isAnalyzed).map { r -> (Recording, Int) in
+        let ranked = knowledgeRecordings.filter { $0.isAnalyzed || $0.isDictation }.map { r -> (Recording, Int) in
             let body = [r.displayTitle, r.summary ?? "", r.sections.flatMap(\.items).joined(separator: " "),
                         r.tags.joined(separator: " "), r.transcript ?? ""].joined(separator: " ")
             return (r, grams.reduce(0) { $0 + (body.contains($1) ? 1 : 0) })
@@ -446,7 +446,7 @@ extension BeanStore {
         let general = ["最近", "这几天", "这周", "本周", "今天", "昨天", "哪些", "总结", "待办", "没做", "答应"].contains { q.contains($0) }
         var picked = ranked.map(\.0)
         if general || picked.isEmpty {
-            for r in recordings.filter(\.isAnalyzed).prefix(8) where !picked.contains(where: { $0.id == r.id }) && picked.count < 8 { picked.append(r) }
+            for r in knowledgeRecordings.filter({ $0.isAnalyzed || $0.isDictation }).prefix(8) where !picked.contains(where: { $0.id == r.id }) && picked.count < 8 { picked.append(r) }
         }
         guard !picked.isEmpty else { answer = "记录里没有找到和这个问题相关的内容。"; answerSources = []; return }
 
@@ -876,11 +876,11 @@ extension BeanStore {
     /// 有了分析模型之后，把之前只按关键词粗分过类的录音补上完整纪要。
     func upgradeRoughNotes() {
         guard analysisAvailable else { return }
-        recordings.filter { $0.transcript != nil && ($0.analyzedBy == nil || $0.analyzedBy == "关键词规则") && stages[$0.id] == nil }
+        recordings.filter { $0.transcript != nil && ($0.analyzedBy == nil || $0.analyzedBy == "关键词规则") && stages[$0.id] == nil && !$0.isDictation }
             .forEach { process($0.id) }
     }
 
-    var roughCount: Int { recordings.filter { $0.transcript != nil && $0.analyzedBy == "关键词规则" }.count }
+    var roughCount: Int { recordings.filter { $0.transcript != nil && $0.analyzedBy == "关键词规则" && !$0.isDictation }.count }
 
     // MARK: 收件箱
 

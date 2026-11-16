@@ -109,7 +109,11 @@ final class BeanStore {
     // 录音
     var recordings: [Recording] = []
     /// 自己录的（不含从链接导入的素材）。录音页、总览只看这些；素材只在素材库里
-    var ownRecordings: [Recording] { recordings.filter { !$0.isMaterial } }
+    var ownRecordings: [Recording] { recordings.filter { !$0.isMaterial && !$0.isDictation } }
+    /// 语音输入记下的（侧栏「语音输入」）。
+    var dictations: [Recording] { recordings.filter(\.isDictation) }
+    /// 知识库和 AI 助手查询用的：默认不含语音输入。
+    var knowledgeRecordings: [Recording] { settings.dictationInKnowledge ? recordings : recordings.filter { !$0.isDictation } }
     var loadingList = false
     var pull: PullProgress?
     var queue: [UInt32] = []
@@ -273,6 +277,7 @@ final class BeanStore {
         Task { [weak self] in
             while let self {
                 self.purgeTrash()
+                self.purgeDictationAudio()
                 try? await Task.sleep(for: .seconds(6 * 3600))
             }
         }

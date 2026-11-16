@@ -82,8 +82,12 @@ final class AppSettings {
     /// 按住哪个键说话。存的是按键码，默认右 Option（61）。
     var dictationKey: Int { didSet { save("dictationKey", dictationKey) } }
     var dictationPolish: Bool { didSet { save("dictationPolish", dictationPolish) } }
-    /// 语音输入说的话，同时作为一条录音存进「录音」（默认开）。
+    /// 语音输入说的话，同时记进侧栏的「语音输入」（默认开）。不进录音列表。
     var dictationSave: Bool { didSet { save("dictationSave", dictationSave) } }
+    /// 语音输入的原声留几天，到期只删声音、文字一直留着。0 = 一直留着。
+    var dictationAudioDays: Int { didSet { save("dictationAudioDays", dictationAudioDays) } }
+    /// 知识库（和 AI 助手的查询）里也搜语音输入说过的话（默认不搜）。
+    var dictationInKnowledge: Bool { didSet { save("dictationInKnowledge", dictationInKnowledge) } }
     /// 给录音豆起的名字。只存在这台 Mac 上，设备本身不支持改名。
     var deviceAlias: String { didSet { save("deviceAlias", deviceAlias) } }
 
@@ -145,6 +149,8 @@ final class AppSettings {
         dictationEnabled = d.object(forKey: "dictationEnabled") as? Bool ?? false
         dictationPolish = d.object(forKey: "dictationPolish") as? Bool ?? false
         dictationSave = d.object(forKey: "dictationSave") as? Bool ?? true
+        dictationAudioDays = d.object(forKey: "dictationAudioDays") as? Int ?? 30
+        dictationInKnowledge = d.object(forKey: "dictationInKnowledge") as? Bool ?? false
         dictationKey = d.object(forKey: "dictationKey") as? Int ?? 61
         deviceAlias = d.string(forKey: "deviceAlias") ?? ""
         llmBaseURL = d.string(forKey: "llmBaseURL") ?? ""
