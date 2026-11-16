@@ -69,14 +69,14 @@ struct StudyView: View {
                     .clipShape(.capsule)
                 }
                 .frame(height: 10)
-                HStack {
+                HStack(spacing: 20) {
                     ForEach(Array(Study.levelBands.enumerated()), id: \.offset) { i, band in
-                        HStack(spacing: 5) {
-                            Circle().fill(bandColor(i)).frame(width: 7, height: 7)
-                            Text("\(band) \(Int(((study.levels[band] ?? 0) / total * 100).rounded()))%")
+                        HStack(spacing: 6) {
+                            Circle().fill(bandColor(i)).frame(width: 8, height: 8)
+                            Text(band).font(.caption.weight(.medium)).foregroundStyle(Theme.warm700)
+                            Text("\(Int(((study.levels[band] ?? 0) / total * 100).rounded()))%")
                                 .font(.caption).monospacedDigit().foregroundStyle(.secondary)
                         }
-                        if i < Study.levelBands.count - 1 { Spacer(minLength: 6) }
                     }
                 }
             }
@@ -111,7 +111,7 @@ struct StudyView: View {
     }
 
     private var words: some View {
-        Card(title: "重点单词 · \(study.words.count) 个", icon: "textformat.abc") {
+        Card(title: "重点单词 · \(study.words.count) 个", icon: "book.closed") {
             HStack(spacing: 6) {
                 ForEach(Filter.allCases, id: \.self) { f in
                     Button { filter = f } label: {
@@ -126,20 +126,29 @@ struct StudyView: View {
             VStack(spacing: 0) {
                 ForEach(Array(shownWords.enumerated()), id: \.element.id) { i, w in
                     if i > 0 { Divider().overlay(Theme.warm200.opacity(0.5)) }
-                    HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        Text(w.word).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.warm900)
-                            .textSelection(.enabled).frame(width: 140, alignment: .leading)
-                        Text(w.phonetic).font(.system(size: 13)).foregroundStyle(.secondary).frame(width: 130, alignment: .leading).lineLimit(1)
-                        Text(w.pos).font(.system(size: 13).italic()).foregroundStyle(.secondary).frame(width: 40, alignment: .leading)
-                        levelChip(w.level)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(w.meaning).font(.system(size: 14)).foregroundStyle(Theme.warm800)
-                            if let ex = w.example { Text(ex).font(.system(size: 12).italic()).foregroundStyle(.tertiary).lineLimit(2) }
+                    // 左：单词，下面一行音标和词性；中：等级；右：释义和整句原句（原句里把这个词标出来）
+                    HStack(alignment: .top, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(w.word).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.warm900).textSelection(.enabled)
+                            HStack(spacing: 6) {
+                                if !w.phonetic.isEmpty { Text(w.phonetic).font(.system(size: 12)).foregroundStyle(.secondary) }
+                                if !w.pos.isEmpty { Text(w.pos).font(.system(size: 12).italic()).foregroundStyle(.tertiary) }
+                            }
+                            .lineLimit(1)
+                        }
+                        .frame(width: 150, alignment: .leading)
+                        levelChip(w.level).padding(.top, 2)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(w.meaning).font(.system(size: 14)).foregroundStyle(Theme.warm800).textSelection(.enabled)
+                            if let ex = w.example {
+                                Text(Self.marked(ex, w.word)).font(.system(size: 13)).lineSpacing(2)
+                                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        listen(w.time, label: "听原句")
+                        listen(w.time, label: "听原句").padding(.top, 2)
                     }
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 10)
                 }
             }
         }
@@ -163,7 +172,10 @@ struct StudyView: View {
                         (Text(p.phrase).font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.warm900)
                          + Text("  —  \(p.meaning)").font(.system(size: 14)).foregroundColor(Theme.warm700))
                             .textSelection(.enabled)
-                        if let ex = p.example { Text(ex).font(.system(size: 13).italic()).foregroundStyle(.secondary).textSelection(.enabled) }
+                        if let ex = p.example {
+                            Text(Self.marked(ex, p.phrase)).font(.system(size: 13)).lineSpacing(2)
+                                .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                        }
                     }
                     Spacer(minLength: 8)
                     listen(p.time, label: "听原句")
@@ -200,6 +212,30 @@ struct StudyView: View {
                 .padding(.vertical, 6)
             }
         }
+    }
+
+    /// 原句：灰色，里面的这个词 / 短语加粗、玫瑰红。找不到原样的（变了形，比如 learned / learning）就按词根前几个字母找。
+    static func marked(_ sentence: String, _ target: String) -> AttributedString {
+        var a = AttributedString(sentence)
+        a.foregroundColor = Theme.warm500
+        let lower = sentence.lowercased()
+        let t = target.lowercased()
+        var range = lower.range(of: t)
+        if range == nil, t.count >= 5, !t.contains(" ") {
+            let stem = String(t.prefix(t.count - 2))
+            if let r = lower.range(of: stem) {
+                // 延伸到这个词结尾
+                var end = r.upperBound
+                while end < lower.endIndex, lower[end].isLetter { end = lower.index(after: end) }
+                range = r.lowerBound..<end
+            }
+        }
+        if let range,
+           let lo = AttributedString.Index(range.lowerBound, within: a), let hi = AttributedString.Index(range.upperBound, within: a) {
+            a[lo..<hi].foregroundColor = Theme.accent
+            a[lo..<hi].inlinePresentationIntent = .stronglyEmphasized
+        }
+        return a
     }
 
     /// 「▶ 听原句」：跳到那一句播完这句停（开着单句循环就循环）
