@@ -15,17 +15,19 @@ public enum AudioError: LocalizedError {
 
 /// 用系统自带的 Opus 解码器把裸帧转成 16 kHz 单声道 WAV（播放和语音识别都用它）。
 public enum OpusDecoder {
-    public static func opusFormat() -> AVAudioFormat? {
+    public static func opusFormat(framesPerPacket: UInt32 = 960) -> AVAudioFormat? {
         var desc = AudioStreamBasicDescription(mSampleRate: 48000, mFormatID: kAudioFormatOpus, mFormatFlags: 0,
-                                               mBytesPerPacket: 0, mFramesPerPacket: 960, mBytesPerFrame: 0,
+                                               mBytesPerPacket: 0, mFramesPerPacket: framesPerPacket, mBytesPerFrame: 0,
                                                mChannelsPerFrame: 1, mBitsPerChannel: 0, mReserved: 0)
         return AVAudioFormat(streamDescription: &desc)
     }
 
     @discardableResult
-    public static func writeWAV(packets: [Data], to url: URL, sampleRate: Double = 16000) throws -> TimeInterval {
+    /// `framesPerPacket`：每个包在 48 kHz 下的采样数。录音豆固定 960（20 ms）；
+    /// 别的来源（录音卡是设备上的 FFmpeg 编的）按第一个包的 TOC 字节算，见 `OggOpus.samplesPerPacket`。
+    public static func writeWAV(packets: [Data], to url: URL, sampleRate: Double = 16000, framesPerPacket: UInt32 = 960) throws -> TimeInterval {
         guard !packets.isEmpty else { throw AudioError.noAudio }
-        guard let input = opusFormat(),
+        guard let input = opusFormat(framesPerPacket: framesPerPacket),
               let pcm = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48000, channels: 1, interleaved: false),
               let converter = AVAudioConverter(from: input, to: pcm) else { throw AudioError.decoderUnavailable }
 
@@ -54,7 +56,7 @@ public enum OpusDecoder {
             inBuf.packetCount = AVAudioPacketCount(group.count)
             inBuf.byteLength = UInt32(bytes)
 
-            guard let outBuf = AVAudioPCMBuffer(pcmFormat: pcm, frameCapacity: AVAudioFrameCount(group.count * 960 + 4096)) else {
+            guard let outBuf = AVAudioPCMBuffer(pcmFormat: pcm, frameCapacity: AVAudioFrameCount(group.count * Int(framesPerPacket) + 4096)) else {
                 throw AudioError.decodeFailed("内存不足")
             }
             nonisolated(unsafe) var pending: AVAudioCompressedBuffer? = inBuf

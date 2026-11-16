@@ -538,19 +538,20 @@ struct DeviceChip: View {
             // 侧栏窄：名字要整行放得下（「soundcore Work」原先被右边的箭头挤成「soundcor…」）。
             // 整张卡本身就是按钮、选中时有描边，不再放箭头；只有正在下载时右边放进度圈
             HStack(spacing: 8) {
-                Image(systemName: "headphones")
-                    .font(.system(size: 13, weight: .medium)).foregroundStyle(store.link == .ready ? Theme.amber : Theme.warm500)
-                    .frame(width: 28, height: 28).background((store.link == .ready ? Theme.amber : Theme.warm400).opacity(0.16), in: .rect(cornerRadius: 8))
+                Image(systemName: showCard ? "rectangle.fill" : "headphones")
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(store.link == .ready || showCard ? Theme.amber : Theme.warm500)
+                    .frame(width: 28, height: 28).background((store.link == .ready || showCard ? Theme.amber : Theme.warm400).opacity(0.16), in: .rect(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(store.link == .ready ? store.displayDeviceName : "录音豆").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.warm900)
+                    Text(showCard ? store.card.name : store.link == .ready ? store.displayDeviceName : "录音豆").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.warm900)
                         .lineLimit(1).minimumScaleFactor(0.8).truncationMode(.middle)
                     HStack(spacing: 4) {
                         Circle().fill(statusColor).frame(width: 6, height: 6)
-                        Text(status).font(.system(size: 10.5)).foregroundStyle(store.link == .ready && store.wifi == nil && store.recState == .idle ? Theme.ok : Theme.warm500).lineLimit(1)
+                        Text(status).font(.system(size: 10.5)).foregroundStyle((store.link == .ready || showCard) && store.wifi == nil && store.recState == .idle ? Theme.ok : Theme.warm500).lineLimit(1)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if let pull = store.pull { ProgressView(value: pull.fraction).progressViewStyle(.circular).controlSize(.small) }
+                else if showCard, let p = store.card.progress { ProgressView(value: p.fraction).progressViewStyle(.circular).controlSize(.small) }
             }
             .padding(.horizontal, 9).padding(.vertical, 11)
             .background(Theme.surface.opacity(0.7), in: .rect(cornerRadius: 12))
@@ -559,11 +560,15 @@ struct DeviceChip: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(store.link == .ready ? store.displayDeviceName : "录音豆")：电量、存储和连接")
+        .help(showCard ? "\(store.card.name)：卡里的录音和连接" : "\(store.link == .ready ? store.displayDeviceName : "录音豆")：电量、存储和连接")
     }
+
+    /// 录音豆没连上、得到录音卡连着：这张卡片显示录音卡。
+    private var showCard: Bool { store.link != .ready && store.card.link == .ready }
 
     private var status: String {
         if store.wifi != nil { return "Wi‑Fi 快传中" }
+        if showCard { return store.card.progress != nil ? "正在下载" : "已连接" }
         switch store.link {
         case .ready:
             if store.recState == .recording { return "录音中" }
@@ -579,6 +584,7 @@ struct DeviceChip: View {
 
     private var statusColor: Color {
         if store.wifi != nil { return Theme.accent }
+        if showCard { return Theme.ok }
         if store.link == .ready { return store.info?.recording == true ? Theme.rec : Theme.ok }
         return .secondary.opacity(0.5)
     }
@@ -2250,6 +2256,8 @@ struct DeviceView: View {
                 case .connecting: connecting
                 case .idle, .scanning: scanner
                 }
+                // 得到 AI 录音卡：和录音豆各连各的（CardViews.swift）
+                CardPanel()
                 Button("诊断日志") { openWindow(id: "log") }.buttonStyle(.plain).foregroundStyle(.tertiary).font(.caption)
                     .frame(maxWidth: .infinity)
             }

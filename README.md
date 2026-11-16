@@ -13,6 +13,12 @@
 - 蓝牙下载较慢，长录音可以走 **Wi‑Fi 快传**（约 500 KB/s，过程中电脑会暂时断网约 40 秒）
 - 录音时可以打重点标记，回听时能跳到标记的地方
 
+**得到 AI 录音卡（试验，还没在实机上测过）**
+- 也能连得到 AI 录音卡（GetSeed，型号 GSC10）：设备页列出卡里的录音，下载下来进同一个录音库，照常转写、整理、提问
+- 连上就自动同步还没下载过的（和录音豆共用「自动下载」开关）；也能从卡上删掉某一条（会先问你，删了不能恢复）
+- 不能在电脑上让录音卡开始录音，要在卡上按键录。不做 Wi‑Fi 快传
+- 协议来自 [Shawn-TKD/getseed-ble-protocol](https://github.com/Shawn-TKD/getseed-ble-protocol)，见下面的[致谢](#致谢)和 [docs/GETSEED.md](docs/GETSEED.md)
+
 **转写**
 - 默认用 [Qwen3‑ASR 0.6B](https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF) 经 llama.cpp 在本机转写，带时间戳，点任意一句就从那里开始听
 - 边录边出字：录音舞台里显示实时字幕，可以投屏给现场看
@@ -50,6 +56,7 @@
 - 录音豆同一时间只能连一台设备。手机连着时电脑搜不到，先关掉手机蓝牙。
 - 只在固件 04.92 上测过。只用已经在官方 App 里开通过的设备测过；全新、从没开通过的设备能不能直接连，还不知道。
 - 蓝牙下载：26 秒的录音约 7 秒传完，一小时的录音要十几分钟。长录音用 Wi‑Fi 快传。
+- 得到录音卡的支持是按公开的协议文档写的，**还没在实机上测过**。它同样只能连一台设备，手机上的得到 App 连着时先关掉手机蓝牙。注意：得到 App 每次连上都会清掉卡里已经同步过的录音，豆仓不会这样做。
 
 ## 安装
 
@@ -194,6 +201,7 @@ Sources/BeanKit/   协议与音频，不依赖界面，可单独测试
   Frame.swift        帧的编码、校验、重组
   Commands.swift     命令
   Models.swift       设备信息、录音列表的解析
+  GetSeed.swift      得到录音卡的帧、命令、列表、下载拼接，以及从 Ogg 文件里取 Opus 包
   Crypto.swift       密钥协商、文件解密、切片解析
   OggOpus.swift      把裸 Opus 帧装进 Ogg 容器
   OpusDecoder.swift  解码成 WAV
@@ -202,7 +210,8 @@ Shared/            Mac 和 iPhone 共用：蓝牙、录音库、转写与整理�
 App/               Mac 界面与 Mac 专属功能（Wi‑Fi 快传、链接导入、刘海面板、连接 AI 助手等）
   SocialDL/          小红书、抖音、视频号等平台的下载器（Python）
 Mobile/            iPhone 版界面（试验中）
-docs/PROTOCOL.md   协议笔记，逐条标注了来源
+docs/PROTOCOL.md   录音豆的协议笔记，逐条标注了来源
+docs/GETSEED.md    得到录音卡的协议摘录与出处
 design/            界面设计稿与「小豆」形象素材
 ```
 
@@ -212,11 +221,15 @@ design/            界面设计稿与「小豆」形象素材
 
 [docs/PROTOCOL.md](docs/PROTOCOL.md) 记录了豆仓与录音豆通信用到的全部协议：帧格式、命令、录音列表、下载与解密、Wi‑Fi 快传。每一条都标了来源：真机实测、对照官方客户端核对，或者取自前人的笔记、尚未独立核实。
 
-这份协议是为了让你能在自己的电脑上使用自己的设备而整理的。本仓库不包含任何厂商的代码、固件或密钥，也不包含反编译得到的代码。
+得到录音卡用到的协议摘录在 [docs/GETSEED.md](docs/GETSEED.md)，那份协议是别人整理的，出处见下面的致谢。
+
+这些协议是为了让你能在自己的电脑上使用自己的设备而整理的。本仓库不包含任何厂商的代码、固件或密钥，也不包含反编译得到的代码。
 
 ## 致谢
 
 协议方面参考了 [tacshi/Soundcore](https://github.com/tacshi/Soundcore) 的协议笔记，它是第一个把这台设备的协议整理出来的项目。本项目的代码是用 Swift 独立编写的，没有使用该项目的代码；在真机上核对时发现并修正了其中几处字段含义，详见协议笔记。
+
+得到 AI 录音卡的协议全部来自 [Shawn-TKD/getseed-ble-protocol](https://github.com/Shawn-TKD/getseed-ble-protocol)（MIT 许可，Copyright (c) 2026 Shawn-TKD），原作者用实机抓包和固件分析整理并验证了这份协议。豆仓按那份文档用 Swift 从零实现，没有使用该项目的代码；许可声明见 [NOTICE](NOTICE)。
 
 转写模型是 Qwen3‑ASR（GGUF 版来自 [ggml-org/Qwen3-ASR-0.6B-GGUF](https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF)），本机推理用 [llama.cpp](https://github.com/ggml-org/llama.cpp)。
 

@@ -288,3 +288,89 @@ func reply(_ type: UInt8, _ id: UInt8, status: UInt8 = 1, _ payload: [UInt8] = [
     #expect(cues.map(\.text) == ["大家好 今天聊复利", "A & B"])
     #expect(cues.map(\.start) == [1, 62.5])
 }
+
+// MARK: - 得到录音卡（GetSeed）
+// 期望值用 Python 的 zlib.crc32 按 getseed-ble-protocol 的帧格式算出来
+
+private func hex(_ s: String) -> [UInt8] {
+    stride(from: 0, to: s.count, by: 2).map { i in
+        let a = s.index(s.startIndex, offsetBy: i)
+        return UInt8(s[a..<s.index(a, offsetBy: 2)], radix: 16)!
+    }
+}
+
+@Test func getSeedFramesMatchZlibCRC() {
+    #expect(Array(GetSeed.list()) == hex("fcfcfcfc43000800010000000500000039bdbfa9"))
+    #expect(Array(GetSeed.download("2026-10-10-15-06-15.ogg")) == hex("fcfcfcfc45011b0000000000323032362d31302d31302d31352d30362d31352e6f67679cb361fa"))
+    let tz = TimeZone(secondsFromGMT: 8 * 3600)!
+    let date = GetSeed.parseDate("20261010115820", timeZone: tz)!
+    #expect(Array(GetSeed.syncTime(date, timeZone: tz)) == hex("fcfcfcfc46010e003230323631303130313135383230fdecf8ea"))
+}
+
+@Test func getSeedReassemblesSplitAndJoinedFrames() {
+    var r = GetSeedReassembler()
+    let a = GetSeed.frame(0x0245, [0x2E, 0x7A, 0, 0])
+    let b = GetSeed.frame(0x0345, [0x10, 0, 0, 0] + Array(repeating: 7, count: 16))
+    let stream = a + b
+    // 切成碎片：第一帧的 CRC 和第二帧的帧头被切在两次通知之间
+    var frames = r.feed(stream.prefix(10))
+    #expect(frames.isEmpty)
+    frames += r.feed(stream.dropFirst(10).prefix(9))
+    frames += r.feed(stream.dropFirst(19))
+    #expect(frames.map(\.cmd) == [0x0245, 0x0345])
+    #expect(frames[0].u32 == 31278)
+    #expect(frames[1].body.count == 20)
+    // 前面有垃圾字节也能对齐
+    #expect(r.feed(Data([1, 2, 0xFC]) + a).map(\.cmd) == [0x0245])
+}
+
+@Test func getSeedParsesListAndIDs() {
+    let tz = TimeZone(secondsFromGMT: 8 * 3600)!
+    let files = GetSeedFile.parseList("1,2026-10-10-15-06-15.ogg,2026-10-10 15:06:22,31282;2,2026-10-10-16-00-00.ogg,2026-10-10 16:01:30,51562;", timeZone: tz)
+    #expect(files.count == 2)
+    #expect(files[0].name == "2026-10-10-15-06-15.ogg")
+    #expect(files[0].size == 31282)
+    #expect(files[0].estimatedDuration == 7)
+    #expect(files[1].estimatedDuration == 90)
+    #expect(files[0].recordingID == UInt32(GetSeed.parseDate("2026-10-10 15:06:15", timeZone: tz)!.timeIntervalSince1970))
+    #expect(GetSeedFile.parseList("").isEmpty)
+    #expect(GetSeedFile.parseList("1,,x,1;").isEmpty)
+}
+
+@Test func getSeedDownloadUsesEndOffsets() {
+    var d = GetSeedDownload(name: "a.ogg")
+    d.add(GetSeedFrame(cmd: 0x0245, body: [10, 0, 0, 0]))
+    // 块的偏移是结束位置：第二块先到也能落对位置
+    d.add(GetSeedFrame(cmd: 0x0345, body: [10, 0, 0, 0] + [5, 6, 7, 8, 9]))
+    d.add(GetSeedFrame(cmd: 0x0345, body: [5, 0, 0, 0] + [0, 1, 2, 3, 4]))
+    d.add(GetSeedFrame(cmd: 0x0445, body: [10, 0, 0, 0]))
+    #expect(d.complete && d.finished)
+    #expect(Array(d.data) == Array(0...9))
+
+    var missing = GetSeedDownload(name: "b.ogg")
+    missing.add(GetSeedFrame(cmd: 0x0245, body: [0, 0, 0, 0]))
+    missing.add(GetSeedFrame(cmd: 0x0545, body: [0x5A]))
+    #expect(missing.notFound && !missing.complete)
+}
+
+@Test func oggRoundTripsAndReadsTOC() {
+    let packets = (0..<120).map { i in Data([0x78] + Array(repeating: UInt8(i), count: i % 3 == 0 ? 300 : 40)) }
+    let back = OggOpus.packets(fromOgg: OggOpus.mux(packets: packets))
+    #expect(back == packets)
+    #expect(OggOpus.samplesPerPacket(Data([0x78])) == 960)        // CELT 20 ms，单帧
+    #expect(OggOpus.samplesPerPacket(Data([0x19])) == 2880 * 2)   // SILK 60 ms，两帧
+    #expect(OggOpus.samplesPerPacket(Data([0x7B, 0x03])) == 2880) // CELT 20 ms × 3 帧
+}
+
+/// 录音卡的文件是设备上的 FFmpeg 编的 Ogg Opus。这两个样本也用 FFmpeg（libopus）编：3 秒、16 kHz 单声道，
+/// 一个 20 ms 一帧（默认），一个 60 ms 一帧，确认拆包 + 按 TOC 定帧长 + 系统解码能还原出时长。
+@Test(arguments: ["card20ms", "card60ms"])
+func decodesFFmpegOggOpus(_ name: String) throws {
+    let url = try #require(Bundle.module.url(forResource: name, withExtension: "ogg", subdirectory: "Fixtures"))
+    let packets = OggOpus.packets(fromOgg: try Data(contentsOf: url))
+    let perPacket = try #require(OggOpus.samplesPerPacket(packets[0]))
+    #expect(perPacket == (name == "card60ms" ? 2880 : 960))
+    let out = FileManager.default.temporaryDirectory.appendingPathComponent("beankit-\(name).wav")
+    let seconds = try OpusDecoder.writeWAV(packets: packets, to: out, framesPerPacket: UInt32(perPacket))
+    #expect(abs(seconds - 3) < 0.15)
+}

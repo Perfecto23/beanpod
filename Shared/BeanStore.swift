@@ -207,6 +207,8 @@ final class BeanStore {
     var log: [String] = []
 
     @ObservationIgnored private let ble = BLEClient()
+    /// 得到 AI 录音卡（CardSync.swift）：和录音豆各连各的，下载下来的录音进同一个录音库。
+    let card = CardSync()
     @ObservationIgnored private var crypto = CryptoSession()
     @ObservationIgnored private var job: PullJob?
     @ObservationIgnored private var listPages: [RemoteFile] = []
@@ -267,17 +269,19 @@ final class BeanStore {
         ble.onPacket = { [weak self] in self?.handle($0) }
         ble.onLog = { [weak self] in self?.addLog($0) }
         ble.start()
+        card.attach(self)
         // 没有记住的设备时，一打开就开始找，不用先点进设备页
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(1.5))
             if let self, self.link == .idle { self.scan() }
+            self?.card.scanBriefly()
         }
         addLog("豆仓启动，本地录音 \(recordings.count) 条")
     }
 
     // MARK: 连接
 
-    func scan() { ble.scan() }
+    func scan() { ble.scan(); if card.link == .idle { card.scan() } }
 
     /// 附近只有一颗录音豆时，不用再点一下，直接连。用户主动断开过就不自动连，免得刚断开又连上。
     @ObservationIgnored var autoConnectAllowed = true
@@ -295,7 +299,7 @@ final class BeanStore {
             if self.link == .scanning, beans.count == 1, let only = beans.first { self.connect(only) }
         }
     }
-    func stopScan() { ble.stopScan() }
+    func stopScan() { ble.stopScan(); card.stopScan() }
 
     // Wi‑Fi 快传要用到的几样（见 WiFiSync.swift）
     var sessionCrypto: CryptoSession { crypto }

@@ -126,12 +126,13 @@ struct BeanPodApp: App {
                     .keyboardShortcut("d", modifiers: [.command, .shift])
             }
             CommandMenu("小豆") {
-                Button("跟着真实状态") { store.mascotPreview = nil }
+                Button("跟着真实状态") { store.mascotPreview = nil; store.card.endPreview() }
                 Button("看看：「录好了」卡片") { store.offerKeep(id: 0, seconds: 25, from: "这台 Mac", onMac: true) }
                 Button("看看：做成视频（选主播）") {
                     if !maker.busy { maker.prepare(text: "这是一段示例口播稿。", recording: 0, title: "示例", template: "口播稿") }
                     openWindow(id: "video-preview")
                 }
+                Button("看看：得到录音卡（示例数据）") { store.card.showPreview(); nav.route = .device }
                 Divider()
                 Button("看看：待命") { store.mascotPreview = (.idle, .mid) }
                 Button("看看：满电") { store.mascotPreview = (.idle, .full) }

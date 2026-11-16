@@ -11,6 +11,6 @@ let package = Package(
     targets: [
         .target(name: "BeanKit"),
         .executableTarget(name: "beanpod", swiftSettings: [.swiftLanguageMode(.v5)]),
-        .testTarget(name: "BeanKitTests", dependencies: ["BeanKit"]),
+        .testTarget(name: "BeanKitTests", dependencies: ["BeanKit"], resources: [.copy("Fixtures")]),
     ]
 )
