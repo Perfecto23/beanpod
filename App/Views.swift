@@ -892,7 +892,7 @@ struct RecordingsView: View {
         } label: {
             HStack(spacing: 4) {
                 if let source { Image(systemName: source.icon).font(.system(size: 11)) }
-                Text("来源：\(source?.name ?? "全部")")
+                Text(source?.name ?? "来源")
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
             }
             .font(.system(size: 12, weight: source == nil ? .regular : .medium))
@@ -962,16 +962,19 @@ struct RecordingsView: View {
                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(searching ? Theme.accent : Theme.warm200.opacity(0.8), lineWidth: searching ? 1.5 : 1))
                     .focused($searching)
                     // 快速筛选：素材库按平台，其他页按星标、待办、重点
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            if nav.route == .materials {
-                                chip("全部", on: platform == nil) { platform = nil }
-                                ForEach(platforms, id: \.self) { p in chip(p, on: platform == p) { platform = p } }
-                            } else {
-                                ForEach(Quick.allCases) { q in chip(q.rawValue, on: quick == q) { quick = q } }
-                                if sources.count > 1 || source != nil { sourceMenu }
+                    // 来源下拉固定在最右边，不跟着前面那排一起滑：列表窄的时候前面的可以滑，它总是完整的
+                    HStack(spacing: 6) {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                if nav.route == .materials {
+                                    chip("全部", on: platform == nil) { platform = nil }
+                                    ForEach(platforms, id: \.self) { p in chip(p, on: platform == p) { platform = p } }
+                                } else {
+                                    ForEach(Quick.allCases) { q in chip(q.rawValue, on: quick == q) { quick = q } }
+                                }
                             }
                         }
+                        if nav.route != .materials, sources.count > 1 || source != nil { sourceMenu }
                     }
                 }
                 .padding(16)
