@@ -19,6 +19,7 @@ struct BeanPodApp: App {
                 .task { dictation.attach(store) }
                 .task { await maker.watch(store) }   // 接着跟上次交给 Claude 还没做完的视频
                 .task { notch.attach(store) }        // 刘海快捷面板
+                .task { FeishuSync.shared.attach(store) }   // 手机同步进飞书妙记的录音，拉回来
                 .frame(minWidth: 980, minHeight: 600)
                 .containerBackground(.clear, for: .window)
         }

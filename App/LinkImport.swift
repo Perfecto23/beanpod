@@ -235,12 +235,13 @@ extension BeanStore {
         return found.hasPrefix("/") && FileManager.default.isExecutableFile(atPath: found) ? found : nil
     }
 
-    nonisolated static func runTool(_ path: String, _ args: [String], env extra: [String: String] = [:],
+    nonisolated static func runTool(_ path: String, _ args: [String], env extra: [String: String] = [:], cwd: URL? = nil,
                                     onLine: @Sendable @escaping (String) -> Void) async -> (status: Int32, output: String, errors: String) {
         await Task.detached {
             let p = Process()
             p.executableURL = URL(fileURLWithPath: path)
             p.arguments = args
+            if let cwd { p.currentDirectoryURL = cwd }
             var env = ProcessInfo.processInfo.environment
             env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + (env["PATH"] ?? "/usr/bin:/bin")
             env.merge(extra) { _, new in new }

@@ -1538,6 +1538,7 @@ struct RecordingDetail: View {
                         Button("拷贝原链接") { copy(source) }
                     }
                     if recording.origin == nil { Button("在访达中显示音频") { store.reveal(recording.id) } }
+                    if let url = FeishuSync.shared.link(for: recording.id) { Button("在飞书妙记里打开") { NSWorkspace.shared.open(url) } }
                 }
                 .disabled(store.stages[recording.id] != nil)
             }
@@ -2338,6 +2339,8 @@ struct DeviceView: View {
                 }
                 // 得到 AI 录音卡：和录音豆各连各的（CardViews.swift）
                 CardPanel()
+                // 手机 App 把录音同步进飞书后，从飞书拉回来（FeishuPanel.swift）
+                FeishuPanel()
                 Button("诊断日志") { openWindow(id: "log") }.buttonStyle(.plain).foregroundStyle(.tertiary).font(.caption)
                     .frame(maxWidth: .infinity)
             }

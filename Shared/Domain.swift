@@ -348,12 +348,13 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
     /// 从哪儿来的：哪台设备录的，还是导入的。由 origin 推出来，不另存——
     /// 录音豆下载的从来不写 origin；Mac/iPhone 录的写「Mac · 麦克风」这样；录音卡、导入、语音输入各有固定的写法。
     enum Source: String, CaseIterable, Identifiable {
-        case bean, card, mac, iphone, imported, note, dictation, link
+        case bean, card, feishu, mac, iphone, imported, note, dictation, link
         var id: String { rawValue }
         var name: String {
             switch self {
             case .bean: "录音豆"
             case .card: "录音卡"
+            case .feishu: "飞书"
             case .mac: "Mac"
             case .iphone: "iPhone"
             case .imported: "导入"
@@ -366,6 +367,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
             switch self {
             case .bean: "headphones"
             case .card: "rectangle.portrait"
+            case .feishu: "cloud"
             case .mac: "laptopcomputer"
             case .iphone: "iphone"
             case .imported: "square.and.arrow.down"
@@ -379,6 +381,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
             switch self {
             case .bean: "在录音豆上录的，连上后同步过来"
             case .card: "在得到录音卡上录的，连上后同步过来"
+            case .feishu: "手机录音豆 App 同步进飞书妙记的，从飞书拉回来"
             case .mac: "用这台 Mac 录的"
             case .iphone: "用 iPhone 录的"
             case .imported: "从文件导入的音频"
@@ -394,6 +397,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
         if isDictation { return .dictation }
         guard let o = origin else { return .bean }
         if o == "得到录音卡" { return .card }
+        if o == "飞书妙记" { return .feishu }
         if o.hasPrefix("Mac") { return .mac }
         if o.hasPrefix("iPhone") { return .iphone }
         if o == "文字笔记" { return .note }
