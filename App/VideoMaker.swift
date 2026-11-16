@@ -22,11 +22,19 @@ final class VideoMaker {
             case .variety: "综艺花字"
             }
         }
+        /// 界面上显示的名字。name 会写进 job.json 和成片记录、也拿来比对，保持中文不变。
+        var label: String {
+            switch self {
+            case .premium: String(localized: "高级 · 网感")
+            case .restrained: String(localized: "高级 · 克制")
+            case .variety: String(localized: "综艺花字")
+            }
+        }
         var fits: String {
             switch self {
-            case .premium: "节奏快、信息密：打字机字、标签卡、闪切、关键词大字。大多数口播用这个"
-            case .restrained: "同样的高级包装，收着用：适合财经、医疗、品牌这类严肃内容"
-            case .variety: "综艺感花字、表情和音效更热闹：适合吐槽、生活建议、娱乐向人设"
+            case .premium: String(localized: "节奏快、信息密：打字机字、标签卡、闪切、关键词大字。大多数口播用这个")
+            case .restrained: String(localized: "同样的高级包装，收着用：适合财经、医疗、品牌这类严肃内容")
+            case .variety: String(localized: "综艺感花字、表情和音效更热闹：适合吐槽、生活建议、娱乐向人设")
             }
         }
         /// 写进 brief 给剪辑 skill 的说法
@@ -51,7 +59,8 @@ final class VideoMaker {
     }
 
     /// 出片这一轮的几步，和 TASK.md 里约定的步骤名一致。
-    static let steps = ["生成口播", "检查拼接", "剪辑规划", "包装配乐", "渲染质检", "下载交付"]
+    static let steps = [String(localized: "生成口播"), String(localized: "检查拼接"), String(localized: "剪辑规划"),
+                        String(localized: "包装配乐"), String(localized: "渲染质检"), String(localized: "下载交付")]
 
     /// waiting：已交给 Claude 桌面版，等它规划报价；quoted：报价出来了，等用户在 Claude 里确认；producing：确认后在出片。
     enum Phase: Equatable { case idle, choosing, waiting, quoted, producing, finished(URL), failed(String) }
@@ -88,9 +97,9 @@ final class VideoMaker {
     /// 录音页上那一行的说明
     var statusLine: String {
         switch phase {
-        case .waiting: "已交给 Claude 桌面版，等它规划报价…"
-        case .quoted: "报价出来了，在 Claude 里回复确认就开始"
-        case .producing: "正在做视频：\(stepIndex > 0 ? Self.steps[min(stepIndex, Self.steps.count) - 1] : "准备")…"
+        case .waiting: String(localized: "已交给 Claude 桌面版，等它规划报价…")
+        case .quoted: String(localized: "报价出来了，在 Claude 里回复确认就开始")
+        case .producing: String(localized: "正在做视频：\(stepIndex > 0 ? Self.steps[min(stepIndex, Self.steps.count) - 1] : String(localized: "准备"))…")
         default: ""
         }
     }
@@ -211,12 +220,12 @@ final class VideoMaker {
     /// 给 Claude Code 加上 Renoise MCP（用户范围）。只加地址，不放任何密钥：第一次用时用户在 Claude 里 /mcp 自己登录。
     func connectRenoiseMCP() async {
         guard let claude = Self.claudePath else {
-            setupNote = "没找到命令行版 claude，没法自动加。可以在 Claude 桌面版里自己加 MCP：\(Self.renoiseMCP)"
+            setupNote = String(localized: "没找到命令行版 claude，没法自动加。可以在 Claude 桌面版里自己加 MCP：\(Self.renoiseMCP)")
             return
         }
         let r = await Self.shell("'\(claude)' mcp add --transport http --scope user renoise \(Self.renoiseMCP)")
         checkSetup()
-        setupNote = renoiseMCPMissing ? "没加上：" + Self.tail(r.output) : "加好了。第一次用时 Claude 会让你输入 /mcp 登录 Renoise。"
+        setupNote = renoiseMCPMissing ? String(localized: "没加上：\(Self.tail(r.output))") : String(localized: "加好了。第一次用时 Claude 会让你输入 /mcp 登录 Renoise。")
     }
 
     // MARK: 跟进度
@@ -290,7 +299,7 @@ final class VideoMaker {
         let rec = UInt32(Self.number(info["recording"]) ?? Double(recording))
         let quote = Self.readJSON(folder.appendingPathComponent("quote.json")).map(Self.parseQuote)
         func clip(file: String) -> VideoClip {
-            var c = VideoClip(file: file, host: info["host"] as? String ?? "数字人",
+            var c = VideoClip(file: file, host: info["host"] as? String ?? String(localized: "数字人"),
                               seconds: Int(Self.number(r["seconds"]) ?? Double(quote?.seconds ?? 0)),
                               credits: Int(Self.number(r["credits_spent"]) ?? (file.isEmpty ? 0 : quote?.credits ?? 0)))
             c.style = info["style"] as? String
@@ -317,14 +326,14 @@ final class VideoMaker {
             // 文件可能还在写，先不收尾；result.json 写了但成片迟迟不在就等下一轮
             if let mtime = (try? fm.attributesOfItem(atPath: folder.appendingPathComponent("result.json").path))?[.modificationDate] as? Date,
                mtime.timeIntervalSinceNow < -120 {
-                close("result.json 里写的成片在本机找不到。")
+                close(String(localized: "result.json 里写的成片在本机找不到。"))
             }
             return
         }
         let stamp = Int(Date.now.timeIntervalSince1970)
         let name = "\(rec)-video-\(stamp).mp4"
         let out = store.folder.appendingPathComponent(name)
-        do { try fm.copyItem(at: local, to: out) } catch { close("成片拷不进录音库：\(error.localizedDescription)"); return }
+        do { try fm.copyItem(at: local, to: out) } catch { close(String(localized: "成片拷不进录音库：\(error.localizedDescription)")); return }
         var c = clip(file: name)
         // 封面：Claude 给了就用它的，没给就从成片里取一帧
         let coverName = "\(rec)-video-\(stamp).jpg"
@@ -337,7 +346,7 @@ final class VideoMaker {
         }
         store.addVideo(rec, c)
         store.addLog("做视频：交付 \(name)，花了 \(c.credits) 积分。\(c.summary ?? "")")
-        store.toast("checkmark.circle.fill", "视频做好了：\(info["title"] as? String ?? "")")
+        store.toast("checkmark.circle.fill", String(localized: "视频做好了：\(info["title"] as? String ?? "")"))
         close(nil)
         if current { phase = .finished(out) }
     }
@@ -366,7 +375,7 @@ final class VideoMaker {
 
     nonisolated static func parseQuote(_ q: [String: Any]) -> Quote {
         let items = (q["items"] as? [[String: Any]] ?? []).map { item -> Quote.Item in
-            let credits = number(item["credits"]).map { "\(Int($0.rounded())) 积分" } ?? ""
+            let credits = number(item["credits"]).map { String(localized: "\(Int($0.rounded())) 积分") } ?? ""
             let count = number(item["count"]).map { " × \(Int($0))" } ?? ""
             return Quote.Item(name: (item["name"] as? String ?? "") + count, detail: credits)
         }
@@ -458,7 +467,7 @@ final class VideoMaker {
             let pipe = Pipe()
             p.standardOutput = pipe; p.standardError = pipe
             p.standardInput = FileHandle.nullDevice
-            guard (try? p.run()) != nil else { return (false, "命令没能运行") }
+            guard (try? p.run()) != nil else { return (false, String(localized: "命令没能运行")) }
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             p.waitUntilExit()
             return (p.terminationStatus == 0, String(data: data, encoding: .utf8) ?? "")
@@ -466,7 +475,7 @@ final class VideoMaker {
     }
 
     nonisolated static func tail(_ output: String) -> String {
-        String((output.split(separator: "\n").last.map(String.init) ?? "没有给出原因").prefix(140))
+        String((output.split(separator: "\n").last.map(String.init) ?? String(localized: "没有给出原因")).prefix(140))
     }
 
     nonisolated static func object(_ line: String) -> [String: Any]? {
@@ -624,16 +633,16 @@ struct VideoSheet: View {
     private func handOff() async {
         guard var h = maker.host else { return }
         if h.material.isEmpty {
-            maker.setupNote = "正在把示例主播的照片传到你的 Renoise 账号（不花积分）…"
+            maker.setupNote = String(localized: "正在把示例主播的照片传到你的 Renoise 账号（不花积分）…")
             guard let up = await maker.library.ensureUploaded(h) else {
-                maker.setupNote = maker.library.error ?? "示例主播没传上去。"
+                maker.setupNote = maker.library.error ?? String(localized: "示例主播没传上去。")
                 return
             }
             h = up
             maker.host = up
             maker.setupNote = ""
             guard up.usable else {
-                maker.setupNote = "示例主播已经传上去了，Renoise 正在审核人像，过一会儿再点「交给 Claude 做」。"
+                maker.setupNote = String(localized: "示例主播已经传上去了，Renoise 正在审核人像，过一会儿再点「交给 Claude 做」。")
                 return
             }
         }
@@ -645,7 +654,7 @@ struct VideoSheet: View {
         return Button { maker.style = s } label: {
             VStack(spacing: 8) {
                 StylePreview(style: s).frame(maxWidth: .infinity).frame(height: 112).clipShape(.rect(cornerRadius: Theme.Radius.card))
-                Text(s.name).font(.callout.weight(.semibold))
+                Text(s.label).font(.callout.weight(.semibold))
             }
             .padding(8)
             .background(Color(nsColor: .controlBackgroundColor).opacity(picked ? 1 : 0.6), in: .rect(cornerRadius: Theme.Radius.card))
@@ -654,7 +663,7 @@ struct VideoSheet: View {
         }
         .buttonStyle(.plain)
         .help(s.fits)
-        .accessibilityLabel("\(s.name)\(picked ? "，已选中" : "")")
+        .accessibilityLabel("\(s.label)\(picked ? String(localized: "，已选中") : "")")
     }
 
     private var waiting: some View {
@@ -666,9 +675,9 @@ struct VideoSheet: View {
                 if let start = maker.started { Text(start, style: .timer).monospacedDigit().foregroundStyle(.secondary) }
             }
             VStack(alignment: .leading, spacing: 6) {
-                step(1, "在 Claude 里按发送。")
-                step(2, "第一次用会让你输入 /mcp 登录 Renoise，登好回它一句。")
-                step(3, "它写稿、逐项核价，报价会同时显示在这里，不花积分。")
+                step(1, String(localized: "在 Claude 里按发送。"))
+                step(2, String(localized: "第一次用会让你输入 /mcp 登录 Renoise，登好回它一句。"))
+                step(3, String(localized: "它写稿、逐项核价，报价会同时显示在这里，不花积分。"))
             }
             .padding(12).panel(radius: Theme.Radius.card)
             TimelineView(.periodic(from: .now, by: 30)) { _ in
@@ -697,7 +706,7 @@ struct VideoSheet: View {
                     Text("积分").foregroundStyle(.secondary)
                     if let b = q.balance { Text("· 账户里还有 \(Int(b))").font(.callout).foregroundStyle(.tertiary) }
                     Spacer()
-                    Text("\(maker.style.name) · \(maker.ratio) · \(q.segments) 段 · 约 \(q.seconds) 秒").font(.callout).foregroundStyle(.secondary)
+                    Text("\(maker.style.label) · \(maker.ratio) · \(q.segments) 段 · 约 \(q.seconds) 秒").font(.callout).foregroundStyle(.secondary)
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(Array(q.items.enumerated()), id: \.offset) { _, item in
@@ -728,7 +737,7 @@ struct VideoSheet: View {
                     stepView(n, name)
                 }
             }
-            Text(maker.stepDetail.isEmpty ? "准备中…" : maker.stepDetail).font(.callout.weight(.medium))
+            Text(maker.stepDetail.isEmpty ? String(localized: "准备中…") : maker.stepDetail).font(.callout.weight(.medium))
             HStack {
                 if let start = maker.started {
                     Label { Text(start, style: .timer).monospacedDigit() } icon: { Image(systemName: "clock") }.font(.caption).foregroundStyle(.secondary)

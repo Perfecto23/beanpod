@@ -76,7 +76,7 @@ struct TrashView: View {
                 .fixedSize()
             Button("恢复") {
                 store.restore([entry.id])
-                store.toast("arrow.uturn.backward", "已恢复「\(rec.displayTitle)」")
+                store.toast("arrow.uturn.backward", String(localized: "已恢复「\(rec.displayTitle)」"))
             }
             .buttonStyle(.glass).foregroundStyle(Theme.accent).fixedSize()
             Menu {
@@ -111,10 +111,10 @@ struct TrashView: View {
 
     private func meta(_ entry: TrashedRecording) -> String {
         let rec = entry.recording
-        var parts = [rec.isMaterial ? "素材" : rec.origin == "语音输入" ? "语音输入" : "录音"]
+        var parts = [rec.isMaterial ? String(localized: "素材") : rec.origin == "语音输入" ? String(localized: "语音输入") : String(localized: "kind.recording", defaultValue: "录音")]
         if rec.isMaterial { parts.append(RecordingsView.platform(of: rec)) }
-        if rec.duration > 0 { parts.append(rec.duration < 60 ? "\(Int(rec.duration)) 秒" : "\(Int(rec.duration / 60)) 分钟") }
-        parts.append(entry.deletedAt.formatted(.dateTime.month().day()) + "删除")
+        if rec.duration > 0 { parts.append(rec.duration < 60 ? String(localized: "\(Int(rec.duration)) 秒") : String(localized: "\(Int(rec.duration / 60)) 分钟")) }
+        parts.append(String(localized: "\(entry.deletedAt.formatted(.dateTime.month().day()))删除"))
         return parts.joined(separator: " · ")
     }
 }

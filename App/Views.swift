@@ -136,7 +136,7 @@ struct RootView: View {
                     Image(systemName: "arrow.down.to.line").font(.title3).foregroundStyle(Theme.accent)
                     VStack(alignment: .leading, spacing: 5) {
                         HStack(spacing: 8) {
-                            Text(job.title.map { "正在导入「\($0.prefix(16))」" } ?? "正在下载\(job.platform)的内容…").font(.callout.weight(.medium)).lineLimit(1)
+                            Text(job.title.map { String(localized: "正在导入「\(String($0.prefix(16)))」") } ?? String(localized: "正在下载\(job.platform)的内容…")).font(.callout.weight(.medium)).lineLimit(1)
                             if let p = job.progress { Text("\(Int(p * 100))%").font(.callout).monospacedDigit().foregroundStyle(.secondary) }
                             if store.linkJobs.count > 1 { Text("后面还有 \(store.linkJobs.count - 1) 条").font(.caption).foregroundStyle(.tertiary) }
                         }
@@ -181,7 +181,7 @@ struct RootView: View {
             Button("开始快传") { store.startWiFiSync() }
             Button("还是用蓝牙", role: .cancel) {}
         } message: {
-            Text(store.wifiSyncEstimate + "\n\n快传时这台 Mac 会离开现在的 Wi‑Fi、连到录音豆上，大约一分钟上不了网，传完自动连回来。")
+            Text(store.wifiSyncEstimate + "\n\n" + String(localized: "快传时这台 Mac 会离开现在的 Wi‑Fi、连到录音豆上，大约一分钟上不了网，传完自动连回来。"))
         }
         .alert(store.problem?.title ?? "", isPresented: Binding(get: { store.problem != nil }, set: { if !$0 { store.problem = nil } }), presenting: store.problem) { p in
             if let action = p.action {
@@ -229,7 +229,7 @@ struct RecordControls: View {
         switch store.recState {
         case .idle:
             Button { store.startRecording() } label: {
-                Label(size == .regular ? "录音" : "开始录音", systemImage: "record.circle.fill").labelStyle(.titleAndIcon).fixedSize()
+                Label(size == .regular ? String(localized: "action.record", defaultValue: "录音") : String(localized: "开始录音"), systemImage: "record.circle.fill").labelStyle(.titleAndIcon).fixedSize()
                     .padding(.horizontal, size == .regular ? 0 : 8)
             }
             .buttonStyle(size == .regular ? AnyButtonStyle(.glass) : AnyButtonStyle(.glassProminent))
@@ -351,14 +351,14 @@ struct Sidebar: View {
             SidebarRecord().padding(.bottom, 20)
 
             VStack(spacing: 4) {
-                item("总览", "house.fill", 0) { nav.route = .dashboard }
-                item("录音", "waveform", 1, count: store.ownRecordings.count) { nav.route = .all }
-                item("素材", "play.rectangle.fill", 3, count: store.recordings.filter(\.isMaterial).count) { nav.route = .materials }
+                item(String(localized: "总览"), "house.fill", 0) { nav.route = .dashboard }
+                item(String(localized: "录音"), "waveform", 1, count: store.ownRecordings.count) { nav.route = .all }
+                item(String(localized: "素材"), "play.rectangle.fill", 3, count: store.recordings.filter(\.isMaterial).count) { nav.route = .materials }
                 // 语音输入：开着「记下说过的话」或者已经记过才出现
                 if store.settings.dictationSave || !store.dictations.isEmpty {
-                    item("语音输入", "keyboard", 4, count: store.dictations.count) { nav.route = .dictation }
+                    item(String(localized: "语音输入"), "keyboard", 4, count: store.dictations.count) { nav.route = .dictation }
                 }
-                item("知识库", "book.closed.fill", 2) { nav.route = .knowledge }
+                item(String(localized: "知识库"), "book.closed.fill", 2) { nav.route = .knowledge }
             }
             projectList.padding(.top, 20)
             SidebarTags().padding(.top, 16)
@@ -453,7 +453,8 @@ struct Sidebar: View {
                     .foregroundStyle(on ? Theme.accent : Theme.warm500)
                 Text(title).font(.system(size: 14, weight: on ? .semibold : .medium))
                     .foregroundStyle(on ? Theme.warm900 : Theme.warm700)
-                Spacer()
+                    .lineLimit(1).minimumScaleFactor(0.8)      // 英文词长：放不下就稍微缩一点，不折行
+                Spacer(minLength: 4)
                 if count > 0 {
                     Text("\(count)").font(.system(size: 12, weight: .bold)).monospacedDigit()
                         .foregroundStyle(on ? Theme.accent : Theme.warm500)
@@ -584,7 +585,7 @@ struct DeviceChip: View {
                     .font(.system(size: 13, weight: .medium)).foregroundStyle(store.link == .ready || showCard ? Theme.amber : Theme.warm500)
                     .frame(width: 28, height: 28).background((store.link == .ready || showCard ? Theme.amber : Theme.warm400).opacity(0.16), in: .rect(cornerRadius: Theme.Radius.card))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(showCard ? store.card.name : store.link == .ready ? store.displayDeviceName : "录音豆").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.warm900)
+                    Text(showCard ? store.card.name : store.link == .ready ? store.displayDeviceName : String(localized: "录音豆")).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.warm900)
                         .lineLimit(1).minimumScaleFactor(0.8).truncationMode(.middle)
                     HStack(spacing: 4) {
                         Circle().fill(statusColor).frame(width: 6, height: 6)
@@ -602,25 +603,25 @@ struct DeviceChip: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(showCard ? "\(store.card.name)：卡里的录音和连接" : "\(store.link == .ready ? store.displayDeviceName : "录音豆")：电量、存储和连接")
+        .help(showCard ? "\(store.card.name)：卡里的录音和连接" : "\(store.link == .ready ? store.displayDeviceName : String(localized: "录音豆"))：电量、存储和连接")
     }
 
     /// 录音豆没连上、得到录音卡连着：这张卡片显示录音卡。
     private var showCard: Bool { store.link != .ready && store.card.link == .ready }
 
     private var status: String {
-        if store.wifi != nil { return "Wi‑Fi 快传中" }
-        if showCard { return store.card.progress != nil ? "正在下载" : "已连接" }
+        if store.wifi != nil { return String(localized: "Wi‑Fi 快传中") }
+        if showCard { return store.card.progress != nil ? String(localized: "正在下载") : String(localized: "已连接") }
         switch store.link {
         case .ready:
-            if store.recState == .recording { return "录音中" }
-            if store.recState == .paused { return "录音已暂停" }
-            return "已连接"
-        case .connecting: return "正在连接…"
-        case .scanning: return "正在搜索…"
-        case .off: return "蓝牙未打开"
-        case .unauthorized: return "没有蓝牙权限"
-        case .idle: return "未连接"
+            if store.recState == .recording { return String(localized: "录音中") }
+            if store.recState == .paused { return String(localized: "录音已暂停") }
+            return String(localized: "已连接")
+        case .connecting: return String(localized: "正在连接…")
+        case .scanning: return String(localized: "正在搜索…")
+        case .off: return String(localized: "蓝牙未打开")
+        case .unauthorized: return String(localized: "没有蓝牙权限")
+        case .idle: return String(localized: "未连接")
         }
     }
 
@@ -769,12 +770,21 @@ struct RecordingsView: View {
     enum Quick: String, CaseIterable, Identifiable {
         case all = "全部", starred = "星标", todos = "有待办", marked = "有重点"
         var id: String { rawValue }
+        /// 显示用的名字（rawValue 只当标识用）。
+        var name: String {
+            switch self {
+            case .all: String(localized: "全部")
+            case .starred: String(localized: "星标")
+            case .todos: String(localized: "有待办")
+            case .marked: String(localized: "有重点")
+            }
+        }
         var emptyHint: String {
             switch self {
             case .all: ""
-            case .starred: "还没有星标的录音。打开一条录音，点右上角的星，它就会出现在这里。"
-            case .todos: "没有还没做完的待办。"
-            case .marked: "还没有打过重点标记的录音。录音时按 ⌘D，或者按录音豆上的标记键。"
+            case .starred: String(localized: "还没有星标的录音。打开一条录音，点右上角的星，它就会出现在这里。")
+            case .todos: String(localized: "没有还没做完的待办。")
+            case .marked: String(localized: "还没有打过重点标记的录音。录音时按 ⌘D，或者按录音豆上的标记键。")
             }
         }
     }
@@ -833,10 +843,10 @@ struct RecordingsView: View {
         for r in items {
             let label: String
             if let d = r.date {
-                if cal.isDateInToday(d) { label = "今天" }
-                else if cal.isDateInYesterday(d) { label = "昨天" }
+                if cal.isDateInToday(d) { label = String(localized: "今天") }
+                else if cal.isDateInYesterday(d) { label = String(localized: "昨天") }
                 else { label = d.formatted(.dateTime.month().day().weekday(.abbreviated)) }
-            } else { label = "没有日期" }
+            } else { label = String(localized: "没有日期") }
             if out.last?.0 == label { out[out.count - 1].1.append(r) } else { out.append((label, [r])) }
         }
         return out
@@ -844,12 +854,12 @@ struct RecordingsView: View {
 
     private var title: String {
         switch nav.route {
-        case .starred: "星标"
+        case .starred: String(localized: "星标")
         case .scene(let s): s.name
-        case .materials: "素材库"
-        case .project(let id): store.project(id)?.name ?? "项目"
+        case .materials: String(localized: "素材库")
+        case .project(let id): store.project(id)?.name ?? String(localized: "项目")
         case .tag(let t): "#\(t)"
-        default: "全部录音"
+        default: String(localized: "全部录音")
         }
     }
 
@@ -892,7 +902,7 @@ struct RecordingsView: View {
         } label: {
             HStack(spacing: 4) {
                 if let source { Image(systemName: source.icon).font(.system(size: 11)) }
-                Text(source?.name ?? "来源")
+                Text(source?.name ?? String(localized: "来源"))
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
             }
             .font(.system(size: 12, weight: source == nil ? .regular : .medium))
@@ -902,7 +912,7 @@ struct RecordingsView: View {
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
         .help("只看某台设备录的，或者导入的")
-        .accessibilityLabel("来源：\(source?.name ?? "全部")")
+        .accessibilityLabel("来源：\(source?.name ?? String(localized: "全部"))")
     }
 
     /// 素材库顶上的粘贴框：贴进来就导入。
@@ -967,10 +977,10 @@ struct RecordingsView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 6) {
                                 if nav.route == .materials {
-                                    chip("全部", on: platform == nil) { platform = nil }
+                                    chip(String(localized: "全部"), on: platform == nil) { platform = nil }
                                     ForEach(platforms, id: \.self) { p in chip(p, on: platform == p) { platform = p } }
                                 } else {
-                                    ForEach(Quick.allCases) { q in chip(q.rawValue, on: quick == q) { quick = q } }
+                                    ForEach(Quick.allCases) { q in chip(q.name, on: quick == q) { quick = q } }
                                 }
                             }
                         }
@@ -1087,26 +1097,26 @@ struct RecordingsView: View {
     }
 
     private var emptyTitle: String {
-        if !query.isEmpty { return "没找到「\(query)」" }
-        if quick != .all { return "「\(quick.rawValue)」里现在是空的" }
-        if let source { return "没有来源是「\(source.name)」的录音" }
+        if !query.isEmpty { return String(localized: "没找到「\(query)」") }
+        if quick != .all { return String(localized: "「\(quick.name)」里现在是空的") }
+        if let source { return String(localized: "没有来源是「\(source.name)」的录音") }
         switch nav.route {
-        case .materials: return "还没有素材"
-        case .project: return "「\(title)」里还没有东西"
-        case .tag: return "没有带「\(title)」的录音了"
-        default: return "这个场景下还没有录音"
+        case .materials: return String(localized: "还没有素材")
+        case .project: return String(localized: "「\(title)」里还没有东西")
+        case .tag: return String(localized: "没有带「\(title)」的录音了")
+        default: return String(localized: "这个场景下还没有录音")
         }
     }
 
     private var emptyDetail: String {
-        if !query.isEmpty { return "换个词试试，或者到知识库里直接提问。" }
+        if !query.isEmpty { return String(localized: "换个词试试，或者到知识库里直接提问。") }
         if quick != .all { return quick.emptyHint }
-        if source != nil { return "在「来源」里换回「全部来源」，就能看到其它录音。" }
+        if source != nil { return String(localized: "在「来源」里换回「全部来源」，就能看到其它录音。") }
         switch nav.route {
-        case .materials: return "把抖音、B 站、YouTube 这些视频链接贴到左边的框里，豆仓会下载声音、转成文字稿，再整理成纪要。"
-        case .project: return "在任意一条录音上右键「移到项目」，或者在「全部录音」里点「选择」，一次放好几条进来。"
-        case .tag: return "在录音详情的标题下面点「＋ 标签」，就能给它加上。"
-        default: return "整理过的录音会自动归到对应的场景。"
+        case .materials: return String(localized: "把抖音、B 站、YouTube 这些视频链接贴到左边的框里，豆仓会下载声音、转成文字稿，再整理成纪要。")
+        case .project: return String(localized: "在任意一条录音上右键「移到项目」，或者在「全部录音」里点「选择」，一次放好几条进来。")
+        case .tag: return String(localized: "在录音详情的标题下面点「＋ 标签」，就能给它加上。")
+        default: return String(localized: "整理过的录音会自动归到对应的场景。")
         }
     }
 
@@ -1114,7 +1124,7 @@ struct RecordingsView: View {
         switch nav.route {
         // 素材库、项目空着时，右边已经有完整的说明，这里不再重复一遍
         case .materials, .project, .tag: ""
-        default: store.ownRecordings.isEmpty ? "还没有录音" : "这个条件下没有录音"
+        default: store.ownRecordings.isEmpty ? String(localized: "还没有录音") : String(localized: "这个条件下没有录音")
         }
     }
 
@@ -1264,7 +1274,7 @@ struct RecordingRow: View {
                         .foregroundStyle(tint)
                         .frame(width: 28, height: 28)
                         .background(tint.opacity(selected ? 0.1 : 0.12), in: .rect(cornerRadius: Theme.Radius.card))
-                        .help(recording.isMaterial ? "从链接导入的素材" : (recording.scene ?? .other).name)
+                        .help(recording.isMaterial ? String(localized: "从链接导入的素材") : (recording.scene ?? .other).name)
                 }
                 Text(recording.displayTitle)
                     .font(.system(size: 14, weight: selected ? .bold : .medium))
@@ -1347,16 +1357,16 @@ struct RecordingRow: View {
         var parts: [String] = []
         // 从链接来的：先写平台和作者，再写多长
         if recording.isMaterial {
-            return [recording.origin ?? "素材", clock(recording.duration)].joined(separator: " • ")
+            return [recording.origin ?? String(localized: "素材"), clock(recording.duration)].joined(separator: " • ")
         }
         if let d = recording.date { parts.append(d.formatted(.dateTime.hour().minute())) }
         // 文字笔记的来源胶囊已经写了「文字」，不再重复
         if !recording.textOnly { parts.append(clock(recording.duration)) }
-        else if recording.recordedOn != .note { parts.append("文字") }
+        else if recording.recordedOn != .note { parts.append(String(localized: "文字")) }
         if let scene = recording.scene { parts.append(scene.name) }
-        else if !recording.downloaded { parts.append("还在录音豆里") }
-        else if recording.transcript == nil { parts.append("还没转成文字") }
-        else if !recording.isAnalyzed { parts.append("还没整理") }
+        else if !recording.downloaded { parts.append(String(localized: "还在录音豆里")) }
+        else if recording.transcript == nil { parts.append(String(localized: "还没转成文字")) }
+        else if !recording.isAnalyzed { parts.append(String(localized: "还没整理")) }
         return parts.joined(separator: " • ")
     }
 
@@ -1460,7 +1470,7 @@ struct RecordingDetail: View {
                         Button { store.setScene(recording.id, s) } label: { Label(s.name, systemImage: s.icon) }
                     }
                 } label: {
-                    Label(recording.scene?.name ?? "未分类", systemImage: recording.scene?.icon ?? "tag")
+                    Label(recording.scene?.name ?? String(localized: "未分类"), systemImage: recording.scene?.icon ?? "tag")
                         .font(.system(size: 12, weight: .semibold)).labelStyle(.titleAndIcon)
                         .foregroundStyle(Theme.warm700)
                         .padding(.horizontal, 10).padding(.vertical, 4)
@@ -1481,7 +1491,7 @@ struct RecordingDetail: View {
                     .onSubmit { store.rename(recording.id, to: title) }
                     .disabled(!recording.downloaded)
                 if recording.downloaded, recording.transcript != nil {
-                    PaneSwitch(selection: $tab, titles: ["纪要", "文字稿", "改写"])
+                    PaneSwitch(selection: $tab, titles: [String(localized: "纪要"), String(localized: "文字稿"), String(localized: "改写")])
                 }
             }
             if recording.downloaded { TagBar(recording: recording) }
@@ -1494,11 +1504,11 @@ struct RecordingDetail: View {
     private var tools: some View {
         HStack(spacing: 4) {
             if recording.downloaded, recording.transcript != nil {
-                IconTool("arrow.triangle.2.circlepath", help: "用分析模型重新判断场景、整理纪要") { store.process(recording.id) }
+                IconTool("arrow.triangle.2.circlepath", help: String(localized: "用分析模型重新判断场景、整理纪要")) { store.process(recording.id) }
                     .disabled(store.stages[recording.id] != nil)
             }
             if recording.downloaded {
-                IconMenu("square.and.arrow.up", help: "导出") {
+                IconMenu("square.and.arrow.up", help: String(localized: "导出")) {
                     Button("导出为 Markdown…") { store.exportMarkdown([recording]) }.disabled(!recording.isAnalyzed)
                     if !recording.textOnly {
                         Button("导出音频（M4A，体积小）…") { store.exportAudio(recording.id, m4a: true) }
@@ -1507,14 +1517,14 @@ struct RecordingDetail: View {
                     Button("拷贝文字稿") { copy(recording.transcript ?? "") }.disabled(recording.transcript == nil)
                 }
             }
-            IconTool(recording.starred ? "star.fill" : "star", help: recording.starred ? "取消星标" : "标为星标",
+            IconTool(recording.starred ? "star.fill" : "star", help: recording.starred ? String(localized: "取消星标") : String(localized: "标为星标"),
                      tint: recording.starred ? Theme.accent : nil) { store.toggleStar(recording.id) }
             if recording.transcript != nil {
-                IconTool("wand.and.sparkles", help: "让 AI 重新起标题") { store.retitle(recording.id) }
+                IconTool("wand.and.sparkles", help: String(localized: "让 AI 重新起标题")) { store.retitle(recording.id) }
                     .disabled(!store.analysisAvailable || store.retitling.contains(recording.id))
             }
             if recording.downloaded {
-                IconMenu("ellipsis", help: "更多") {
+                IconMenu("ellipsis", help: String(localized: "更多")) {
                     Menu("移到项目") { ProjectMenuItems(ids: [recording.id]) }
                     Divider()
                     Button("重新整理纪要") { store.process(recording.id) }.disabled(recording.transcript == nil)
@@ -1542,7 +1552,7 @@ struct RecordingDetail: View {
                 }
                 .disabled(store.stages[recording.id] != nil)
             }
-            IconMenu("trash", help: "删除", danger: true) {
+            IconMenu("trash", help: String(localized: "删除"), danger: true) {
                 if recording.downloaded { Button("移到最近删除") { store.trashWithUndo([recording.id]) } }
                 if recording.onDevice { Button("从录音豆删除…") { nav.confirmDeviceDelete = true } }
             }
@@ -1551,7 +1561,7 @@ struct RecordingDetail: View {
 
     private var subtitle: String {
         var parts: [String] = []
-        if let p = store.project(recording.project) { parts.append("项目「\(p.name)」") }
+        if let p = store.project(recording.project) { parts.append(String(localized: "项目「\(p.name)」")) }
         // 自己录的来源已经在前面的小胶囊里了；素材这里写平台和作者
         if recording.isMaterial, let o = recording.origin { parts.append(o) }
         if let d = recording.date {
@@ -1735,7 +1745,7 @@ struct PlayerBar: View {
             .frame(height: 34)
             .accessibilityElement()
             .accessibilityLabel("播放进度")
-            .accessibilityValue("\(clock(active ? store.playhead : 0))，共 \(clock(recording.duration))" + (recording.marks.isEmpty ? "" : "，\(recording.marks.count) 个重点标记"))
+            .accessibilityValue(String(localized: "\(clock(active ? store.playhead : 0))，共 \(clock(recording.duration))") + (recording.marks.isEmpty ? "" : String(localized: "，\(recording.marks.count) 个重点标记")))
             .accessibilityAdjustableAction { direction in
                 store.skip(recording.id, by: direction == .increment ? 15 : -15)
             }
@@ -1752,7 +1762,7 @@ struct PlayerBar: View {
                     .background(Theme.warm200.opacity(0.8), in: .rect(cornerRadius: 8))
             }
             .buttonStyle(.plain).help("播放速度，点一下换一档（⌘] 加快，⌘[ 放慢）")
-            .accessibilityLabel("播放速度").accessibilityValue("\(rateLabel(store.playRate).dropLast()) 倍")
+            .accessibilityLabel("播放速度").accessibilityValue(String(localized: "\(String(rateLabel(store.playRate).dropLast())) 倍"))
         }
         .padding(12)
         .background(Theme.warm100.opacity(0.8), in: .rect(cornerRadius: Theme.Radius.panel))
@@ -1960,7 +1970,7 @@ struct RewriteView: View {
                             .buttonStyle(.glass).tint(Theme.accent)
                             .disabled(maker.busy && maker.recording != recording.id)
                             .help("交给 Claude 桌面版，用 Renoise 的数字人和口播剪辑 skill 做成带包装的成片。会先报价，确认了才开始")
-                        Button("拷贝", systemImage: "doc.on.doc") { copy(item.text); store.toast("doc.on.doc", "已拷贝") }
+                        Button("拷贝", systemImage: "doc.on.doc") { copy(item.text); store.toast("doc.on.doc", String(localized: "已拷贝")) }
                             .labelStyle(.iconOnly).buttonStyle(.borderless)
                         Button("删除", systemImage: "trash") { store.deleteRewrite(recording.id, item.id) }
                             .labelStyle(.iconOnly).buttonStyle(.borderless)
@@ -2000,7 +2010,7 @@ struct NotesView: View {
     private var normal: some View {
         VStack(alignment: .leading, spacing: 20) {
             if let summary = recording.summary {
-                Card(title: "摘要", icon: "text.alignleft") {
+                Card(title: String(localized: "摘要"), icon: "text.alignleft") {
                     Text(MarkdownView.inline(summary)).font(.system(size: 14)).foregroundStyle(Theme.warm700).textSelection(.enabled).lineSpacing(5)
                 }
             }
@@ -2015,7 +2025,7 @@ struct NotesView: View {
                 }
             }
             if !recording.todos.isEmpty {
-                Card(title: "待办", icon: "checkmark.square.fill") {
+                Card(title: String(localized: "待办"), icon: "checkmark.square.fill") {
                     ForEach(recording.todos) { todo in
                         Toggle(isOn: Binding(get: { todo.done }, set: { _ in store.toggleTodo(recording.id, todo.id) })) {
                             Text(todo.text).font(.system(size: 14)).strikethrough(todo.done).foregroundStyle(Theme.warm800)
@@ -2043,7 +2053,7 @@ struct NotesView: View {
                             .disabled(store.stages[recording.id] != nil)
                     } else {
                         Text("先在设置里配置云端模型，或下载本机模型。").font(.callout).foregroundStyle(.secondary)
-                        ModelSettingsLink(title: "打开设置")
+                        ModelSettingsLink(title: String(localized: "打开设置"))
                     }
                 }
             }
@@ -2060,9 +2070,9 @@ struct NotesView: View {
 
     private var credits: String {
         var parts: [String] = []
-        if let t = recording.transcribedBy { parts.append("转写：\(t)") }
-        if let a = recording.analyzedBy, a != "—" { parts.append("整理：\(a)") }
-        parts.append("内容由模型生成，重要信息请对照录音核实")
+        if let t = recording.transcribedBy { parts.append(String(localized: "转写：\(t)")) }
+        if let a = recording.analyzedBy, a != "—" { parts.append(String(localized: "整理：\(a)")) }
+        parts.append(String(localized: "内容由模型生成，重要信息请对照录音核实"))
         return parts.joined(separator: " • ")
     }
 }
@@ -2087,7 +2097,17 @@ struct TranscriptView: View {
     @AppStorage("followPlayback") private var follow = true
     @State private var hovered: TimeInterval?
 
-    enum Shown: String, CaseIterable { case original = "原文", both = "双语", translated = "译文" }
+    enum Shown: String, CaseIterable {
+        case original = "原文", both = "双语", translated = "译文"
+        /// 显示用的名字（rawValue 只当标识用）。
+        var name: String {
+            switch self {
+            case .original: String(localized: "原文")
+            case .both: String(localized: "双语")
+            case .translated: String(localized: "译文")
+            }
+        }
+    }
 
     private var hasClean: Bool { recording.segments.contains { $0.clean != nil } }
     private var translation: Translation? { recording.translation }
@@ -2268,7 +2288,7 @@ struct TranscriptView: View {
     @ViewBuilder private var translateTools: some View {
         if translation != nil {
             PaneSwitch(selection: Binding(get: { Shown.allCases.firstIndex(of: view) ?? 1 }, set: { view = Shown.allCases[$0] }),
-                       titles: Shown.allCases.map(\.rawValue))
+                       titles: Shown.allCases.map(\.name))
         }
         if let t = translation {
             Text("\(t.language) · \(t.style)").font(.caption).foregroundStyle(Theme.warm500).fixedSize()
@@ -2303,7 +2323,7 @@ struct TranscriptView: View {
                 Spacer()
                 Button("替换") {
                     let n = store.replaceWord(wrong, with: right, in: recording.id, everywhere: everywhere, remember: remember)
-                    store.toast("checkmark.circle.fill", n > 0 ? "改了 \(n) 处" : (remember ? "这里没有这个词，已记进词库" : "这里没有这个词"))
+                    store.toast("checkmark.circle.fill", n > 0 ? String(localized: "改了 \(n) 处") : (remember ? String(localized: "这里没有这个词，已记进词库") : String(localized: "这里没有这个词")))
                     wrong = ""; right = ""; replacing = false
                 }
                 .buttonStyle(.borderedProminent)
@@ -2320,7 +2340,7 @@ struct TranscriptView: View {
             Spacer()
             Button("全部替换并记住") {
                 let n = store.replaceWord(fix.wrong, with: fix.right, in: recording.id, everywhere: true, remember: true)
-                store.toast("checkmark.circle.fill", "又改了 \(n) 处，以后会自动改")
+                store.toast("checkmark.circle.fill", String(localized: "又改了 \(n) 处，以后会自动改"))
                 store.pendingFix = nil
             }
             .buttonStyle(.borderedProminent)
@@ -2543,9 +2563,9 @@ struct DeviceView: View {
                     .contentTransition(.opacity)
                 if beans.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        step("1", "把录音豆从充电盒里取出来")
-                        step("2", "放在电脑旁边")
-                        step("3", "手机连着它的话，先关掉手机蓝牙")
+                        step("1", String(localized: "把录音豆从充电盒里取出来"))
+                        step("2", String(localized: "放在电脑旁边"))
+                        step("3", String(localized: "手机连着它的话，先关掉手机蓝牙"))
                     }
                     .padding(.top, 2)
                 }
@@ -2608,10 +2628,10 @@ struct DeviceView: View {
 
             if let info = store.info {
                 HStack(spacing: 18) {
-                    ring("录音豆", "\(info.micBattery)%", Double(info.micBattery) / 100, note: info.micCharging ? "充电中" : nil, warn: info.micBattery < 20)
-                    ring("充电盒", "\(info.caseBattery)%", Double(info.caseBattery) / 100, note: info.caseCharging ? "充电中" : nil, warn: info.caseBattery < 20)
+                    ring(String(localized: "录音豆"), "\(info.micBattery)%", Double(info.micBattery) / 100, note: info.micCharging ? String(localized: "充电中") : nil, warn: info.micBattery < 20)
+                    ring(String(localized: "充电盒"), "\(info.caseBattery)%", Double(info.caseBattery) / 100, note: info.caseCharging ? String(localized: "充电中") : nil, warn: info.caseBattery < 20)
                     if info.totalKB > 0 {
-                        ring("已用空间", size(info.usedKB), max(0.004, Double(info.usedKB) / Double(info.totalKB)), note: "共 " + size(info.totalKB), warn: false)
+                        ring(String(localized: "已用空间"), size(info.usedKB), max(0.004, Double(info.usedKB) / Double(info.totalKB)), note: String(localized: "共 \(size(info.totalKB))"), warn: false)
                     }
                 }
 
@@ -2622,16 +2642,16 @@ struct DeviceView: View {
                 Card {
                     Grid(alignment: .leading, horizontalSpacing: 28, verticalSpacing: 11) {
                         GridRow {
-                            fact("录音豆里的录音", "\(onDevice.count) 条" + (waiting > 0 ? "，\(waiting) 条没下载" : "，都已下载"))
-                            fact("还能录", hoursLeft >= 100 ? "约 \(Int(hoursLeft)) 小时" : String(format: "约 %.1f 小时", hoursLeft))
+                            fact(String(localized: "录音豆里的录音"), String(localized: "\(onDevice.count) 条") + (waiting > 0 ? String(localized: "，\(waiting) 条没下载") : String(localized: "，都已下载")))
+                            fact(String(localized: "还能录"), hoursLeft >= 100 ? String(localized: "约 \(Int(hoursLeft)) 小时") : String(format: String(localized: "约 %.1f 小时"), hoursLeft))
                         }
                         GridRow {
-                            fact("录音豆固件", info.firmware)
-                            fact("充电盒固件", info.caseFirmware.isEmpty ? "—" : info.caseFirmware)
+                            fact(String(localized: "录音豆固件"), info.firmware)
+                            fact(String(localized: "充电盒固件"), info.caseFirmware.isEmpty ? "—" : info.caseFirmware)
                         }
                         GridRow {
-                            fact("下载加密", store.encryptionReady ? "密钥已协商" : "还没协商好，暂时不能下载", warn: !store.encryptionReady)
-                            fact("序列号", info.serial.uppercased())
+                            fact(String(localized: "下载加密"), store.encryptionReady ? String(localized: "密钥已协商") : String(localized: "还没协商好，暂时不能下载"), warn: !store.encryptionReady)
+                            fact(String(localized: "序列号"), info.serial.uppercased())
                         }
                     }
                     if waiting > 0 {
@@ -2929,7 +2949,7 @@ struct TranslatePanel: View {
                         .buttonStyle(.plain)
                     }
                 }
-                Text(style == .custom && store.settings.translatePrompt.isEmpty ? "还没写自定义提示词，在设置的「模型」里写。没写的话按通用风格译。" : style.hint)
+                Text(style == .custom && store.settings.translatePrompt.isEmpty ? String(localized: "还没写自定义提示词，在设置的「模型」里写。没写的话按通用风格译。") : style.hint)
                     .font(.caption).foregroundStyle(Theme.warm500).fixedSize(horizontal: false, vertical: true)
             }
             Divider()

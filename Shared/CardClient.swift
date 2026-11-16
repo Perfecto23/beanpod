@@ -148,7 +148,7 @@ final class CardClient: NSObject, @preconcurrency CBCentralManagerDelegate, @pre
         let byMark = mfg.count >= 2 && UInt16(mfg[0]) | UInt16(mfg[1]) << 8 == GetSeed.companyID
         guard byName || byMark else { return }
 
-        let card = FoundCard(id: peripheral.identifier, name: name.isEmpty ? "得到录音卡" : name, rssi: RSSI.intValue)
+        let card = FoundCard(id: peripheral.identifier, name: name.isEmpty ? String(localized: "得到录音卡") : name, rssi: RSSI.intValue)
         peripherals[peripheral.identifier] = peripheral
         found[peripheral.identifier] = card
         if awaiting {

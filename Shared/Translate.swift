@@ -17,27 +17,27 @@ nonisolated enum TranslateStyle: String, CaseIterable, Identifiable, Codable {
 
     var name: String {
         switch self {
-        case .general: "通用"
-        case .tech: "科技"
-        case .fiction: "小说"
-        case .academic: "学术文献"
-        case .news: "新闻"
-        case .forum: "社交论坛"
-        case .spoken: "口播字幕"
-        case .custom: "自定义"
+        case .general: String(localized: "通用")
+        case .tech: String(localized: "科技")
+        case .fiction: String(localized: "小说")
+        case .academic: String(localized: "学术文献")
+        case .news: String(localized: "新闻")
+        case .forum: String(localized: "社交论坛")
+        case .spoken: String(localized: "口播字幕")
+        case .custom: String(localized: "自定义")
         }
     }
 
     var hint: String {
         switch self {
-        case .general: "准确、通顺，读起来像中文母语者写的。"
-        case .tech: "术语、产品名、代码和 API 名保留原文，第一次出现时括注中文。"
-        case .fiction: "保留人物口吻、语气和节奏，文学性优先。"
-        case .academic: "术语规范、句式严谨，长句可拆分，不加主观发挥。"
-        case .news: "简洁客观，人名地名用通行译法。"
-        case .forum: "像 Reddit、推特这样的帖子：口语化，梗和语气要对上，缩写意译。"
-        case .spoken: "短句、适合朗读，便于做字幕或配音。"
-        case .custom: "用你在设置里写的提示词。"
+        case .general: String(localized: "准确、通顺，读起来像中文母语者写的。")
+        case .tech: String(localized: "术语、产品名、代码和 API 名保留原文，第一次出现时括注中文。")
+        case .fiction: String(localized: "保留人物口吻、语气和节奏，文学性优先。")
+        case .academic: String(localized: "术语规范、句式严谨，长句可拆分，不加主观发挥。")
+        case .news: String(localized: "简洁客观，人名地名用通行译法。")
+        case .forum: String(localized: "像 Reddit、推特这样的帖子：口语化，梗和语气要对上，缩写意译。")
+        case .spoken: String(localized: "短句、适合朗读，便于做字幕或配音。")
+        case .custom: String(localized: "用你在设置里写的提示词。")
         }
     }
 
@@ -131,9 +131,9 @@ extension BeanStore {
                 recordings[i].translation = Translation(language: language, style: style.name, lines: out, model: model)
                 saveLibrary()
                 addLog("翻译完成 \(rid)：\(out.count) 句，模型 \(model)")
-                toast("character.bubble", "翻译好了：\(rec.displayTitle.prefix(16))")
+                toast("character.bubble", String(localized: "翻译好了：\(String(rec.displayTitle.prefix(16)))"))
             } catch {
-                problem = Problem(title: "没能翻译", detail: error.localizedDescription)
+                problem = Problem(title: String(localized: "没能翻译"), detail: error.localizedDescription)
             }
         }
     }

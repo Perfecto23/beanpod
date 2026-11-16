@@ -13,15 +13,15 @@ nonisolated enum CloudASRError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .badURL: "云端转写的接口地址不对"
+        case .badURL: String(localized: "云端转写的接口地址不对")
         case .http(let code, let body):
             switch code {
-            case 401, 403: "云端转写的密钥不对，或者没有权限（\(code)）"
-            case 429: "云端转写被限流了，过一会儿再试（429）"
-            case 404: "这个地址没有转写接口（404）。检查一下接口地址，或者在设置里换一家能转写的服务。"
-            default: "云端转写返回错误 \(code)：\(body.prefix(160))"
+            case 401, 403: String(localized: "云端转写的密钥不对，或者没有权限（\(code)）")
+            case 429: String(localized: "云端转写被限流了，过一会儿再试（429）")
+            case 404: String(localized: "这个地址没有转写接口（404）。检查一下接口地址，或者在设置里换一家能转写的服务。")
+            default: String(localized: "云端转写返回错误 \(code)：\(String(body.prefix(160)))")
             }
-        case .noText: "云端转写没有返回文字"
+        case .noText: String(localized: "云端转写没有返回文字")
         }
     }
 }
@@ -33,8 +33,8 @@ nonisolated enum CloudASRError: LocalizedError {
 /// 服务商给不给时间戳不一定：给了就用它的分句，没给就按标点自己分句、按字数估时间。
 nonisolated enum CloudASR {
     static let presets: [(name: String, url: String, model: String)] = [
-        ("小米 MiMo", "https://api.xiaomimimo.com/v1", "mimo-v2.5-asr"),
-        ("硅基流动", "https://api.siliconflow.cn/v1", "FunAudioLLM/SenseVoiceSmall"),
+        (String(localized: "小米 MiMo"), "https://api.xiaomimimo.com/v1", "mimo-v2.5-asr"),
+        (String(localized: "硅基流动"), "https://api.siliconflow.cn/v1", "FunAudioLLM/SenseVoiceSmall"),
         ("OpenAI", "https://api.openai.com/v1", "whisper-1"),
         ("Groq", "https://api.groq.com/openai/v1", "whisper-large-v3-turbo"),
     ]

@@ -13,11 +13,11 @@ struct FeishuPanel: View {
                 header
                 switch sync.link {
                 case .noTool:
-                    hint("这台 Mac 没装飞书命令行工具 lark-cli。在终端里运行 npm install -g @larksuite/cli，再运行 lark-cli config init 和 lark-cli auth login --domain minutes 授权后回来点「现在检查」。")
+                    hint(String(localized: "这台 Mac 没装飞书命令行工具 lark-cli。在终端里运行 npm install -g @larksuite/cli，再运行 lark-cli config init 和 lark-cli auth login --domain minutes 授权后回来点「现在检查」。"))
                 case .notLoggedIn:
-                    hint("还没授权豆仓读取你的飞书妙记。在终端里运行 lark-cli auth login --domain minutes，在浏览器里确认后回来点「现在检查」。")
+                    hint(String(localized: "还没授权豆仓读取你的飞书妙记。在终端里运行 lark-cli auth login --domain minutes，在浏览器里确认后回来点「现在检查」。"))
                 case .failed(let why):
-                    hint("没连上飞书：\(why)")
+                    hint(String(localized: "没连上飞书：\(why)"))
                 default:
                     list
                 }
@@ -57,10 +57,10 @@ struct FeishuPanel: View {
 
     private var stateText: String {
         switch sync.link {
-        case .ready: "已连接 · 你的飞书账号"
-        case .checking: "正在查…"
-        case .noTool, .notLoggedIn: "还没连上"
-        case .failed: "出了点问题"
+        case .ready: String(localized: "已连接 · 你的飞书账号")
+        case .checking: String(localized: "正在查…")
+        case .noTool, .notLoggedIn: String(localized: "还没连上")
+        case .failed: String(localized: "出了点问题")
         case .unknown: ""
         }
     }
@@ -99,9 +99,9 @@ struct FeishuPanel: View {
     }
 
     private var listTitle: String {
-        guard let t = sync.lastChecked else { return "最近的妙记" }
+        guard let t = sync.lastChecked else { return String(localized: "最近的妙记") }
         let ago = Int(Date.now.timeIntervalSince(t) / 60)
-        return "最近的妙记 · 上次检查" + (ago < 1 ? "刚刚" : " \(ago) 分钟前")
+        return ago < 1 ? String(localized: "最近的妙记 · 上次检查刚刚") : String(localized: "最近的妙记 · 上次检查 \(ago) 分钟前")
     }
 
     private func row(_ m: FeishuSync.Minute) -> some View {
@@ -144,9 +144,9 @@ struct FeishuPanel: View {
     /// 录音豆 App 的默认标题里有录音时间，用它；否则写上传时间
     private func meta(_ m: FeishuSync.Minute) -> String {
         let f = Date.FormatStyle.dateTime.month().day().hour().minute()
-        let when = m.recorded.map { $0.formatted(f) } ?? m.uploaded.map { "\($0.formatted(f)) 上传" } ?? ""
+        let when = m.recorded.map { $0.formatted(f) } ?? m.uploaded.map { String(localized: "\($0.formatted(f)) 上传") } ?? ""
         let d = Int(m.duration.rounded())
-        let len = d >= 3600 ? "\(d / 3600) 小时 \(d % 3600 / 60) 分钟" : d >= 60 ? "\(d / 60) 分钟" : "\(d) 秒"
+        let len = d >= 3600 ? String(localized: "\(d / 3600) 小时 \(d % 3600 / 60) 分钟") : d >= 60 ? String(localized: "\(d / 60) 分钟") : String(localized: "\(d) 秒")
         return [when, len].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 

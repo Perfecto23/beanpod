@@ -16,10 +16,10 @@ nonisolated enum AnalyzerError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured: "还没有设置分析模型。"
-        case .http(let code, let body): "分析模型返回错误 \(code)：\(body.prefix(200))"
-        case .badReply(let why): "分析模型的回答看不懂：\(why)"
-        case .unreachable(let why): "连不上分析模型：\(why)"
+        case .notConfigured: String(localized: "还没有设置分析模型。")
+        case .http(let code, let body): String(localized: "分析模型返回错误 \(code)：\(String(body.prefix(200)))")
+        case .badReply(let why): String(localized: "分析模型的回答看不懂：\(why)")
+        case .unreachable(let why): String(localized: "连不上分析模型：\(why)")
         }
     }
 }
@@ -62,7 +62,7 @@ nonisolated enum Analyzer {
               let choices = root["choices"] as? [[String: Any]],
               let message = choices.first?["message"] as? [String: Any],
               let content = message["content"] as? String else {
-            throw AnalyzerError.badReply("没有 choices")
+            throw AnalyzerError.badReply(String(localized: "没有 choices"))
         }
         return stripThinking(content)
     }
@@ -96,19 +96,19 @@ nonisolated enum Analyzer {
             var notes: [String] = []
             for (i, chunk) in split(transcript, size: 6000).enumerated() {
                 let note = try await chat(config,
-                    system: "你在帮人整理一段长录音的文字稿。这是其中第 \(i + 1) 段。用中文列出这一段里的事实、观点、数字、人名、约定和待办，每条一行，不要评论，不要编造。",
+                    system: "你在帮人整理一段长录音的文字稿。这是其中第 \(i + 1) 段。用\(NotesLanguage.promptName)列出这一段里的事实、观点、数字、人名、约定和待办，每条一行，不要评论，不要编造。",
                     user: chunk, json: false)
                 notes.append("【第 \(i + 1) 段】\n" + note)
             }
             material = notes.joined(separator: "\n\n")
         }
 
-        let sceneGuide = Scene.allCases.map { "- \($0.rawValue)（\($0.name)）：\($0.definition)。栏目：\($0.headings.joined(separator: "、"))" }
+        let sceneGuide = Scene.allCases.map { "- \($0.rawValue)（\($0.promptName)）：\($0.definition)。栏目：\($0.headings.joined(separator: "、"))" }
             .joined(separator: "\n")
         let sceneRule = fixedScene.map { "场景已经确定是 \($0.rawValue)，不要改。" }
             ?? "先判断场景，从下面的英文代号里选一个。"
         let system = """
-        你是录音整理助手。使用者的职业是「\(profession.name)」，\(profession.focus)
+        你是录音整理助手。使用者的职业是「\(profession.promptName)」，\(profession.promptFocus)
 
         \(sceneRule)
         \(sceneGuide)
@@ -116,7 +116,7 @@ nonisolated enum Analyzer {
         然后只输出一个 JSON 对象，不要任何别的文字：
         {
           "scene": "场景的英文代号",
-          "title": "一句话标题，不超过 18 个字，说清这段录音是什么事",
+          "title": "\(NotesLanguage.isEnglish ? "一句话英文标题，不超过 10 个单词" : "一句话标题，不超过 18 个字")，说清这段录音是什么事",
           "summary": "两到四句话的摘要，先说结论",
           "sections": [{"heading": "所选场景的栏目名", "items": ["这一栏下的要点，每条一句完整的话"]}],
           "todos": ["后续要做的事，写清谁、做什么、什么时候；没有就给空数组"],
@@ -127,9 +127,9 @@ nonisolated enum Analyzer {
         要求：
         - sections 必须使用所选场景的栏目名，某一栏没有内容就不要输出这一栏。
         - 只写录音里真有的内容。数字、金额、日期、人名照原样写，听不清的不要猜。
-        - 全部用简体中文。
+        - \(NotesLanguage.rule)
         """
-        let user = "录音时长：\(spokenDuration(duration))\n\n文字稿：\n\(material)"
+        let user = "录音时长：\(promptDuration(duration))\n\n文字稿：\n\(material)"
         let reply = try await chat(config, system: system, user: user, json: true)
         return try parse(reply, fixedScene: fixedScene, source: config.model)
     }
@@ -137,15 +137,15 @@ nonisolated enum Analyzer {
     static func parse(_ reply: String, fixedScene: Scene?, source: String) throws -> Analysis {
         guard let start = reply.firstIndex(of: "{"), let end = reply.lastIndex(of: "}"),
               let obj = try? JSONSerialization.jsonObject(with: Data(reply[start...end].utf8)) as? [String: Any] else {
-            throw AnalyzerError.badReply("不是 JSON")
+            throw AnalyzerError.badReply(String(localized: "不是 JSON"))
         }
         func strings(_ any: Any?) -> [String] {
             (any as? [Any] ?? []).compactMap { ($0 as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         }
         let sceneText = (obj["scene"] as? String ?? "").lowercased()
-        let scene = fixedScene ?? Scene(rawValue: sceneText) ?? Scene.allCases.first { $0.name == sceneText } ?? .other
+        let scene = fixedScene ?? Scene(rawValue: sceneText) ?? Scene.allCases.first { $0.promptName == sceneText || $0.name == sceneText } ?? .other
         let summary = (obj["summary"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !summary.isEmpty else { throw AnalyzerError.badReply("没有摘要") }
+        guard !summary.isEmpty else { throw AnalyzerError.badReply(String(localized: "没有摘要")) }
         let sections = (obj["sections"] as? [[String: Any]] ?? []).compactMap { s -> NoteSection? in
             let items = strings(s["items"])
             guard let heading = s["heading"] as? String, !items.isEmpty else { return nil }
@@ -207,7 +207,7 @@ nonisolated enum Analyzer {
             guard let a = reply.firstIndex(of: "{"), let b = reply.lastIndex(of: "}"),
                   let obj = try? JSONSerialization.jsonObject(with: Data(reply[a...b].utf8)) as? [String: Any],
                   let cleaned = obj["lines"] as? [String], cleaned.count == batch.count else {
-                throw AnalyzerError.badReply("润色结果的句数对不上")
+                throw AnalyzerError.badReply(String(localized: "润色结果的句数对不上"))
             }
             out += cleaned.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         }
@@ -219,7 +219,7 @@ nonisolated enum Analyzer {
     static func rewrite(material: String, instruction: String, profession: Profession, config: LLMConfig) async throws -> String {
         try await chat(config,
             system: """
-            你是一位文字编辑。使用者的职业是「\(profession.name)」。下面是他一段录音的内容，请按要求改写。
+            你是一位文字编辑。使用者的职业是「\(profession.promptName)」。下面是他一段录音的内容，请按要求改写。
             要求：\(instruction)
             只用录音里有的事实、观点和例子，不要编造数据或经历。录音里的口语垫词不要带进成品。
             直接输出成品，不要解释你做了什么。
@@ -232,7 +232,30 @@ nonisolated enum Analyzer {
     static func answer(question: String, context: [(title: String, text: String)], config: LLMConfig) async throws -> String {
         let material = context.enumerated().map { "[\($0.offset + 1)]《\($0.element.title)》\n\($0.element.text)" }.joined(separator: "\n\n")
         return try await chat(config,
-            system: "你根据用户自己的录音记录回答问题。只用下面给出的材料，材料里没有就直说没有记录到，不要编。回答简洁，用简体中文，在相关句子后面用 [编号] 标出依据。",
+            system: "你根据用户自己的录音记录回答问题。只用下面给出的材料，材料里没有就直说没有记录到，不要编。回答简洁，用提问所用的语言回答，在相关句子后面用 [编号] 标出依据。",
             user: "材料：\n\(material)\n\n问题：\(question)", json: false)
+    }
+}
+
+
+/// 纪要用什么语言写（设置 → 通用 → 语言里的「纪要语言」）：默认跟着界面语言，也可以固定中文或英文。
+/// 只管模型写的纪要、标题、摘要、待办、标签和长录音的分段要点；英语学习模式的讲解仍用中文（给中文母语者学英语用）。
+nonisolated enum NotesLanguage {
+    /// UserDefaults "notesLanguage"：auto（默认）/ zh-Hans / en
+    static var isEnglish: Bool {
+        switch UserDefaults.standard.string(forKey: "notesLanguage") ?? "auto" {
+        case "en": return true
+        case "zh-Hans": return false
+        default: return (Bundle.main.preferredLocalizations.first ?? "zh-Hans").hasPrefix("en")
+        }
+    }
+
+    static var promptName: String { isEnglish ? "英文（English）" : "简体中文" }
+
+    /// 写进整理提示词的那一条要求
+    static var rule: String {
+        isEnglish
+            ? "全部用英文（English）写：title、summary、sections 的 heading 和 items、todos、tags 都用英文；heading 把所选场景的栏目名译成英文。人名、专有名词照原样。"
+            : "全部用简体中文。"
     }
 }

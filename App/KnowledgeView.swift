@@ -15,10 +15,10 @@ struct KnowledgeView: View {
 
     /// 几个现成的问题：按这个人自己的录音来出，点一下就问。
     private var suggestions: [String] {
-        var out = ["最近这几天我都聊了什么？", "我还有哪些答应了别人、还没做的事？"]
-        if let tag = store.allTags.first?.tag { out.append("关于「\(tag)」都说过什么？") }
-        if let person = store.allPeople.first { out.append("和\(person)聊过哪些事？") }
-        out.append("有哪些想法还没落实？")
+        var out = [String(localized: "最近这几天我都聊了什么？"), String(localized: "我还有哪些答应了别人、还没做的事？")]
+        if let tag = store.allTags.first?.tag { out.append(String(localized: "关于「\(tag)」都说过什么？")) }
+        if let person = store.allPeople.first { out.append(String(localized: "和\(person)聊过哪些事？")) }
+        out.append(String(localized: "有哪些想法还没落实？"))
         return out
     }
 
@@ -141,7 +141,7 @@ struct KnowledgeView: View {
                         HStack {
                             Text("回答由模型根据上面的录音生成，可能有错，请点开原录音核实。").font(.caption).foregroundStyle(.tertiary)
                             Spacer()
-                            Button("拷贝") { copy(answer); store.toast("doc.on.doc", "已拷贝") }.buttonStyle(.plain).foregroundStyle(Theme.accent).font(.callout)
+                            Button("拷贝") { copy(answer); store.toast("doc.on.doc", String(localized: "已拷贝")) }.buttonStyle(.plain).foregroundStyle(Theme.accent).font(.callout)
                             Button("清掉") { store.answer = nil; store.answerSources = []; asked = "" }.buttonStyle(.plain).foregroundStyle(.secondary).font(.callout)
                         }
                     }
@@ -266,7 +266,7 @@ struct KnowledgeView: View {
                 Text(query.isEmpty ? "符合条件的 \(order.count) 条录音" : "「\(query)」出现在 \(order.count) 条录音里").font(.headline)
                 Spacer()
                 if !query.isEmpty, store.analysisAvailable {
-                    Button("让 AI 总结这些") { submit("关于「\(query)」都说过什么？") }.buttonStyle(.plain).foregroundStyle(Theme.accent)
+                    Button("让 AI 总结这些") { submit(String(localized: "关于「\(query)」都说过什么？")) }.buttonStyle(.plain).foregroundStyle(Theme.accent)
                 }
                 if !query.isEmpty { Button("清除") { query = "" }.buttonStyle(.plain).foregroundStyle(.secondary) }
             }

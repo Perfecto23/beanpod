@@ -62,7 +62,7 @@ struct RecordStage: View {
                 .opacity(paused ? 1 : 0.55 + 0.45 * Double(level))
                 .animation(.easeOut(duration: 0.25), value: level)
             Text(paused ? "已暂停" : "正在录音").font(.callout.weight(.semibold)).tracking(1.5)
-            Text(store.recordingOnMac ? "这台 Mac · " + store.macSource.name : store.displayDeviceName + (store.info.map { " · \($0.micBattery)%" } ?? ""))
+            Text(store.recordingOnMac ? String(localized: "这台 Mac · \(store.macSource.name)") : store.displayDeviceName + (store.info.map { " · \($0.micBattery)%" } ?? ""))
                 .font(.callout).foregroundStyle(Theme.paper.opacity(0.45))
             Spacer()
             Button { nav.stageOpen = false } label: {
@@ -175,7 +175,7 @@ struct RecordStage: View {
                     .buttonStyle(.glass).controlSize(.extraLarge).help("字大一点").accessibilityLabel("字大一点")
                 Button {
                     copy(store.liveSegments.map { store.settings.liveTidy ? stripFillers($0.text) : $0.text }.joined(separator: "\n"))
-                    store.toast("doc.on.doc", "已拷贝")
+                    store.toast("doc.on.doc", String(localized: "已拷贝"))
                 } label: { Image(systemName: "doc.on.doc") }
                     .buttonStyle(.glass).controlSize(.extraLarge).help("拷贝到现在为止的全部文字").accessibilityLabel("拷贝全部文字")
             }

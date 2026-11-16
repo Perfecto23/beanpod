@@ -55,7 +55,7 @@ extension BeanStore {
         }
         saveLibrary()
         if moved > 0 {
-            toast("folder", project.flatMap { self.project($0)?.name }.map { "\(moved) 条放进了「\($0)」" } ?? "\(moved) 条移出了项目")
+            toast("folder", project.flatMap { self.project($0)?.name }.map { String(localized: "\(moved) 条放进了「\($0)」") } ?? String(localized: "\(moved) 条移出了项目"))
         }
     }
 

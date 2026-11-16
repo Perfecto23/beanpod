@@ -79,6 +79,10 @@
 
 ![语音输入：像输入法的历史，记着每句打进了哪个软件](docs/screenshots/dictation.jpg)
 
+**多语言**
+- 界面支持简体中文（默认）和英文：默认跟随系统，系统不是中文时显示英文；也可以在「设置 → 通用 → 语言」里固定。纪要、标题、待办这些模型写的内容，语言单独设（「纪要语言」，默认跟随界面）
+- 界面文字都在 `App/Localizable.xcstrings`（苹果的 String Catalog）。想加一种语言：编译一次，运行 `python3 scripts/i18n-sync.py --lang ja --missing ja.json` 拿到待翻译清单，翻好后 `--apply` 合进去，再在 `App/Language.swift` 里加一个选项。欢迎提 PR
+
 **接上 AI 助手**
 - 豆仓自带 MCP 服务和命令行工具，Claude Code、Codex、Claude 桌面版、OpenClaw 可以一键连接。连上后在助手里就能查录音、纪要和待办，也能让助手把内容存进豆仓。详见下面的[接入 AI 助手](#接入-ai-助手)
 

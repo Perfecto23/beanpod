@@ -62,19 +62,19 @@ final class RenoiseSetup {
 
     /// 安装或更新命令行工具：读官方清单 → 下对应这台 Mac 的包 → 核对校验值 → 解开 → 放进 ~/.local/bin。
     func install() async {
-        busy = "正在安装 Renoise…"; note = nil
+        busy = String(localized: "正在安装 Renoise…"); note = nil
         defer { busy = nil }
         do {
             let (data, _) = try await URLSession.shared.data(from: Self.index)
             guard let m = try JSONSerialization.jsonObject(with: data) as? [String: Any], m["schemaVersion"] as? Int == 1,
                   let tag = m["version"] as? String, tag.wholeMatch(of: /v\d+\.\d+\.\d+/) != nil,
                   let assets = m["assets"] as? [String], let sums = m["checksums"] as? String,
-                  ([sums] + assets).allSatisfy({ $0.wholeMatch(of: /[\w.-]+/) != nil }) else { throw Failure("官方的发布清单读不懂。") }
+                  ([sums] + assets).allSatisfy({ $0.wholeMatch(of: /[\w.-]+/) != nil }) else { throw Failure(String(localized: "官方的发布清单读不懂。")) }
             var uts = utsname(); uname(&uts)
             let machine = withUnsafeBytes(of: &uts.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
             let arch = machine.contains("arm64") ? ["arm64", "aarch64"] : ["amd64", "x86_64"]
             let picks = assets.filter { n in n.hasSuffix(".tar.gz") && (n.contains("darwin") || n.contains("macos")) && arch.contains { n.contains($0) } }
-            guard picks.count == 1, let name = picks.first else { throw Failure("清单里没有适合这台 Mac 的安装包。") }
+            guard picks.count == 1, let name = picks.first else { throw Failure(String(localized: "清单里没有适合这台 Mac 的安装包。")) }
 
             let work = FileManager.default.temporaryDirectory.appendingPathComponent("beanpod-renoise-\(UUID().uuidString)", isDirectory: true)
             try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
@@ -85,7 +85,7 @@ final class RenoiseSetup {
             let expected = String(decoding: sumData, as: UTF8.self).split(separator: "\n")
                 .first { $0.hasSuffix("  \(name)") || $0.hasSuffix(" *\(name)") }?.split(separator: " ").first.map { $0.lowercased() }
             let actual = SHA256.hash(data: archive).map { String(format: "%02x", $0) }.joined()
-            guard let expected, expected.count == 64, expected == actual else { throw Failure("安装包的校验值对不上，没有安装。换个网络再试。") }
+            guard let expected, expected.count == 64, expected == actual else { throw Failure(String(localized: "安装包的校验值对不上，没有安装。换个网络再试。")) }
 
             let file = work.appendingPathComponent(name)
             try archive.write(to: file)
@@ -93,45 +93,45 @@ final class RenoiseSetup {
             try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
             guard (await Self.shell("/usr/bin/tar -xf '\(file.path)' -C '\(out.path)'")).ok,
                   let binary = FileManager.default.enumerator(at: out, includingPropertiesForKeys: nil)?
-                    .compactMap({ $0 as? URL }).first(where: { $0.lastPathComponent == "renoise" }) else { throw Failure("安装包解不开。") }
+                    .compactMap({ $0 as? URL }).first(where: { $0.lastPathComponent == "renoise" }) else { throw Failure(String(localized: "安装包解不开。")) }
             let target = Self.target
             try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
             if FileManager.default.fileExists(atPath: target.path) { _ = try FileManager.default.replaceItemAt(target, withItemAt: binary) }
             else { try FileManager.default.moveItem(at: binary, to: target) }
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: target.path)
-            guard (await Self.shell("'\(target.path)' version")).ok else { throw Failure("装上了但运行不起来。") }
-            note = (true, "Renoise \(tag) 装好了，在 ~/.local/bin/renoise。下一步是登录。")
+            guard (await Self.shell("'\(target.path)' version")).ok else { throw Failure(String(localized: "装上了但运行不起来。")) }
+            note = (true, String(localized: "Renoise \(tag) 装好了，在 ~/.local/bin/renoise。下一步是登录。"))
         } catch let f as Failure {
             note = (false, f.text)
         } catch {
-            note = (false, "没装成：\(error.localizedDescription)")
+            note = (false, String(localized: "没装成：\(error.localizedDescription)"))
         }
         await refresh()
     }
 
     /// 登录：让 Renoise 自己打开浏览器，用户在网页上点「允许并连接」。豆仓不经手密码和密钥。
     func login() async {
-        busy = "正在等你在浏览器里登录…"; note = nil
+        busy = String(localized: "正在等你在浏览器里登录…"); note = nil
         defer { busy = nil }
         let r = await Self.shell("'\(Self.target.path)' auth login --web --json 2>&1 || renoise auth login --web --json")
         await refresh()
-        note = loggedIn ? (true, "登录好了。") : (false, "还没登录上：" + VideoMaker.tail(r.output))
+        note = loggedIn ? (true, String(localized: "登录好了。")) : (false, String(localized: "还没登录上：\(VideoMaker.tail(r.output))"))
     }
 
     func installClaudePlugin() async {
-        busy = "正在给 Claude Code 装 Renoise 插件…"; note = nil
+        busy = String(localized: "正在给 Claude Code 装 Renoise 插件…"); note = nil
         defer { busy = nil }
         _ = await Self.shell("claude plugin marketplace add ArcoCodes/renoise-plugins-official")
         let r = await Self.shell("claude plugin install renoise@renoise-plugins-official")
-        note = r.ok ? (true, "Claude Code 里装好了。新开一个会话，说「用 Renoise 做一条视频」就行。") : (false, "没装成：" + VideoMaker.tail(r.output))
+        note = r.ok ? (true, String(localized: "Claude Code 里装好了。新开一个会话，说「用 Renoise 做一条视频」就行。")) : (false, String(localized: "没装成：\(VideoMaker.tail(r.output))"))
         await refresh()
     }
 
     func installOpenClawPlugin() async {
-        busy = "正在给 OpenClaw 装 Renoise 插件…"; note = nil
+        busy = String(localized: "正在给 OpenClaw 装 Renoise 插件…"); note = nil
         defer { busy = nil }
         let r = await Self.shell("openclaw plugins install @renoise/plugin")
-        note = r.ok ? (true, "OpenClaw 里装好了。") : (false, "没装成：" + VideoMaker.tail(r.output))
+        note = r.ok ? (true, String(localized: "OpenClaw 里装好了。")) : (false, String(localized: "没装成：\(VideoMaker.tail(r.output))"))
         await refresh()
     }
 
@@ -161,17 +161,17 @@ struct RenoiseCard: View {
             Text("豆仓里「改写」下面的「做成视频」靠它生成数字人口播。它是按积分收费的服务，每次生成前豆仓都会先报价。")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
 
-            step(1, "安装命令行工具", renoise.installed ? "已安装 \(renoise.version)" + (renoise.updatable ? "，官方最新是 \(renoise.latest)" : "") : "从 Renoise 官方下载，核对校验值后放进 ~/.local/bin。",
+            step(1, String(localized: "安装命令行工具"), renoise.installed ? String(localized: "已安装 \(renoise.version)") + (renoise.updatable ? String(localized: "，官方最新是 \(renoise.latest)") : "") : String(localized: "从 Renoise 官方下载，核对校验值后放进 ~/.local/bin。"),
                  done: renoise.installed) {
                 if !renoise.installed { Button("安装") { Task { await renoise.install() } }.buttonStyle(.glassProminent) }
                 else if renoise.updatable { Button("更新") { Task { await renoise.install() } } }
             }
-            step(2, "登录账户", renoise.loggedIn ? "已登录" + (renoise.account.isEmpty ? "" : "：\(renoise.account)") + (renoise.balance.map { " · 余额 \(Int($0)) 积分" } ?? "")
-                    : "会打开浏览器，在网页上点「允许并连接」。豆仓不经手你的密码。",
+            step(2, String(localized: "登录账户"), renoise.loggedIn ? String(localized: "已登录") + (renoise.account.isEmpty ? "" : "：\(renoise.account)") + (renoise.balance.map { String(localized: " · 余额 \(Int($0)) 积分") } ?? "")
+                    : String(localized: "会打开浏览器，在网页上点「允许并连接」。豆仓不经手你的密码。"),
                  done: renoise.loggedIn) {
                 if renoise.installed, !renoise.loggedIn { Button("登录") { Task { await renoise.login() } }.buttonStyle(.glassProminent) }
             }
-            step(3, "给 AI 助手也装上（可选）", "装了之后，在助手里也能直接说「用 Renoise 做一条视频」。", done: renoise.claudePlugin == true || renoise.openclawPlugin == true) {
+            step(3, String(localized: "给 AI 助手也装上（可选）"), String(localized: "装了之后，在助手里也能直接说「用 Renoise 做一条视频」。"), done: renoise.claudePlugin == true || renoise.openclawPlugin == true) {
                 EmptyView()
             }
             HStack(spacing: 8) {
@@ -184,7 +184,7 @@ struct RenoiseCard: View {
                     else { Button("装到 OpenClaw") { Task { await renoise.installOpenClawPlugin() } } }
                 }
                 if renoise.hasCodex {
-                    Button("Codex：拷贝安装命令") { copy(RenoiseSetup.codexCommand); renoise.note = (true, "命令已拷贝。在终端里运行它，然后重开 Codex，到 Plugins 里装 renoise。") }
+                    Button("Codex：拷贝安装命令") { copy(RenoiseSetup.codexCommand); renoise.note = (true, String(localized: "命令已拷贝。在终端里运行它，然后重开 Codex，到 Plugins 里装 renoise。")) }
                 }
             }
             .font(.callout).padding(.leading, 44)

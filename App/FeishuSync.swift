@@ -144,10 +144,10 @@ final class FeishuSync {
             var args = ["minutes", "+search", "--owner-ids", "me", "--start", Self.day.string(from: since), "--page-size", "30", "--format", "json"]
             if let pageToken { args += ["--page-token", pageToken] }
             let r = await BeanStore.runTool(tool, args) { _ in }
-            guard let obj = Self.reply(r) else { link = .failed("飞书没有回话：\(r.errors.prefix(120))"); return }
+            guard let obj = Self.reply(r) else { link = .failed(String(localized: "飞书没有回话：\(r.errors.prefix(120))")); return }
             if let err = obj["error"] as? [String: Any] {
                 let type = err["type"] as? String ?? ""
-                link = type == "config" || type == "authorization" || type == "auth" ? .notLoggedIn : .failed(err["message"] as? String ?? "飞书报错")
+                link = type == "config" || type == "authorization" || type == "auth" ? .notLoggedIn : .failed(err["message"] as? String ?? String(localized: "飞书报错"))
                 return
             }
             let data = obj["data"] as? [String: Any] ?? [:]
@@ -216,7 +216,7 @@ final class FeishuSync {
                 if let file = Self.firstFile(in: dir, ext: ["txt"]), let raw = try? String(contentsOf: file, encoding: .utf8) {
                     id = store.importFeishuText(Self.cleanTranscript(raw), minute: m)
                 } else {
-                    let why = (Self.reply(det)?["error"] as? [String: Any])?["message"] as? String ?? "飞书没给文字稿"
+                    let why = (Self.reply(det)?["error"] as? [String: Any])?["message"] as? String ?? String(localized: "飞书没给文字稿")
                     errors[token] = why
                     store.addLog("飞书妙记 \(token) 文字稿没拿到：\(why)")
                 }
@@ -228,7 +228,7 @@ final class FeishuSync {
             }
         }
         if done > 0 {
-            store.announce("arrow.down.circle.fill", "从飞书妙记拉回了 \(done) 条录音", body: audioDenied ? "飞书没给音频，先用飞书的文字稿整理。" : "正在转写整理。")
+            store.announce("arrow.down.circle.fill", String(localized: "从飞书妙记拉回了 \(done) 条录音"), body: audioDenied ? String(localized: "飞书没给音频，先用飞书的文字稿整理。") : String(localized: "正在转写整理。"))
         }
     }
 
@@ -255,7 +255,7 @@ final class FeishuSync {
             audioDenied = false
             if await store.attachFeishuAudio(audio, to: id) { done += 1 }
         }
-        if done > 0 { store.announce("waveform", "给 \(done) 条飞书录音补上了音频", body: "正在重新转写，转完就能点句子回听。") }
+        if done > 0 { store.announce("waveform", String(localized: "给 \(done) 条飞书录音补上了音频"), body: String(localized: "正在重新转写，转完就能点句子回听。")) }
     }
 
     // MARK: 解析

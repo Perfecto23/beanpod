@@ -11,8 +11,8 @@ extension BeanStore {
     func importChannels(_ id: UUID, _ url: String) async {
         let platform = "视频号"
         guard let sph = ChannelsAPI.sphId(url) else {
-            problem = Problem(title: "这条视频号链接没能导入",
-                              detail: "链接里没找到作品号。在视频号里点「分享 → 复制链接」，贴进来的应该是 https://weixin.qq.com/sph/… 这样的链接。")
+            problem = Problem(title: String(localized: "这条视频号链接没能导入"),
+                              detail: String(localized: "链接里没找到作品号。在视频号里点「分享 → 复制链接」，贴进来的应该是 https://weixin.qq.com/sph/… 这样的链接。"))
             return
         }
         // 不登录也能看到标题和作者：先填上，列表里认得出是哪一条
@@ -21,7 +21,7 @@ extension BeanStore {
             addLog("视频号作品 \(sph)：@\(preview.author)「\(preview.title.prefix(30))」")
             setLinkJob(id, title: preview.title, progress: 0.1)
         }
-        let known = preview.map { "已经认出这条视频号：\($0.author.isEmpty ? "" : "@\($0.author) · ")\($0.title.prefix(36))。" } ?? ""
+        let known = preview.map { String(localized: "已经认出这条视频号：\($0.author.isEmpty ? "" : "@\($0.author) · ")\(String($0.title.prefix(36)))。") } ?? ""
 
         let file = Self.cookieFile(platform)
         guard let cookie = ChannelsAPI.cookieHeader(file) else {
@@ -37,15 +37,15 @@ extension BeanStore {
             let justLoggedIn = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
                 .map { Date.now.timeIntervalSince($0) < 300 } ?? false
             if justLoggedIn {
-                problem = Problem(title: "这条视频号链接没能导入",
-                                  detail: "\(known)刚登录的腾讯元宝没解析出这条视频\(why.isEmpty ? "" : "（\(why)）")。可能这条作品不让在网页上看，过一会儿再试。")
+                problem = Problem(title: String(localized: "这条视频号链接没能导入"),
+                                  detail: String(localized: "\(known)刚登录的腾讯元宝没解析出这条视频\(why.isEmpty ? "" : "（\(why)）")。可能这条作品不让在网页上看，过一会儿再试。"))
             } else {
                 try? FileManager.default.removeItem(at: file)
-                linkLogin = LinkLoginRequest(platform: platform, url: url, hint: "\(known)上次在豆仓登录的腾讯元宝过期了，再扫一次码。")
+                linkLogin = LinkLoginRequest(platform: platform, url: url, hint: String(localized: "\(known)上次在豆仓登录的腾讯元宝过期了，再扫一次码。"))
             }
         case .failed(let why):
             addLog("视频号导入失败：\(why)")
-            problem = Problem(title: "这条视频号链接没能导入", detail: known + why)
+            problem = Problem(title: String(localized: "这条视频号链接没能导入"), detail: known + why)
         case .found(let feed):
             let title = feed.title.isEmpty ? (preview?.title ?? "") : feed.title
             let author = feed.author.isEmpty ? (preview?.author ?? "") : feed.author
@@ -59,13 +59,13 @@ extension BeanStore {
             var got = false
             for link in feed.videos where !got { got = await ChannelsAPI.download(link, to: media) }
             guard got else {
-                problem = Problem(title: "这条视频号链接没能导入", detail: "\(known)视频地址拿到了，但没下下来。看看网络，再试一次。")
+                problem = Problem(title: String(localized: "这条视频号链接没能导入"), detail: String(localized: "\(known)视频地址拿到了，但没下下来。看看网络，再试一次。"))
                 return
             }
             setLinkJob(id, title: title, progress: 0.8)
             guard let audio = await audioTrack(of: media, in: work) else {
                 // 下下来的文件抽不出声音：多半是加密过的视频，或者给的不是视频
-                problem = Problem(title: "这条视频号链接没能导入", detail: "\(known)视频下下来了，但抽不出声音，可能是加密过的视频。")
+                problem = Problem(title: String(localized: "这条视频号链接没能导入"), detail: String(localized: "\(known)视频下下来了，但抽不出声音，可能是加密过的视频。"))
                 return
             }
             finishLinkImport(id, audio: audio, title: title, author: author,
@@ -118,7 +118,7 @@ nonisolated enum ChannelsAPI {
     static func video(share: String, cookie: String) async -> Outcome {
         guard let r = await post(yuanbaoAPI, ["type": "video_channel_url", "url": share, "scene": 1],
                                  headers: ["Origin": "https://yuanbao.tencent.com", "Referer": "https://yuanbao.tencent.com/", "Cookie": cookie]) else {
-            return .failed("连不上腾讯元宝。看看网络，再试一次。")
+            return .failed(String(localized: "连不上腾讯元宝。看看网络，再试一次。"))
         }
         let says = [r.json["msg"], r.json["message"], r.json["errMsg"]].compactMap { $0 as? String }.first { !$0.isEmpty } ?? ""
         if r.status == 401 || r.status == 403 { return .expired(says.isEmpty ? "HTTP \(r.status)" : says) }
@@ -131,10 +131,10 @@ nonisolated enum ChannelsAPI {
         guard let f = await post(feedAPI, ["baseReq": ["generalToken": token], "exportId": exportId],
                                  headers: ["Origin": "https://channels.weixin.qq.com",
                                            "Referer": "https://channels.weixin.qq.com/finder-preview/pages/feed"]) else {
-            return .failed("连不上视频号。看看网络，再试一次。")
+            return .failed(String(localized: "连不上视频号。看看网络，再试一次。"))
         }
         let feed = parse(f.json)
-        return feed.videos.isEmpty ? .failed("拿到了预览凭证，但视频号没给视频地址。可能这条作品不让在网页上看。") : .found(feed)
+        return feed.videos.isEmpty ? .failed(String(localized: "拿到了预览凭证，但视频号没给视频地址。可能这条作品不让在网页上看。")) : .found(feed)
     }
 
     static func parse(_ json: [String: Any]) -> Feed {

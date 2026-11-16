@@ -29,8 +29,8 @@ extension BeanStore {
         let list = wifiCandidates
         let seconds = list.reduce(0) { $0 + $1.duration }
         let ble = seconds / 3.7, wifi = 40 + seconds / 50
-        func about(_ t: Double) -> String { t < 90 ? "\(max(1, Int((t / 10).rounded())) * 10) 秒左右" : "\(Int((t / 60).rounded())) 分钟左右" }
-        return "\(list.count) 条录音，一共 \(clock(seconds))。蓝牙要 \(about(ble))，Wi‑Fi 快传 \(about(wifi))。"
+        func about(_ t: Double) -> String { t < 90 ? String(localized: "\(max(1, Int((t / 10).rounded())) * 10) 秒左右") : String(localized: "\(Int((t / 60).rounded())) 分钟左右") }
+        return String(localized: "\(list.count) 条录音，一共 \(clock(seconds))。蓝牙要 \(about(ble))，Wi‑Fi 快传 \(about(wifi))。")
     }
 
     func startWiFiSync() {
@@ -62,7 +62,7 @@ extension BeanStore {
         guard let r = wifiReply?.raw, r[4] & 0x0F == 1, r.count >= 15 else {
             note("录音豆没有打开 Wi‑Fi：\(wifiReply.map { $0.raw.hex } ?? "没有回包")")
             wifi = nil
-            problem = Problem(title: "录音豆没能打开 Wi‑Fi", detail: "这次改用蓝牙下载。可以把录音豆从充电盒里拿出来、放在电脑旁边再试。")
+            problem = Problem(title: String(localized: "录音豆没能打开 Wi‑Fi"), detail: String(localized: "这次改用蓝牙下载。可以把录音豆从充电盒里拿出来、放在电脑旁边再试。"))
             ids.forEach { download($0) }
             return
         }
@@ -96,7 +96,7 @@ extension BeanStore {
             wifi?.phase = .connecting
             (failure, stored) = await pullAll(ids, ip: ip, port: port, session: session, note: note)
         } else {
-            failure = "这台 Mac 没能连上录音豆的 Wi‑Fi"
+            failure = String(localized: "这台 Mac 没能连上录音豆的 Wi‑Fi")
         }
 
         // 4. 恢复 Wi‑Fi 和蓝牙
@@ -118,11 +118,11 @@ extension BeanStore {
         if settings.autoProcess { stored.forEach { process($0) } }
 
         if !back {
-            problem = Problem(title: "没能自动连回原来的 Wi‑Fi", detail: "请在菜单栏的 Wi‑Fi 图标里手动选一下原来的网络。" + (stored.isEmpty ? "" : "\n录音已经传回来 \(stored.count) 条。"))
+            problem = Problem(title: String(localized: "没能自动连回原来的 Wi‑Fi"), detail: String(localized: "请在菜单栏的 Wi‑Fi 图标里手动选一下原来的网络。") + (stored.isEmpty ? "" : "\n" + String(localized: "录音已经传回来 \(stored.count) 条。")))
         } else if let failure, !left.isEmpty {
-            problem = Problem(title: "Wi‑Fi 快传没有全部传完", detail: "\(failure)。传回来 \(stored.count) 条，剩下的 \(left.count) 条等蓝牙连上后接着下。")
+            problem = Problem(title: String(localized: "Wi‑Fi 快传没有全部传完"), detail: String(localized: "\(failure)。传回来 \(stored.count) 条，剩下的 \(left.count) 条等蓝牙连上后接着下。"))
         } else {
-            toast("checkmark.circle.fill", "Wi‑Fi 快传完成：\(stored.count) 条，用了 \(seconds) 秒")
+            toast("checkmark.circle.fill", String(localized: "Wi‑Fi 快传完成：\(stored.count) 条，用了 \(seconds) 秒"))
         }
     }
 
@@ -157,7 +157,7 @@ extension BeanStore {
             }
             return err
         }
-        if let err = await connect() { return ("连不上录音豆（\(err)）", stored) }
+        if let err = await connect() { return (String(localized: "连不上录音豆（\(err)）"), stored) }
         // 只用于自测断线续传：收到这么多个切片后故意把连接掐断一次
         var testCut = UserDefaults.standard.integer(forKey: "wifiDebugCutAfterSlices")
 
@@ -185,7 +185,7 @@ extension BeanStore {
             let t0 = Date.now
 
             attempt: while !done, !skip {
-                guard let s = socket else { return ("连接断了", stored) }
+                guard let s = socket else { return (String(localized: "连接断了"), stored) }
                 var decryptor: FileDecryptor?
                 var buffer: [UInt8] = []
                 var cut: String?
@@ -244,7 +244,7 @@ extension BeanStore {
                                 s.sendText(Command.wifiDoneText())
                                 break receive
                             case (0x1A, 0x06):
-                                return await finish("录音豆开始录音了，快传中止")
+                                return await finish(String(localized: "录音豆开始录音了，快传中止"))
                             default:
                                 note("\(id)：其他帧 \(p.raw.prefix(20).hex)（长 \(p.raw.count)）")
                             }
@@ -255,10 +255,10 @@ extension BeanStore {
                 // 连接断了：重连，从已经收到的地方接着要
                 reconnects += 1
                 note("\(id)：连接断了（\(cut ?? "未知")），已收 \(data.count) / \(expected) 字节，第 \(reconnects) 次重连")
-                guard reconnects <= 2 else { return await finish("连接反复中断") }
+                guard reconnects <= 2 else { return await finish(String(localized: "连接反复中断")) }
                 // 末尾可能是半截，退回到整帧
                 data = data.prefix(data.count / OggOpus.frameSize * OggOpus.frameSize)
-                if let err = await connect() { return ("重连不上录音豆（\(err)）", stored) }
+                if let err = await connect() { return (String(localized: "重连不上录音豆（\(err)）"), stored) }
             }
             if skip { continue }
 
@@ -269,7 +269,7 @@ extension BeanStore {
             // 官方客户端在两条之间停 0.6 秒
             try? await Task.sleep(for: .milliseconds(600))
         }
-        return await finish(stored.count == ids.count ? nil : "有 \(ids.count - stored.count) 条没传下来")
+        return await finish(stored.count == ids.count ? nil : String(localized: "有 \(ids.count - stored.count) 条没传下来"))
     }
 
     /// 回到原来的 Wi‑Fi。先等系统自己连回去；不行就把 Wi‑Fi 关了再开，让系统重新选网络。
@@ -358,7 +358,7 @@ nonisolated final class WiFiSocket: @unchecked Sendable {
 
     /// 连上返回 nil，连不上返回原因。
     func connect(host: String, port: Int, tls: Bool, timeout: Double) async -> String? {
-        guard let url = URL(string: "\(tls ? "wss" : "ws")://\(host):\(port)/") else { return "地址不对" }
+        guard let url = URL(string: "\(tls ? "wss" : "ws")://\(host):\(port)/") else { return String(localized: "地址不对") }
         let ws = NWProtocolWebSocket.Options()
         ws.autoReplyPing = true
         ws.maximumMessageSize = 64 * 1024 * 1024
@@ -393,13 +393,13 @@ nonisolated final class WiFiSocket: @unchecked Sendable {
                         answer(e.localizedDescription)
                         self.push(.closed(e.localizedDescription))
                     case .cancelled:
-                        answer("已取消")
+                        answer(String(localized: "已取消"))
                         self.push(.closed("已关闭"))
                     default: break
                     }
                 }
                 c.start(queue: self.queue)
-                self.queue.asyncAfter(deadline: .now() + timeout) { answer("\(Int(timeout)) 秒没连上") }
+                self.queue.asyncAfter(deadline: .now() + timeout) { answer(String(localized: "\(Int(timeout)) 秒没连上")) }
             }
         }
     }

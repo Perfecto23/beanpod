@@ -6,9 +6,9 @@ nonisolated enum TranscribeError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .denied: "没有语音识别权限，请到 系统设置 → 隐私与安全性 → 语音识别 里打开。"
-        case .unsupported(let lang): "这台 Mac 不支持「\(lang)」的本机识别。"
-        case .failed(let why): "转写失败：\(why)"
+        case .denied: String(localized: "没有语音识别权限，请到 系统设置 → 隐私与安全性 → 语音识别 里打开。")
+        case .unsupported(let lang): String(localized: "这台 Mac 不支持「\(lang)」的本机识别。")
+        case .failed(let why): String(localized: "转写失败：\(why)")
         }
     }
 }

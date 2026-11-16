@@ -24,7 +24,7 @@ struct SettingsView: View {
 /// 「去设置」按钮：直接打开设置里的模型页。全应用里叫用户去设置的地方，缺的都是模型。
 struct ModelSettingsLink: View {
     @Environment(\.openSettings) private var openSettings
-    var title = "去设置"
+    var title = String(localized: "去设置")
 
     var body: some View {
         Button(title) { SettingsView.open(.models, with: openSettings) }
@@ -64,7 +64,7 @@ private struct PaneFrame<Content: View>: View {
 }
 
 /// 一组设置：小标题、一张卡片、卡片下面的说明。卡片里每一行之间自动加分隔线。
-private struct SettingsGroup<Content: View, Accessory: View>: View {
+struct SettingsGroup<Content: View, Accessory: View>: View {
     var title: String?
     var footer: String?
     @ViewBuilder var accessory: Accessory
@@ -105,7 +105,7 @@ extension SettingsGroup where Accessory == EmptyView {
 }
 
 /// 一行设置：左边可选的小图标、标题和一行说明，右边是控件。
-private struct SettingRow<Trailing: View>: View {
+struct SettingRow<Trailing: View>: View {
     var icon: String?
     var title: String
     var detail: String?
@@ -152,7 +152,7 @@ private struct GeneralPane: View {
     var body: some View {
         @Bindable var settings = store.settings
         PaneFrame {
-            SettingsGroup("外观") {
+            SettingsGroup(String(localized: "外观")) {
                 HStack(spacing: 12) {
                     ForEach(AppSettings.Appearance.allCases) { mode in
                         AppearanceTile(mode: mode, selected: settings.appearance == mode) { settings.appearance = mode }
@@ -161,8 +161,10 @@ private struct GeneralPane: View {
                 .padding(.vertical, 5)
             }
 
-            SettingsGroup("我是做什么的", footer: "职业决定整理纪要时更看重什么。场景（会议、访谈、销售……）是每条录音自动判断的，判断错了可以在录音页面改。") {
-                SettingRow(icon: "person.crop.circle", title: "我的职业", detail: settings.profession.focus) {
+            LanguageSetting()
+
+            SettingsGroup(String(localized: "我是做什么的"), footer: String(localized: "职业决定整理纪要时更看重什么。场景（会议、访谈、销售……）是每条录音自动判断的，判断错了可以在录音页面改。")) {
+                SettingRow(icon: "person.crop.circle", title: String(localized: "我的职业"), detail: settings.profession.focus) {
                     Picker("我的职业", selection: $settings.profession) {
                         ForEach(Profession.allCases) { Text($0.name).tag($0) }
                     }
@@ -170,24 +172,24 @@ private struct GeneralPane: View {
                 }
             }
 
-            SettingsGroup("视频素材") {
+            SettingsGroup(String(localized: "视频素材")) {
                 VideoKeepSettings().padding(.vertical, 6)
             }
 
-            SettingsGroup("录音的时候和录完之后") {
-                SettingRow(icon: "captions.bubble", title: "边录边出字", detail: "录音时在舞台上实时显示文字。") {
+            SettingsGroup(String(localized: "录音的时候和录完之后")) {
+                SettingRow(icon: "captions.bubble", title: String(localized: "边录边出字"), detail: String(localized: "录音时在舞台上实时显示文字。")) {
                     Toggle("边录边出字", isOn: $settings.liveTranscribe).labelsHidden().toggleStyle(.switch)
                 }
-                SettingRow(icon: "doc.on.clipboard", title: "识别剪贴板里的视频链接", detail: "复制了抖音、B 站、YouTube 这些链接，切回豆仓时提示一键导入。只看链接，不存剪贴板内容。") {
+                SettingRow(icon: "doc.on.clipboard", title: String(localized: "识别剪贴板里的视频链接"), detail: String(localized: "复制了抖音、B 站、YouTube 这些链接，切回豆仓时提示一键导入。只看链接，不存剪贴板内容。")) {
                     Toggle("识别剪贴板里的视频链接", isOn: $settings.watchClipboard).labelsHidden().toggleStyle(.switch)
                 }
-                SettingRow(icon: "questionmark.bubble", title: "录完先问一句留不留", detail: "录完弹一张小卡片，不要的话当场删掉，哪里都不留。十秒不理它就默认留着。") {
+                SettingRow(icon: "questionmark.bubble", title: String(localized: "录完先问一句留不留"), detail: String(localized: "录完弹一张小卡片，不要的话当场删掉，哪里都不留。十秒不理它就默认留着。")) {
                     Toggle("录完先问一句留不留", isOn: $settings.askKeep).labelsHidden().toggleStyle(.switch)
                 }
-                SettingRow(icon: "arrow.down.circle", title: "自动从录音豆下载", detail: "录完一条、或者重新连上录音豆时，把还没下载的拉到这台 Mac 上。") {
+                SettingRow(icon: "arrow.down.circle", title: String(localized: "自动从录音豆下载"), detail: String(localized: "录完一条、或者重新连上录音豆时，把还没下载的拉到这台 Mac 上。")) {
                     Toggle("自动从录音豆下载", isOn: $settings.autoDownload).labelsHidden().toggleStyle(.switch)
                 }
-                SettingRow(icon: "wand.and.sparkles", title: "自动转写并整理", detail: "下载后直接出文字稿、纪要和待办。") {
+                SettingRow(icon: "wand.and.sparkles", title: String(localized: "自动转写并整理"), detail: String(localized: "下载后直接出文字稿、纪要和待办。")) {
                     Toggle("自动转写并整理", isOn: $settings.autoProcess).labelsHidden().toggleStyle(.switch)
                 }
             }
@@ -281,8 +283,8 @@ private struct DictationPane: View {
         @Bindable var settings = store.settings
         let on = settings.dictationEnabled
         PaneFrame {
-            SettingsGroup(footer: "把录音豆当随身麦克风：在任何 App 里按住你选的那个键，对着录音豆说话，松开后文字出现在光标处。") {
-                SettingRow(icon: "mic.fill", title: "按住按键说话，松开输入文字", detail: on ? "已打开。按住「\(Dictation.name(of: settings.dictationKey))」试试。" : "关着的时候，豆仓不会监听任何按键。") {
+            SettingsGroup(footer: String(localized: "把录音豆当随身麦克风：在任何 App 里按住你选的那个键，对着录音豆说话，松开后文字出现在光标处。")) {
+                SettingRow(icon: "mic.fill", title: String(localized: "按住按键说话，松开输入文字"), detail: on ? String(localized: "已打开。按住「\(Dictation.name(of: settings.dictationKey))」试试。") : String(localized: "关着的时候，豆仓不会监听任何按键。")) {
                     Toggle("语音输入", isOn: Binding(get: { settings.dictationEnabled }, set: {
                         settings.dictationEnabled = $0
                         dictation.refresh()
@@ -292,8 +294,8 @@ private struct DictationPane: View {
                 }
             }
 
-            SettingsGroup("怎么用") {
-                SettingRow(icon: "keyboard", title: "按住这个键", detail: dictation.recordingKey ? "现在按下你想用的那个键…" : nil) {
+            SettingsGroup(String(localized: "怎么用")) {
+                SettingRow(icon: "keyboard", title: String(localized: "按住这个键"), detail: dictation.recordingKey ? String(localized: "现在按下你想用的那个键…") : nil) {
                     Picker("按住这个键", selection: $settings.dictationKey) {
                         ForEach(Dictation.keys, id: \.code) { Text($0.name).tag($0.code) }
                         if !Dictation.keys.contains(where: { $0.code == settings.dictationKey }) {
@@ -307,36 +309,36 @@ private struct DictationPane: View {
                     }
                     .help("点一下，然后按下你想用的修饰键")
                 }
-                SettingRow(icon: "text.badge.checkmark", title: "把口语理顺再输入", detail: "去掉嗯啊和重复，句子更通顺。要多等几秒。") {
+                SettingRow(icon: "text.badge.checkmark", title: String(localized: "把口语理顺再输入"), detail: String(localized: "去掉嗯啊和重复，句子更通顺。要多等几秒。")) {
                     Toggle("把口语理顺再输入", isOn: $settings.dictationPolish).labelsHidden().toggleStyle(.switch)
                 }
-                SettingRow(icon: "keyboard", title: "记下说过的话", detail: "打字的同时，把这句话记进侧栏的「语音输入」（声音 + 文字），能回听、拷贝、搜索。不进录音列表，也不做 AI 整理。") {
+                SettingRow(icon: "keyboard", title: String(localized: "记下说过的话"), detail: String(localized: "打字的同时，把这句话记进侧栏的「语音输入」（声音 + 文字），能回听、拷贝、搜索。不进录音列表，也不做 AI 整理。")) {
                     Toggle("记下说过的话", isOn: $settings.dictationSave).labelsHidden().toggleStyle(.switch)
                 }
-                SettingRow(icon: "waveform.badge.minus", title: "原声保留", detail: "到期只删声音，文字一直留着。") {
+                SettingRow(icon: "waveform.badge.minus", title: String(localized: "原声保留"), detail: String(localized: "到期只删声音，文字一直留着。")) {
                     Picker("原声保留", selection: $settings.dictationAudioDays) {
                         Text("7 天").tag(7); Text("30 天").tag(30); Text("90 天").tag(90); Text("一直留着").tag(0)
                     }
                     .labelsHidden().fixedSize()
                 }
                 .disabled(!settings.dictationSave)
-                SettingRow(icon: "books.vertical", title: "知识库里也搜", detail: "问知识库、AI 助手查询时，把语音输入说过的话也算进去。默认不算，免得零碎的话干扰回答。") {
+                SettingRow(icon: "books.vertical", title: String(localized: "知识库里也搜"), detail: String(localized: "问知识库、AI 助手查询时，把语音输入说过的话也算进去。默认不算，免得零碎的话干扰回答。")) {
                     Toggle("知识库里也搜", isOn: $settings.dictationInKnowledge).labelsHidden().toggleStyle(.switch)
                 }
                 .disabled(!settings.dictationSave)
-                SettingRow(icon: "play.circle", title: "先试一次", detail: "录 5 秒，只显示识别结果，不会打进别的 App。") {
+                SettingRow(icon: "play.circle", title: String(localized: "先试一次"), detail: String(localized: "录 5 秒，只显示识别结果，不会打进别的 App。")) {
                     Button("试一次") { dictation.tryOnce() }
                 }
             }
             .disabled(!on)
             .opacity(on ? 1 : 0.5)
 
-            SettingsGroup("权限", footer: "豆仓要靠「辅助功能」权限来听到这个按键、把文字打进其他 App。没有权限时，文字只会放进剪贴板。") {
-                SettingRow(icon: "hand.raised", title: "辅助功能") {
+            SettingsGroup(String(localized: "权限"), footer: String(localized: "豆仓要靠「辅助功能」权限来听到这个按键、把文字打进其他 App。没有权限时，文字只会放进剪贴板。")) {
+                SettingRow(icon: "hand.raised", title: String(localized: "辅助功能")) {
                     if trusted {
-                        StatusPill(ok: true, text: "已允许")
+                        StatusPill(ok: true, text: String(localized: "已允许"))
                     } else {
-                        StatusPill(ok: false, text: "未允许")
+                        StatusPill(ok: false, text: String(localized: "未允许"))
                         Button("去授权") { dictation.requestAccessibility() }
                         Button("重新检查") { trusted = AXIsProcessTrusted(); dictation.refresh() }
                     }
@@ -391,13 +393,13 @@ private struct ModelsPane: View {
         }
         PaneFrame {
             // 设计稿 design/ui/ui_models2.png
-            ModelCard(icon: "cpu", title: "本机运行环境", ok: server != nil, status: server != nil ? "已就绪" : "需要安装") {
-                line("推理程序 llama.cpp") {
+            ModelCard(icon: "cpu", title: String(localized: "本机运行环境"), ok: server != nil, status: server != nil ? String(localized: "已就绪") : String(localized: "需要安装")) {
+                line(String(localized: "推理程序 llama.cpp")) {
                     if let note = store.serverInstall {
                         ProgressView().controlSize(.small)
                         Text(note).foregroundStyle(.secondary)
                     } else if let server {
-                        Text(server.path.hasPrefix("/Applications/") ? "借用 " + (server.pathComponents.dropFirst(2).first ?? "其他 App") : "已安装")
+                        Text(server.path.hasPrefix("/Applications/") ? String(localized: "借用 \(server.pathComponents.dropFirst(2).first ?? String(localized: "其他 App"))") : String(localized: "已安装"))
                             .foregroundStyle(.secondary)
                         Button("重新检查") { store.refreshASRAvailability() }
                     } else {
@@ -412,7 +414,7 @@ private struct ModelsPane: View {
                 Text(serverHint(server)).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 DisclosureGroup("高级", isExpanded: $advanced) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(server?.path ?? "没找到").font(.callout.monospaced()).foregroundStyle(.secondary)
+                        Text(server?.path ?? String(localized: "没找到")).font(.callout.monospaced()).foregroundStyle(.secondary)
                             .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                         TextField("自己指定 llama-server 的位置（可不填）", text: $settings.llamaServerPath).textFieldStyle(.roundedBorder)
                             .onSubmit { store.refreshASRAvailability() }
@@ -421,8 +423,8 @@ private struct ModelsPane: View {
                 }
             }
 
-            ModelCard(icon: "waveform", title: "转写：把声音变成文字", ok: asrOK, status: asrOK ? "已就绪" : "还差一步") {
-                line("引擎") {
+            ModelCard(icon: "waveform", title: String(localized: "转写：把声音变成文字"), ok: asrOK, status: asrOK ? String(localized: "已就绪") : String(localized: "还差一步")) {
+                line(String(localized: "引擎")) {
                     Picker("引擎", selection: $settings.engine) {
                         Text("本机 Qwen3‑ASR").tag(AppSettings.Engine.qwen)
                         Text("系统识别").tag(AppSettings.Engine.apple)
@@ -432,12 +434,12 @@ private struct ModelsPane: View {
                 }
                 switch settings.engine {
                 case .qwen:
-                    line("模型") { downloadView(store.asrJob, ready: QwenASR.locateModel() != nil,
-                                               readyText: "\(QwenASR.displayName) · 已下载 · 1.0 GB", size: "约 1 GB") { store.downloadASRModel() } }
+                    line(String(localized: "模型")) { downloadView(store.asrJob, ready: QwenASR.locateModel() != nil,
+                                               readyText: String(localized: "\(QwenASR.displayName) · 已下载 · 1.0 GB"), size: String(localized: "约 1 GB")) { store.downloadASRModel() } }
                     Text(store.asrAvailable ? "在这台 Mac 上运行，录音不会上传。" : "还没准备好之前，暂时用系统语音识别顶上。")
                         .font(.callout).foregroundStyle(store.asrAvailable ? Color.secondary : Theme.amber)
                 case .apple:
-                    line("语言") {
+                    line(String(localized: "语言")) {
                         Picker("语言", selection: $settings.language) {
                             ForEach(Transcriber.languages, id: \.id) { Text($0.name).tag($0.id) }
                         }
@@ -449,7 +451,7 @@ private struct ModelsPane: View {
                         .font(.callout).foregroundStyle(settings.asrConfig == nil ? Theme.amber : Color.secondary)
                 }
                 Divider()
-                line(settings.engine == .cloud ? "云端转写服务" : "云端重转") {
+                line(settings.engine == .cloud ? String(localized: "云端转写服务") : String(localized: "云端重转")) {
                     Text(asrSummary).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                     Button(settings.asrConfig == nil ? "设置…" : "更改…") { asrSheet = true }
                 }
@@ -458,7 +460,7 @@ private struct ModelsPane: View {
                 }
             }
 
-            ModelCard(icon: "doc.text", title: "整理：写纪要、回答提问", ok: store.analysisAvailable, status: store.analysisAvailable ? "已就绪" : "还没选模型") {
+            ModelCard(icon: "doc.text", title: String(localized: "整理：写纪要、回答提问"), ok: store.analysisAvailable, status: store.analysisAvailable ? String(localized: "已就绪") : String(localized: "还没选模型")) {
                 VStack(alignment: .leading, spacing: 8) {
                     Picker("用哪边的模型", selection: $settings.analysisMode) {
                         Text("云端优先").tag(AppSettings.AnalysisMode.auto)
@@ -469,7 +471,7 @@ private struct ModelsPane: View {
                     Text(modeHint(settings.analysisMode)).font(.callout).foregroundStyle(.secondary)
                 }
                 HStack(alignment: .top, spacing: 18) {
-                    half("本机模型", dim: settings.analysisMode == .cloud) {
+                    half(String(localized: "本机模型"), dim: settings.analysisMode == .cloud) {
                         if let job = store.llmJob {
                             jobDetail(job, title: "Qwen3‑4B")
                         } else if store.localLLMReady || LocalLLM.modelURL != nil {
@@ -484,7 +486,7 @@ private struct ModelsPane: View {
                         }
                     }
                     Divider()
-                    half("云端服务", dim: settings.analysisMode == .local) {
+                    half(String(localized: "云端服务"), dim: settings.analysisMode == .local) {
                         Text(cloudSummary).font(.body.weight(.medium)).lineLimit(1).truncationMode(.middle)
                         HStack {
                             Button(settings.llmConfigured ? "更改…" : "设置…") { cloudSheet = true }
@@ -501,15 +503,15 @@ private struct ModelsPane: View {
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
 
-            ModelCard(icon: "character.bubble", title: "翻译：把外语译成你要的语言", ok: store.analysisAvailable, status: store.analysisAvailable ? "用整理的模型" : "还没选模型") {
-                line("译成") {
+            ModelCard(icon: "character.bubble", title: String(localized: "翻译：把外语译成你要的语言"), ok: store.analysisAvailable, status: store.analysisAvailable ? String(localized: "用整理的模型") : String(localized: "还没选模型")) {
+                line(String(localized: "译成")) {
                     Picker("译成", selection: $settings.translateTo) {
                         ForEach(translateLanguages, id: \.self) { Text($0).tag($0) }
                     }
                     .labelsHidden().fixedSize()
                 }
                 Divider()
-                line("默认风格") {
+                line(String(localized: "默认风格")) {
                     Picker("默认风格", selection: $settings.translateStyle) {
                         ForEach(TranslateStyle.allCases) { Text($0.name).tag($0) }
                     }
@@ -531,14 +533,14 @@ private struct ModelsPane: View {
     }
 
     private func serverHint(_ server: URL?) -> String {
-        if store.serverInstall != nil { return "正在用 Homebrew 安装 llama.cpp，大约 1 分钟，装好会自动检测。" }
+        if store.serverInstall != nil { return String(localized: "正在用 Homebrew 安装 llama.cpp，大约 1 分钟，装好会自动检测。") }
         if let server, server.path.hasPrefix("/Applications/") {
-            return "本机转写和本机整理模型都靠它运行。现在借用的是别的 App 里带的那份，那个 App 删掉就用不了了；建议点「高级」看看位置，或者用 Homebrew 装一份（brew install llama.cpp）。"
+            return String(localized: "本机转写和本机整理模型都靠它运行。现在借用的是别的 App 里带的那份，那个 App 删掉就用不了了；建议点「高级」看看位置，或者用 Homebrew 装一份（brew install llama.cpp）。")
         }
-        if server != nil { return "本机转写和本机整理模型都靠它运行。" }
+        if server != nil { return String(localized: "本机转写和本机整理模型都靠它运行。") }
         return BeanStore.brewPath != nil
-            ? "本机转写和本机整理模型都靠它运行。点「安装」会用 Homebrew 装，大约 1 分钟。"
-            : "本机转写和本机整理模型都靠它运行。这台 Mac 上没有 Homebrew，先按链接里的说明装好 llama.cpp。"
+            ? String(localized: "本机转写和本机整理模型都靠它运行。点「安装」会用 Homebrew 装，大约 1 分钟。")
+            : String(localized: "本机转写和本机整理模型都靠它运行。这台 Mac 上没有 Homebrew，先按链接里的说明装好 llama.cpp。")
     }
 
     /// 模型下载那一格：没下 → 下载按钮；下载中 → 进度、来源、速度、暂停/取消；下好了 → 一行字。
@@ -557,10 +559,10 @@ private struct ModelsPane: View {
     private func jobDetail(_ job: DownloadJob, title: String?) -> some View {
         let gb = { (b: Int64) in String(format: "%.1f", Double(b) / 1_000_000_000) }
         let head: String = switch job.state {
-        case .running: "正在下载 \(Int(job.fraction * 100))%"
-        case .paused: "已暂停 \(Int(job.fraction * 100))%"
-        case .verifying: "正在校验…"
-        case .failed: "没下完"
+        case .running: String(localized: "正在下载 \(Int(job.fraction * 100))%")
+        case .paused: String(localized: "已暂停 \(Int(job.fraction * 100))%")
+        case .verifying: String(localized: "正在校验…")
+        case .failed: String(localized: "没下完")
         }
         Text([title, head].compactMap { $0 }.joined(separator: " · ")).font(.body.weight(.medium)).monospacedDigit()
         ProgressView(value: job.fraction).tint(Theme.accent)
@@ -586,7 +588,7 @@ private struct ModelsPane: View {
         testing = true; testNote = nil
         Task {
             defer { testing = false }
-            testNote = await CloudServiceSheet.runTest(config, store: store)
+            testNote = await CloudServiceSheet.runTest(config, store: store).text
         }
     }
 
@@ -614,23 +616,23 @@ private struct ModelsPane: View {
 
     private func modeHint(_ mode: AppSettings.AnalysisMode) -> String {
         switch mode {
-        case .auto: "平时用云端，连不上的时候自动换成本机。"
-        case .cloud: "只用云端。连不上的时候不整理，等能连上再说。"
-        case .local: "只用本机。文字稿不会离开这台电脑。"
+        case .auto: String(localized: "平时用云端，连不上的时候自动换成本机。")
+        case .cloud: String(localized: "只用云端。连不上的时候不整理，等能连上再说。")
+        case .local: String(localized: "只用本机。文字稿不会离开这台电脑。")
         }
     }
 
     private var cloudSummary: String {
         let s = store.settings
-        guard s.llmConfigured else { return "还没设置" }
-        let name = AppSettings.presets.first { $0.url == s.llmBaseURL }?.name ?? "自定义服务"
+        guard s.llmConfigured else { return String(localized: "还没设置") }
+        let name = AppSettings.presets.first { $0.url == s.llmBaseURL }?.name ?? String(localized: "自定义服务")
         return "\(name) · \(s.llmModel)"
     }
 
     private var asrSummary: String {
         let s = store.settings
-        guard s.asrConfig != nil else { return "未设置" }
-        let name = CloudASR.presets.first { $0.url == s.asrBaseURL }?.name ?? "自定义服务"
+        guard s.asrConfig != nil else { return String(localized: "未设置") }
+        let name = CloudASR.presets.first { $0.url == s.asrBaseURL }?.name ?? String(localized: "自定义服务")
         return "\(name) · \(s.asrModel)"
     }
 }
@@ -661,7 +663,7 @@ private struct CloudServiceSheet: View {
             }
             HStack(spacing: 8) {
                 ForEach(local) { p in chip(p.name, picked: settings.llmBaseURL == p.url) { pick(p) } }
-                chip("自定义…", picked: custom || (current == nil && !settings.llmBaseURL.isEmpty)) {
+                chip(String(localized: "自定义…"), picked: custom || (current == nil && !settings.llmBaseURL.isEmpty)) {
                     custom = true; settings.llmBaseURL = ""; settings.llmModel = ""; models = []; testResult = nil
                 }
             }
@@ -742,7 +744,7 @@ private struct CloudServiceSheet: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(p.name + (picked ? "，已选中" : ""))
+        .accessibilityLabel(picked ? String(localized: "\(p.name)，已选中") : p.name)
     }
 
     private func chip(_ title: String, picked: Bool, action: @escaping () -> Void) -> some View {
@@ -765,13 +767,12 @@ private struct CloudServiceSheet: View {
         testing = true; testResult = nil
         Task {
             defer { testing = false }
-            let text = await Self.runTest(config, store: store)
-            testResult = (text.hasPrefix("测试通过"), text)
+            testResult = await Self.runTest(config, store: store)
         }
     }
 
     /// 拿一段销售通话试整理，看判对场景没有。模型页的「测试」也用它。
-    static func runTest(_ config: LLMConfig, store: BeanStore) async -> String {
+    static func runTest(_ config: LLMConfig, store: BeanStore) async -> (ok: Bool, text: String) {
         let t0 = Date()
         do {
             let a = try await Analyzer.analyze(
@@ -780,10 +781,10 @@ private struct CloudServiceSheet: View {
             store.upgradeRoughNotes()
             let secs = String(format: "%.1f", Date().timeIntervalSince(t0))
             return a.scene == .sales || a.scene == .call
-                ? "测试通过 · \(secs) 秒 · 把销售通话判成了「\(a.scene.name)」"
-                : "能连上（\(secs) 秒），但把销售通话判成了「\(a.scene.name)」，这个模型可能偏弱。"
+                ? (ok: true, text: String(localized: "测试通过 · \(secs) 秒 · 把销售通话判成了「\(a.scene.name)」"))
+                : (ok: false, text: String(localized: "能连上（\(secs) 秒），但把销售通话判成了「\(a.scene.name)」，这个模型可能偏弱。"))
         } catch {
-            return error.localizedDescription
+            return (ok: false, text: error.localizedDescription)
         }
     }
 }
@@ -857,7 +858,7 @@ private struct CloudASRSheet: View {
         testing = true; result = nil
         Task {
             defer { testing = false }
-            do { try await CloudASR.test(config); result = (true, "测试通过，接口能用。") }
+            do { try await CloudASR.test(config); result = (true, String(localized: "测试通过，接口能用。")) }
             catch { result = (false, error.localizedDescription) }
         }
     }
@@ -879,7 +880,7 @@ private struct VocabularyPane: View {
     var body: some View {
         let settings = store.settings
         PaneFrame {
-            SettingsGroup("纠错词库", footer: "模型老是听错的人名、产品名、术语记在这里，以后转写出来会自动改成正确的写法。在文字稿里改一个词，也会记到这里。") {
+            SettingsGroup(String(localized: "纠错词库"), footer: String(localized: "模型老是听错的人名、产品名、术语记在这里，以后转写出来会自动改成正确的写法。在文字稿里改一个词，也会记到这里。")) {
                 HStack(spacing: 10) {
                     TextField("听成了", text: $wrong, prompt: Text("听成了，比如：豆苍")).textFieldStyle(.roundedBorder)
                         .focused($focus, equals: .wrong).onSubmit { focus = .right }
@@ -933,20 +934,20 @@ private struct ConnectPane: View {
 
     var body: some View {
         PaneFrame {
-            SettingsGroup("AI 助手", footer: "连上之后，在它们那边就能直接查你的录音、纪要和待办，也能把文字和音频存进豆仓。") {
+            SettingsGroup(String(localized: "AI 助手"), footer: String(localized: "连上之后，在它们那边就能直接查你的录音、纪要和待办，也能把文字和音频存进豆仓。")) {
                 SettingRow(icon: "link", title: "Claude、Codex、OpenClaw、Grok Bot",
-                           detail: connector.connectedCount > 0 ? "已经连上 \(connector.connectedCount) 个。" : "还没有连上任何一个。") {
+                           detail: connector.connectedCount > 0 ? String(localized: "已经连上 \(connector.connectedCount) 个。") : String(localized: "还没有连上任何一个。")) {
                     Button("打开连接页面…") { openWindow(id: "connect") }
                 }
-                SettingRow(icon: "film", title: "Renoise（做视频）", detail: "把改写好的稿子做成口播视频要用它。安装和登录也在连接页面里。") {
+                SettingRow(icon: "film", title: String(localized: "Renoise（做视频）"), detail: String(localized: "把改写好的稿子做成口播视频要用它。安装和登录也在连接页面里。")) {
                     Button("去看看…") { openWindow(id: "connect") }
                 }
             }
 
             LoginsGroup()
 
-            SettingsGroup("给其他工具用", footer: "这个地址只在这台电脑上能访问，而且只有豆仓开着的时候才通。") {
-                SettingRow(icon: "network", title: "接入地址") {
+            SettingsGroup(String(localized: "给其他工具用"), footer: String(localized: "这个地址只在这台电脑上能访问，而且只有豆仓开着的时候才通。")) {
+                SettingRow(icon: "network", title: String(localized: "接入地址")) {
                     Text(BeanStore.mcpAddress).font(.callout.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
                     Button(copied ? "已拷贝" : "拷贝") {
                         copy(BeanStore.mcpAddress)
@@ -954,7 +955,7 @@ private struct ConnectPane: View {
                         Task { try? await Task.sleep(for: .seconds(1.5)); copied = false }
                     }
                 }
-                SettingRow(icon: "terminal", title: "命令行", detail: "在终端里也能查录音、存内容。") {
+                SettingRow(icon: "terminal", title: String(localized: "命令行"), detail: String(localized: "在终端里也能查录音、存内容。")) {
                     Text("beanpod").font(.callout.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
                 }
             }
@@ -971,7 +972,7 @@ private struct LoginsGroup: View {
     var body: some View {
         let list = store.loggedInPlatforms
         let _ = refresh
-        SettingsGroup("从链接导入时登录过的平台", footer: "导入要登录才能看的内容时，豆仓会弹出登录窗口让你自己登录。登录状态只存在这台 Mac 上。") {
+        SettingsGroup(String(localized: "从链接导入时登录过的平台"), footer: String(localized: "导入要登录才能看的内容时，豆仓会弹出登录窗口让你自己登录。登录状态只存在这台 Mac 上。")) {
             if list.isEmpty {
                 Text("还没有登录过任何平台。").foregroundStyle(.secondary)
             }

@@ -80,11 +80,11 @@ struct VideoResultCard: View {
         Button("在访达中显示", systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             .buttonStyle(.glass).fixedSize()
         if let script = clip.script {
-            Button("拷贝口播稿", systemImage: "doc.on.doc") { copyText(script); store.toast("doc.on.doc", "口播稿已拷贝") }
+            Button("拷贝口播稿", systemImage: "doc.on.doc") { copyText(script); store.toast("doc.on.doc", String(localized: "口播稿已拷贝")) }
                 .buttonStyle(.glass).fixedSize()
         }
         if let material = clip.material {
-            Button("拷贝素材编号", systemImage: "number") { copyText(material); store.toast("number", "Renoise 素材编号已拷贝") }
+            Button("拷贝素材编号", systemImage: "number") { copyText(material); store.toast("number", String(localized: "Renoise 素材编号已拷贝")) }
                 .buttonStyle(.glass).fixedSize()
                 .help("Renoise 里成片的素材编号：\(material)")
         }
@@ -102,7 +102,7 @@ struct VideoResultCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("没做成 · \(heading)").font(.headline)
                 Text(clip.error ?? "").font(.callout).foregroundStyle(Theme.warm700).fixedSize(horizontal: false, vertical: true)
-                Text(clip.date.formatted(date: .abbreviated, time: .shortened) + (clip.credits > 0 ? " · 已花 \(clip.credits) 积分" : " · 没花积分"))
+                Text(clip.date.formatted(date: .abbreviated, time: .shortened) + (clip.credits > 0 ? String(localized: " · 已花 \(clip.credits) 积分") : String(localized: " · 没花积分")))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
@@ -132,7 +132,9 @@ struct VideoResultCard: View {
     private var host: String { legacy ? clip.host.components(separatedBy: " · ").dropFirst().joined(separator: " · ") : clip.host }
 
     private var heading: String {
-        (["数字人口播", style, clip.ratio].compactMap { $0 }).joined(separator: " · ")
+        // 风格存的是中文名（VideoMaker.Style.name），显示时换成当前语言
+        let shown = style.map { s in VideoMaker.Style.allCases.first { $0.name == s }?.label ?? s }
+        return ([String(localized: "数字人口播"), shown, clip.ratio].compactMap { $0 }).joined(separator: " · ")
     }
 
     /// 没有封面（旧版交付的）：从成片里取一帧补上。
@@ -147,9 +149,9 @@ struct VideoResultCard: View {
 
     private var meta: String {
         var parts = [clip.date.formatted(date: .abbreviated, time: .shortened)]
-        if clip.seconds > 0 { parts.append(clip.seconds >= 60 ? "\(clip.seconds / 60) 分 \(clip.seconds % 60) 秒" : "\(clip.seconds) 秒") }
-        parts.append("主播 \(host)")
-        if clip.credits > 0 { parts.append("花了 \(clip.credits.formatted()) 积分") }
+        if clip.seconds > 0 { parts.append(clip.seconds >= 60 ? String(localized: "\(clip.seconds / 60) 分 \(clip.seconds % 60) 秒") : String(localized: "\(clip.seconds) 秒")) }
+        parts.append(String(localized: "主播 \(host)"))
+        if clip.credits > 0 { parts.append(String(localized: "花了 \(clip.credits.formatted()) 积分")) }
         return parts.joined(separator: " · ")
     }
 

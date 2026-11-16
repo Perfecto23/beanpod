@@ -16,7 +16,7 @@ final class CardSync {
 
     var link: BLEClient.Link = .idle
     var found: [FoundCard] = []
-    var name = "得到录音卡"
+    var name = String(localized: "得到录音卡")
     /// 标准电量服务报的电量（这张卡有没有这个服务还要实机确认，没有就是 nil）。
     var battery: Int?
     var freeKB: UInt32?
@@ -75,7 +75,7 @@ final class CardSync {
         guard previewing else { return }
         previewing = false
         previewImported = [:]
-        files = []; listed = false; progress = nil; battery = nil; freeKB = nil; name = "得到录音卡"
+        files = []; listed = false; progress = nil; battery = nil; freeKB = nil; name = String(localized: "得到录音卡")
         link = client.link
     }
 
@@ -127,14 +127,14 @@ final class CardSync {
         link = new
         guard new == .ready else {
             if old == .ready {
-                store?.toast("wave.3.right", "得到录音卡已断开")
-                if let f = jobFile { failJob(f, "连接断开，下载中断。录音还在卡里。") }
+                store?.toast("wave.3.right", String(localized: "得到录音卡已断开"))
+                if let f = jobFile { failJob(f, String(localized: "连接断开，下载中断。录音还在卡里。")) }
             }
             queue.removeAll(); files = []; listed = false; listing = false; battery = nil; freeKB = nil
             return
         }
         if let n = client.connectedName, !n.isEmpty { name = n }
-        store?.toast("checkmark.circle.fill", "得到录音卡已连接")
+        store?.toast("checkmark.circle.fill", String(localized: "得到录音卡已连接"))
         syncOnConnect = store?.settings.autoDownload ?? false
         Task {
             // 先对时（卡里的文件名就是按它的时钟起的），再问剩余空间，最后要列表
@@ -194,7 +194,7 @@ final class CardSync {
         if syncOnConnect {
             syncOnConnect = false
             if !waiting.isEmpty {
-                store?.toast("arrow.down.circle.fill", "得到录音卡里有 \(waiting.count) 条新录音，开始同步")
+                store?.toast("arrow.down.circle.fill", String(localized: "得到录音卡里有 \(waiting.count) 条新录音，开始同步"))
                 downloadAll()
             }
         }
@@ -227,7 +227,7 @@ final class CardSync {
                 let idle = Date.now.timeIntervalSince(self.lastActivity)
                 if j.complete, idle > 2 { self.finishJob(); return }
                 if idle > 20 {
-                    self.failJob(file, j.received == 0 ? "录音卡没有回传数据。把卡靠近电脑再试一次。" : "传输中途停了，请重试。录音还在卡里。")
+                    self.failJob(file, j.received == 0 ? String(localized: "录音卡没有回传数据。把卡靠近电脑再试一次。") : String(localized: "传输中途停了，请重试。录音还在卡里。"))
                     return
                 }
                 try? await Task.sleep(for: .seconds(1))
@@ -240,12 +240,12 @@ final class CardSync {
         job = nil; jobFile = nil; progress = nil
         defer { if !queue.isEmpty { Task { try? await Task.sleep(for: .seconds(1)); startNext() } } }
         if j.notFound {
-            store?.problem = BeanStore.Problem(title: "卡里已经没有这条录音了", detail: "「\(file.name)」可能已经被得到 App 同步后清掉了。")
+            store?.problem = BeanStore.Problem(title: String(localized: "卡里已经没有这条录音了"), detail: String(localized: "「\(file.name)」可能已经被得到 App 同步后清掉了。"))
             files.removeAll { $0.name == file.name }
             return
         }
         guard j.complete else {
-            store?.problem = BeanStore.Problem(title: "这条录音没传完整", detail: "只收到 \(Int(j.fraction * 100))%。录音还在卡里，没有丢，可以再下载一次。")
+            store?.problem = BeanStore.Problem(title: String(localized: "这条录音没传完整"), detail: String(localized: "只收到 \(Int(j.fraction * 100))%。录音还在卡里，没有丢，可以再下载一次。"))
             return
         }
         store?.addLog("录音卡下载完：\(file.name)，\(j.chunks) 块，\(j.data.count) 字节")
@@ -255,7 +255,7 @@ final class CardSync {
     private func failJob(_ file: GetSeedFile, _ message: String) {
         guard jobFile?.name == file.name else { return }
         job = nil; jobFile = nil; progress = nil
-        store?.problem = BeanStore.Problem(title: "这条录音没下载下来", detail: message, action: .device)
+        store?.problem = BeanStore.Problem(title: String(localized: "这条录音没下载下来"), detail: message, action: .device)
         startNext()
     }
 
@@ -292,9 +292,9 @@ final class CardSync {
                 pendingDelete = nil
                 if ok {
                     files.removeAll { $0.name == name }
-                    store?.toast("trash", "已从录音卡删掉一条录音")
+                    store?.toast("trash", String(localized: "已从录音卡删掉一条录音"))
                 } else {
-                    store?.problem = BeanStore.Problem(title: "录音卡没有删掉这条录音", detail: "它可能正在录音或传文件。等一会儿再试。")
+                    store?.problem = BeanStore.Problem(title: String(localized: "录音卡没有删掉这条录音"), detail: String(localized: "它可能正在录音或传文件。等一会儿再试。"))
                 }
             }
         default:
@@ -330,7 +330,7 @@ extension BeanStore {
             try? FileManager.default.removeItem(at: oggURL(id))
             try? FileManager.default.removeItem(at: wavURL(id))
             addLog("录音卡的录音没存下来 \(file.name)：\(error.localizedDescription)")
-            problem = BeanStore.Problem(title: "录音没能存到这台设备", detail: "\(error.localizedDescription)\n录音还在卡里，可以再下载一次。")
+            problem = BeanStore.Problem(title: String(localized: "录音没能存到这台设备"), detail: String(localized: "\(error.localizedDescription)\n录音还在卡里，可以再下载一次。"))
             return nil
         }
     }

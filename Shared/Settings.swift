@@ -9,9 +9,9 @@ final class AppSettings {
         var id: String { rawValue }
         var name: String {
             switch self {
-            case .qwen: "Qwen3‑ASR（本机）"
-            case .apple: "系统语音识别"
-            case .cloud: "云端转写"
+            case .qwen: String(localized: "Qwen3‑ASR（本机）")
+            case .apple: String(localized: "系统语音识别")
+            case .cloud: String(localized: "云端转写")
             }
         }
         /// 这台机器上能选的引擎。手机上跑不动本机模型。
@@ -27,7 +27,7 @@ final class AppSettings {
     enum Appearance: String, CaseIterable, Identifiable {
         case system, light, dark
         var id: String { rawValue }
-        var name: String { self == .system ? "跟随系统" : self == .light ? "浅色" : "深色" }
+        var name: String { self == .system ? String(localized: "跟随系统") : self == .light ? String(localized: "浅色") : String(localized: "深色") }
     }
 
     /// 从链接导入视频时，要不要连画面一起留着。
@@ -36,9 +36,9 @@ final class AppSettings {
         var id: String { rawValue }
         var name: String {
             switch self {
-            case .short: "短视频"
-            case .always: "都保留"
-            case .never: "都不保留"
+            case .short: String(localized: "短视频")
+            case .always: String(localized: "都保留")
+            case .never: String(localized: "都不保留")
             }
         }
     }
@@ -51,9 +51,9 @@ final class AppSettings {
         var id: String { rawValue }
         var name: String {
             switch self {
-            case .auto: "云端优先，连不上时用本机"
-            case .cloud: "只用云端"
-            case .local: "只用本机"
+            case .auto: String(localized: "云端优先，连不上时用本机")
+            case .cloud: String(localized: "只用云端")
+            case .local: String(localized: "只用本机")
             }
         }
     }
@@ -184,19 +184,19 @@ final class AppSettings {
     }
 
     static let presets: [Provider] = [
-        Provider(name: "小米 MiMo", url: "https://api.xiaomimimo.com/v1", model: "mimo-v2.6-pro", keyPage: "https://platform.xiaomimimo.com"),
+        Provider(name: String(localized: "小米 MiMo"), url: "https://api.xiaomimimo.com/v1", model: "mimo-v2.6-pro", keyPage: "https://platform.xiaomimimo.com"),
         Provider(name: "DeepSeek", url: "https://api.deepseek.com/v1", model: "deepseek-chat", keyPage: "https://platform.deepseek.com/api_keys"),
-        Provider(name: "通义千问", url: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus", keyPage: "https://bailian.console.aliyun.com"),
+        Provider(name: String(localized: "通义千问"), url: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus", keyPage: "https://bailian.console.aliyun.com"),
         Provider(name: "Kimi", url: "https://api.moonshot.cn/v1", keyPage: "https://platform.moonshot.cn/console/api-keys"),
-        Provider(name: "豆包", url: "https://ark.cn-beijing.volces.com/api/v3", keyPage: "https://console.volcengine.com/ark"),
-        Provider(name: "智谱 GLM", url: "https://open.bigmodel.cn/api/paas/v4", keyPage: "https://open.bigmodel.cn"),
+        Provider(name: String(localized: "豆包"), url: "https://ark.cn-beijing.volces.com/api/v3", keyPage: "https://console.volcengine.com/ark"),
+        Provider(name: String(localized: "智谱 GLM"), url: "https://open.bigmodel.cn/api/paas/v4", keyPage: "https://open.bigmodel.cn"),
         Provider(name: "MiniMax", url: "https://api.minimaxi.com/v1", keyPage: "https://platform.minimaxi.com"),
-        Provider(name: "硅基流动", url: "https://api.siliconflow.cn/v1", keyPage: "https://cloud.siliconflow.cn/account/ak"),
+        Provider(name: String(localized: "硅基流动"), url: "https://api.siliconflow.cn/v1", keyPage: "https://cloud.siliconflow.cn/account/ak"),
         Provider(name: "OpenRouter", url: "https://openrouter.ai/api/v1", keyPage: "https://openrouter.ai/keys"),
         Provider(name: "Gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai", keyPage: "https://aistudio.google.com/apikey"),
         Provider(name: "Claude", url: "https://api.anthropic.com/v1", keyPage: "https://console.anthropic.com/settings/keys"),
         Provider(name: "OpenAI", url: "https://api.openai.com/v1", keyPage: "https://platform.openai.com/api-keys"),
-        Provider(name: "本机 Ollama", url: "http://127.0.0.1:11434/v1", local: true),
-        Provider(name: "本机 LM Studio", url: "http://127.0.0.1:1234/v1", local: true),
+        Provider(name: String(localized: "本机 Ollama"), url: "http://127.0.0.1:11434/v1", local: true),
+        Provider(name: String(localized: "本机 LM Studio"), url: "http://127.0.0.1:1234/v1", local: true),
     ]
 }

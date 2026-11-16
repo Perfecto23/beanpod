@@ -18,8 +18,8 @@ nonisolated enum ModelSource: String, CaseIterable, Sendable {
     var name: String {
         switch self {
         case .huggingface: "HuggingFace"
-        case .hfMirror: "国内镜像"
-        case .modelscope: "魔搭社区"
+        case .hfMirror: String(localized: "国内镜像")
+        case .modelscope: String(localized: "魔搭社区")
         }
     }
 
@@ -108,18 +108,18 @@ final class DownloadJob {
                 case .slow, .failed: continue
                 }
             }
-            guard ok else { fail("三个下载源都没下下来，检查网络后点「继续」再试。"); return }
+            guard ok else { fail(String(localized: "三个下载源都没下下来，检查网络后点「继续」再试。")); return }
 
             // 校验
             state = .verifying
             let sum = await Task.detached { Self.sha256(of: part) }.value
             guard sum == f.sha256 else {
                 try? fm.removeItem(at: part)
-                fail("「\(f.name)」下载下来的文件不完整，已删掉，点「继续」重新下载。")
+                fail(String(localized: "「\(f.name)」下载下来的文件不完整，已删掉，点「继续」重新下载。"))
                 return
             }
             try? fm.removeItem(at: target)
-            do { try fm.moveItem(at: part, to: target) } catch { fail("下载好了，但没能放进模型文件夹：\(error.localizedDescription)"); return }
+            do { try fm.moveItem(at: part, to: target) } catch { fail(String(localized: "下载好了，但没能放进模型文件夹：\(error.localizedDescription)")); return }
             state = .running
         }
         refreshReceived()

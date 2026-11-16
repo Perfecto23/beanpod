@@ -36,7 +36,12 @@ struct StudyView: View {
     @Environment(BeanStore.self) private var store
     let recording: Recording
     let study: Study
-    enum Filter: String, CaseIterable { case all = "全部", b2 = "B2 及以上", c = "C1–C2" }
+    enum Filter: String, CaseIterable {
+        case all = "全部", b2 = "B2 及以上", c = "C1–C2"
+        var name: String {
+            switch self { case .all: String(localized: "全部"); case .b2: String(localized: "B2 及以上"); case .c: "C1–C2" }
+        }
+    }
     @State private var filter: Filter = .all
 
     var body: some View {
@@ -53,7 +58,7 @@ struct StudyView: View {
     // MARK: 难度概览
 
     private var overview: some View {
-        Card(title: "难度概览", icon: "chart.bar.xaxis") {
+        Card(title: String(localized: "难度概览"), icon: "chart.bar.xaxis") {
             Text(headline).font(.system(size: 14)).foregroundStyle(Theme.warm700)
             let total = max(1, Study.levelBands.reduce(0) { $0 + (study.levels[$1] ?? 0) })
             if study.levels.values.contains(where: { $0 > 0 }) {
@@ -85,14 +90,14 @@ struct StudyView: View {
 
     private var headline: String {
         var parts: [String] = []
-        if !study.overall.isEmpty { parts.append("整体 \(study.overall)\(Self.levelName(study.overall))") }
-        if let wpm = study.wordsPerMinute { parts.append("语速约 \(wpm) 词/分") }
+        if !study.overall.isEmpty { parts.append(String(localized: "整体 \(study.overall)\(Self.levelName(study.overall))")) }
+        if let wpm = study.wordsPerMinute { parts.append(String(localized: "语速约 \(wpm) 词/分")) }
         if !study.note.isEmpty { parts.append(study.note) }
         return parts.joined(separator: " · ")
     }
 
     static func levelName(_ l: String) -> String {
-        switch l.prefix(1) { case "A": " 初级"; case "B": l.hasPrefix("B2") ? " 中高级" : " 中级"; case "C": " 高级"; default: "" }
+        switch l.prefix(1) { case "A": " " + String(localized: "初级"); case "B": " " + (l.hasPrefix("B2") ? String(localized: "中高级") : String(localized: "中级")); case "C": " " + String(localized: "高级"); default: "" }
     }
 
     /// 暖灰 → 玫瑰红：越难越红
@@ -111,11 +116,11 @@ struct StudyView: View {
     }
 
     private var words: some View {
-        Card(title: "重点单词 · \(study.words.count) 个", icon: "book.closed") {
+        Card(title: String(localized: "重点单词 · \(study.words.count) 个"), icon: "book.closed") {
             HStack(spacing: 6) {
                 ForEach(Filter.allCases, id: \.self) { f in
                     Button { filter = f } label: {
-                        Text(f.rawValue).font(.system(size: 12, weight: filter == f ? .medium : .regular))
+                        Text(f.name).font(.system(size: 12, weight: filter == f ? .medium : .regular))
                             .padding(.horizontal, 10).padding(.vertical, 3)
                             .foregroundStyle(filter == f ? Theme.accent : Theme.warm700)
                             .background(filter == f ? Theme.accent.opacity(0.12) : Theme.warm100, in: .rect(cornerRadius: Theme.Radius.chip))
@@ -146,7 +151,7 @@ struct StudyView: View {
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        listen(w.time, label: "听原句").padding(.top, 2)
+                        listen(w.time, label: String(localized: "听原句")).padding(.top, 2)
                     }
                     .padding(.vertical, 10)
                 }
@@ -165,7 +170,7 @@ struct StudyView: View {
     // MARK: 短语、难句
 
     private var phrases: some View {
-        Card(title: "短语搭配 · \(study.phrases.count) 个", icon: "text.quote") {
+        Card(title: String(localized: "短语搭配 · \(study.phrases.count) 个"), icon: "text.quote") {
             ForEach(study.phrases) { p in
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 3) {
@@ -178,7 +183,7 @@ struct StudyView: View {
                         }
                     }
                     Spacer(minLength: 8)
-                    listen(p.time, label: "听原句")
+                    listen(p.time, label: String(localized: "听原句"))
                 }
                 .padding(.vertical, 4)
             }
@@ -186,7 +191,7 @@ struct StudyView: View {
     }
 
     private var sentences: some View {
-        Card(title: "难句解析 · \(study.sentences.count) 句", icon: "text.magnifyingglass") {
+        Card(title: String(localized: "难句解析 · \(study.sentences.count) 句"), icon: "text.magnifyingglass") {
             ForEach(study.sentences) { s in
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -196,7 +201,7 @@ struct StudyView: View {
                         }
                         Text(s.text).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.warm900).textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        listen(s.time, label: "听这句")
+                        listen(s.time, label: String(localized: "听这句"))
                     }
                     if !s.translation.isEmpty { Text(s.translation).font(.system(size: 14)).foregroundStyle(Theme.warm700).textSelection(.enabled) }
                     if !s.structure.isEmpty || !s.points.isEmpty {

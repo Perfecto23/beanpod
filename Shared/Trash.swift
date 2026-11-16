@@ -53,7 +53,7 @@ extension BeanStore {
         let dest = trashFolder.appendingPathComponent(sub, isDirectory: true)
         do { try fm.createDirectory(at: dest, withIntermediateDirectories: true) } catch {
             addLog("最近删除的文件夹建不了：\(error.localizedDescription)")
-            problem = Problem(title: "没能删除", detail: "「最近删除」的文件夹建不了：\(error.localizedDescription)")
+            problem = Problem(title: String(localized: "没能删除"), detail: String(localized: "「最近删除」的文件夹建不了：\(error.localizedDescription)"))
             return nil
         }
         var moved: [String] = []
@@ -81,7 +81,7 @@ extension BeanStore {
     func trashWithUndo(_ ids: [UInt32]) {
         let entries = ids.compactMap { moveToTrash($0) }
         guard !entries.isEmpty else { return }
-        toast("trash", entries.count == 1 ? "已移到最近删除" : "已把 \(entries.count) 条移到最近删除", undo: entries)
+        toast("trash", entries.count == 1 ? String(localized: "已移到最近删除") : String(localized: "已把 \(entries.count) 条移到最近删除"), undo: entries)
     }
 
     /// 原样恢复：文件挪回去，记录（文字稿、纪要、标签……）放回录音库。

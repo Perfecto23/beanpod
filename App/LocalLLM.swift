@@ -55,11 +55,11 @@ actor LocalLLM {
         let health = URL(string: "http://127.0.0.1:\(port)/health")!
         for _ in 0..<180 {
             try await Task.sleep(for: .milliseconds(500))
-            if !p.isRunning { process = nil; throw ASRError.startFailed("本机分析模型没启动起来，可能是模型文件损坏或内存不够") }
+            if !p.isRunning { process = nil; throw ASRError.startFailed(String(localized: "本机分析模型没启动起来，可能是模型文件损坏或内存不够")) }
             if let (_, r) = try? await URLSession.shared.data(from: health), (r as? HTTPURLResponse)?.statusCode == 200 { return config }
         }
         stop()
-        throw ASRError.startFailed("本机分析模型等了一分半还没就绪")
+        throw ASRError.startFailed(String(localized: "本机分析模型等了一分半还没就绪"))
     }
 
     private var config: LLMConfig {

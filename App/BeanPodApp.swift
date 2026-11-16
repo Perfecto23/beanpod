@@ -128,7 +128,7 @@ struct BeanPodApp: App {
             }
             CommandMenu("小豆") {
                 Button("跟着真实状态") { store.mascotPreview = nil; store.card.endPreview() }
-                Button("看看：「录好了」卡片") { store.offerKeep(id: 0, seconds: 25, from: "这台 Mac", onMac: true) }
+                Button("看看：「录好了」卡片") { store.offerKeep(id: 0, seconds: 25, from: String(localized: "这台 Mac"), onMac: true) }
                 Button("看看：做成视频（选主播）") {
                     if !maker.busy { maker.prepare(text: "这是一段示例口播稿。", recording: 0, title: "示例", template: "口播稿") }
                     openWindow(id: "video-preview")
@@ -187,7 +187,7 @@ struct MenuBarContent: View {
 
     var body: some View {
         if store.link == .ready {
-            Text(store.recState == .paused ? "\(store.displayDeviceName) 录音已暂停" : store.isRecording ? "\(store.displayDeviceName) 正在录音" : "\(store.displayDeviceName) 已连接" + (store.info.map { " · \($0.micBattery)%" } ?? ""))
+            Text(store.recState == .paused ? String(localized: "\(store.displayDeviceName) 录音已暂停") : store.isRecording ? String(localized: "\(store.displayDeviceName) 正在录音") : String(localized: "\(store.displayDeviceName) 已连接") + (store.info.map { " · \($0.micBattery)%" } ?? ""))
             switch store.recState {
             case .idle: Button("开始录音") { store.startRecording() }
             case .recording:

@@ -21,12 +21,12 @@ struct WelcomeView: View {
         var id: Int { rawValue }
         var name: String {
             switch self {
-            case .welcome: "欢迎"
-            case .device: "连接录音豆"
-            case .asr: "转写模型"
-            case .analysis: "整理纪要的模型"
-            case .permissions: "权限"
-            case .more: "更多功能"
+            case .welcome: String(localized: "欢迎")
+            case .device: String(localized: "连接录音豆")
+            case .asr: String(localized: "转写模型")
+            case .analysis: String(localized: "整理纪要的模型")
+            case .permissions: String(localized: "权限")
+            case .more: String(localized: "更多功能")
             }
         }
     }
@@ -105,7 +105,7 @@ struct WelcomeView: View {
         .padding(.horizontal, 10).padding(.vertical, 8)
         .background(current ? Theme.accent.opacity(0.12) : .clear, in: .rect(cornerRadius: Theme.Radius.card))
         .contentShape(.rect)
-        .accessibilityLabel("第 \(s.rawValue + 1) 步：\(s.name)\(isDone ? "，已完成" : "")")
+        .accessibilityLabel(isDone ? String(localized: "第 \(s.rawValue + 1) 步：\(s.name)，已完成") : String(localized: "第 \(s.rawValue + 1) 步：\(s.name)"))
     }
 
     private func done(_ s: Step) -> Bool {
@@ -171,15 +171,15 @@ struct WelcomeView: View {
 
     private var welcome: some View {
         VStack(alignment: .leading, spacing: 0) {
-            heading("欢迎来到豆仓", "录音豆负责听，豆仓负责把它变成文字和纪要。接下来几步把要准备的东西过一遍，几分钟就好；每一步都能先跳过。")
+            heading(String(localized: "欢迎来到豆仓"), String(localized: "录音豆负责听，豆仓负责把它变成文字和纪要。接下来几步把要准备的东西过一遍，几分钟就好；每一步都能先跳过。"))
             VStack(spacing: 0) {
-                feature("waveform", "录完自动变成纪要", "连上录音豆自动下载，在这台 Mac 上转成文字，整理出摘要、决定和待办。")
+                feature("waveform", String(localized: "录完自动变成纪要"), String(localized: "连上录音豆自动下载，在这台 Mac 上转成文字，整理出摘要、决定和待办。"))
                 Divider().padding(.leading, 62)
-                feature("lock", "录音不出这台 Mac", "转写用本机模型；整理纪要可以用本机模型，也可以填你自己的云端模型。")
+                feature("lock", String(localized: "录音不出这台 Mac"), String(localized: "转写用本机模型；整理纪要可以用本机模型，也可以填你自己的云端模型。"))
                 Divider().padding(.leading, 62)
-                feature("square.stack.3d.up", "一个地方管所有声音", "录音豆、录音卡、Mac 自己录、导入的音频、视频链接、飞书妙记，都在这里，标着来源。")
+                feature("square.stack.3d.up", String(localized: "一个地方管所有声音"), String(localized: "录音豆、录音卡、Mac 自己录、导入的音频、视频链接、飞书妙记，都在这里，标着来源。"))
                 Divider().padding(.leading, 62)
-                feature("sparkles", "AI 助手直接查", "Claude、Codex 这些助手连上后，可以直接问豆仓里的录音、纪要和待办。")
+                feature("sparkles", String(localized: "AI 助手直接查"), String(localized: "Claude、Codex 这些助手连上后，可以直接问豆仓里的录音、纪要和待办。"))
             }
             .padding(.vertical, 4)
             .panel(radius: Theme.Radius.panel)
@@ -201,9 +201,9 @@ struct WelcomeView: View {
 
     private var device: some View {
         VStack(alignment: .leading, spacing: 0) {
-            heading("连接录音豆", "把录音豆从充电盒里拿出来，放在 Mac 旁边。录音豆同一时间只能连一台设备：手机上的录音豆 App 连着的话，先关掉手机蓝牙。")
-            row(icon: "headphones", title: store.link == .ready ? "\(store.displayDeviceName) 已连接" : "录音豆还没连上",
-                detail: store.link == .ready ? "以后放回充电盒、或者一连上，在外面录的都会自动同步过来。" : "点「去连接」到设备页，找到它点一下就行。",
+            heading(String(localized: "连接录音豆"), String(localized: "把录音豆从充电盒里拿出来，放在 Mac 旁边。录音豆同一时间只能连一台设备：手机上的录音豆 App 连着的话，先关掉手机蓝牙。"))
+            row(icon: "headphones", title: store.link == .ready ? String(localized: "\(store.displayDeviceName) 已连接") : String(localized: "录音豆还没连上"),
+                detail: store.link == .ready ? String(localized: "以后放回充电盒、或者一连上，在外面录的都会自动同步过来。") : String(localized: "点「去连接」到设备页，找到它点一下就行。"),
                 ok: store.link == .ready) {
                 Button("去连接") { nav.route = .device; finish() }.buttonStyle(.glass)
             }
@@ -215,9 +215,9 @@ struct WelcomeView: View {
 
     private var asr: some View {
         VStack(alignment: .leading, spacing: 0) {
-            heading("下载转写模型", "把录音转成文字。模型约 1 GB，下一次就一直能用；转写在这台 Mac 上完成，录音不上传。")
-            row(icon: "text.bubble", title: store.asrAvailable ? "转写模型已就绪" : "Qwen3‑ASR 0.6B",
-                detail: store.asrAvailable ? "新录音下载后会自动转成文字。" : "下载可以续传；网络不好时会换下载源。",
+            heading(String(localized: "下载转写模型"), String(localized: "把录音转成文字。模型约 1 GB，下一次就一直能用；转写在这台 Mac 上完成，录音不上传。"))
+            row(icon: "text.bubble", title: store.asrAvailable ? String(localized: "转写模型已就绪") : "Qwen3‑ASR 0.6B",
+                detail: store.asrAvailable ? String(localized: "新录音下载后会自动转成文字。") : String(localized: "下载可以续传；网络不好时会换下载源。"),
                 ok: store.asrAvailable) {
                 if let progress = store.modelDownload {
                     ProgressView(value: progress).frame(width: 110)
@@ -234,9 +234,9 @@ struct WelcomeView: View {
 
     private var analysis: some View {
         VStack(alignment: .leading, spacing: 0) {
-            heading("选一个整理纪要的模型", "把文字稿整理成摘要、决定、待办和重点。可以用本机模型（不联网），也可以填你自己的云端模型。这一步可以以后再做：没选的时候录音照样转成文字。")
-            row(icon: "doc.text.magnifyingglass", title: store.analysisAvailable ? "已就绪" : "还没选",
-                detail: store.analysisAvailable ? "整理好的录音会出现在总览的「接下来要做的」里。" : "在设置里选本机模型下载，或者填云端服务的地址和密钥。",
+            heading(String(localized: "选一个整理纪要的模型"), String(localized: "把文字稿整理成摘要、决定、待办和重点。可以用本机模型（不联网），也可以填你自己的云端模型。这一步可以以后再做：没选的时候录音照样转成文字。"))
+            row(icon: "doc.text.magnifyingglass", title: store.analysisAvailable ? String(localized: "已就绪") : String(localized: "还没选"),
+                detail: store.analysisAvailable ? String(localized: "整理好的录音会出现在总览的「接下来要做的」里。") : String(localized: "在设置里选本机模型下载，或者填云端服务的地址和密钥。"),
                 ok: store.analysisAvailable) {
                 if let progress = store.llmDownload {
                     ProgressView(value: progress).frame(width: 110)
@@ -251,7 +251,7 @@ struct WelcomeView: View {
 
     private var permissions: some View {
         VStack(alignment: .leading, spacing: 0) {
-            heading("豆仓需要的权限", "每一项都写了用来做什么。没开的点「去打开」，会直接跳到系统设置里对应的地方；开好回来这里会自动变成已开。")
+            heading(String(localized: "豆仓需要的权限"), String(localized: "每一项都写了用来做什么。没开的点「去打开」，会直接跳到系统设置里对应的地方；开好回来这里会自动变成已开。"))
             VStack(spacing: 0) {
                 ForEach(Array(Permissions.Kind.allCases.enumerated()), id: \.element) { i, k in
                     if i > 0 { Divider().padding(.leading, 62) }
@@ -268,18 +268,18 @@ struct WelcomeView: View {
 
     private var more: some View {
         VStack(alignment: .leading, spacing: 0) {
-            heading("更多功能（都是可选的）", "用得上再开。都可以以后在设置或设备页里打开。")
+            heading(String(localized: "更多功能（都是可选的）"), String(localized: "用得上再开。都可以以后在设置或设备页里打开。"))
             VStack(spacing: 0) {
-                row(icon: "keyboard", title: "语音输入",
-                    detail: store.settings.dictationEnabled ? "已打开：按住\(Dictation.name(of: store.settings.dictationKey).components(separatedBy: " ").prefix(2).joined(separator: " "))说话，松开文字打进当前的软件。说过的话记在侧栏「语音输入」。"
-                        : "按住一个键对着录音豆或麦克风说话，松开后文字直接打进当前的软件，像输入法一样。要「辅助功能」权限。",
+                row(icon: "keyboard", title: String(localized: "语音输入"),
+                    detail: store.settings.dictationEnabled ? String(localized: "已打开：按住\(Dictation.name(of: store.settings.dictationKey).components(separatedBy: " ").prefix(2).joined(separator: " "))说话，松开文字打进当前的软件。说过的话记在侧栏「语音输入」。")
+                        : String(localized: "按住一个键对着录音豆或麦克风说话，松开后文字直接打进当前的软件，像输入法一样。要「辅助功能」权限。"),
                     ok: store.settings.dictationEnabled) {
                     Button("去设置") { SettingsView.open(.dictation, with: openSettings) }.buttonStyle(.glass)
                 }
                 Divider().padding(.leading, 62)
-                row(icon: "cloud", title: "飞书妙记同步",
-                    detail: FeishuSync.shared.link == .ready ? "已连上你的飞书。手机 App 同步走的录音会在设备页列出来，可以拉回豆仓。"
-                        : "手机上的录音豆 App 先连上录音豆的话，录音会被同步进飞书、录音豆上就没有了。装好飞书命令行工具并授权后，豆仓能把它们拉回来。",
+                row(icon: "cloud", title: String(localized: "飞书妙记同步"),
+                    detail: FeishuSync.shared.link == .ready ? String(localized: "已连上你的飞书。手机 App 同步走的录音会在设备页列出来，可以拉回豆仓。")
+                        : String(localized: "手机上的录音豆 App 先连上录音豆的话，录音会被同步进飞书、录音豆上就没有了。装好飞书命令行工具并授权后，豆仓能把它们拉回来。"),
                     ok: FeishuSync.shared.link == .ready) {
                     Button("看步骤") { nav.route = .device; finish() }.buttonStyle(.glass)
                 }
@@ -292,9 +292,9 @@ struct WelcomeView: View {
                     .padding(.leading, 62).padding(.trailing, 14).padding(.bottom, 12)
                 }
                 Divider().padding(.leading, 62)
-                row(icon: "sparkles", title: "连上 AI 助手",
-                    detail: connector.connectedCount > 0 ? "已经连上 \(connector.connectedCount) 个。在它们那边就能直接问豆仓里的内容。"
-                        : "Claude、Codex、OpenClaw、Grok Bot 都可以。连上后在它们那边就能直接问豆仓里的录音和待办。",
+                row(icon: "sparkles", title: String(localized: "连上 AI 助手"),
+                    detail: connector.connectedCount > 0 ? String(localized: "已经连上 \(connector.connectedCount) 个。在它们那边就能直接问豆仓里的内容。")
+                        : String(localized: "Claude、Codex、OpenClaw、Grok Bot 都可以。连上后在它们那边就能直接问豆仓里的录音和待办。"),
                     ok: connector.connectedCount > 0) {
                     Button("去连接") { openWindow(id: "connect") }.buttonStyle(.glass)
                 }
@@ -312,7 +312,7 @@ struct WelcomeView: View {
             Button {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
-                store.toast("doc.on.doc", "已拷贝，粘到终端里运行")
+                store.toast("doc.on.doc", String(localized: "已拷贝，粘到终端里运行"))
             } label: { Image(systemName: "doc.on.doc") }
                 .buttonStyle(.plain).foregroundStyle(Theme.warm500).help("拷贝").accessibilityLabel("拷贝命令")
         }
@@ -353,20 +353,20 @@ final class Permissions {
         case bluetooth, microphone, screen, accessibility, notifications
         var name: String {
             switch self {
-            case .bluetooth: "蓝牙"
-            case .microphone: "麦克风"
-            case .screen: "屏幕与系统录音"
-            case .accessibility: "辅助功能"
-            case .notifications: "通知"
+            case .bluetooth: String(localized: "蓝牙")
+            case .microphone: String(localized: "麦克风")
+            case .screen: String(localized: "屏幕与系统录音")
+            case .accessibility: String(localized: "辅助功能")
+            case .notifications: String(localized: "通知")
             }
         }
         var use: String {
             switch self {
-            case .bluetooth: "连接录音豆和录音卡"
-            case .microphone: "用 Mac 自己录音"
-            case .screen: "录会议软件、视频里的电脑声音"
-            case .accessibility: "语音输入时把文字打进别的软件"
-            case .notifications: "录音整理好了、录音豆连上了告诉你"
+            case .bluetooth: String(localized: "连接录音豆和录音卡")
+            case .microphone: String(localized: "用 Mac 自己录音")
+            case .screen: String(localized: "录会议软件、视频里的电脑声音")
+            case .accessibility: String(localized: "语音输入时把文字打进别的软件")
+            case .notifications: String(localized: "录音整理好了、录音豆连上了告诉你")
             }
         }
         var icon: String {

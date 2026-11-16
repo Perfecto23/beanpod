@@ -57,7 +57,7 @@ struct DashboardView: View {
 
                 if showStats {
                 HStack(alignment: .top, spacing: 12) {
-                    Card(title: "近 14 天录音时长") {
+                    Card(title: String(localized: "近 14 天录音时长")) {
                         if store.ownRecordings.isEmpty {
                             Text("有了录音之后，这里会显示每天录了多久。").font(.callout).foregroundStyle(.secondary).frame(height: 150)
                         } else {
@@ -66,11 +66,11 @@ struct DashboardView: View {
                                     .foregroundStyle(Theme.accent.gradient).cornerRadius(3)
                             }
                             .chartXAxis { AxisMarks(values: .stride(by: .day, count: 2)) { _ in AxisValueLabel(format: .dateTime.day()); AxisGridLine() } }
-                            .chartYAxis { AxisMarks { v in AxisValueLabel { if let m = v.as(Double.self) { Text(m < 10 && m != m.rounded() ? String(format: "%.1f 分", m) : "\(Int(m)) 分") } }; AxisGridLine() } }
+                            .chartYAxis { AxisMarks { v in AxisValueLabel { if let m = v.as(Double.self) { Text(m < 10 && m != m.rounded() ? String(format: String(localized: "%.1f 分"), m) : String(localized: "\(Int(m)) 分")) } }; AxisGridLine() } }
                             .frame(height: 150)
                         }
                     }
-                    Card(title: "场景分布") {
+                    Card(title: String(localized: "场景分布")) {
                         if sceneCounts.isEmpty {
                             Text("录音整理之后会自动归类到会议、访谈、销售等场景。").font(.callout).foregroundStyle(.secondary).frame(height: 150, alignment: .top)
                         } else {
@@ -102,7 +102,7 @@ struct DashboardView: View {
                 }
 
                 if showStats, !store.allTags.isEmpty {
-                    Card(title: "常出现的话题") {
+                    Card(title: String(localized: "常出现的话题")) {
                         FlowLayout(spacing: 6) {
                             ForEach(store.allTags.prefix(24), id: \.tag) { item in
                                 Text("\(item.tag)  \(item.count)").font(.callout)
@@ -228,7 +228,7 @@ struct DashboardView: View {
     }
 
     private func hours(_ t: TimeInterval) -> String {
-        t >= 3600 ? String(format: "%.1f 小时", t / 3600) : "\(Int(t / 60)) 分钟"
+        t >= 3600 ? String(format: String(localized: "%.1f 小时"), t / 3600) : String(localized: "\(Int(t / 60)) 分钟")
     }
 }
 
@@ -304,36 +304,36 @@ struct Hero: View {
 
     private var greeting: String {
         switch Calendar.current.component(.hour, from: .now) {
-        case 5..<11: "早上好"
-        case 11..<13: "中午好"
-        case 13..<18: "下午好"
-        default: "晚上好"
+        case 5..<11: String(localized: "早上好")
+        case 11..<13: String(localized: "中午好")
+        case 13..<18: String(localized: "下午好")
+        default: String(localized: "晚上好")
         }
     }
 
     private var line: String {
-        if store.isRecording { return store.recordingOnMac ? "在听，录的是这台 Mac 的\(store.macSource.name)。" : "在听，你说。" }
+        if store.isRecording { return store.recordingOnMac ? String(localized: "在听，录的是这台 Mac 的\(store.macSource.name)。") : String(localized: "在听，你说。") }
         // Wi‑Fi 快传时蓝牙是自己主动断开的，别说「没连上」
-        if store.wifi != nil { return "正在用 Wi‑Fi 把录音搬回来，这一分钟电脑上不了网，马上就好。" }
-        if store.link != .ready, store.stages.isEmpty, store.recState == .idle { return "录音豆没连上。把它拿出来我就醒；想现在就录，用这台 Mac 也行。" }
-        if store.recState == .paused { return "先歇一下。想接着录就点继续，录完了点结束。" }
-        if cheering, store.stages.isEmpty { return "连上啦，随时可以开始。" }
+        if store.wifi != nil { return String(localized: "正在用 Wi‑Fi 把录音搬回来，这一分钟电脑上不了网，马上就好。") }
+        if store.link != .ready, store.stages.isEmpty, store.recState == .idle { return String(localized: "录音豆没连上。把它拿出来我就醒；想现在就录，用这台 Mac 也行。") }
+        if store.recState == .paused { return String(localized: "先歇一下。想接着录就点继续，录完了点结束。") }
+        if cheering, store.stages.isEmpty { return String(localized: "连上啦，随时可以开始。") }
         if let stage = store.stages.values.first {
             switch stage {
-            case .transcribing: return "正在把录音变成文字…"
-            case .analyzing: return "正在想这是什么场合、该记哪些重点…"
-            case .queued: return "马上就来。"
+            case .transcribing: return String(localized: "正在把录音变成文字…")
+            case .analyzing: return String(localized: "正在想这是什么场合、该记哪些重点…")
+            case .queued: return String(localized: "马上就来。")
             }
         }
-        if store.pull != nil { return "正在从录音豆里往外搬录音…" }
+        if store.pull != nil { return String(localized: "正在从录音豆里往外搬录音…") }
         switch store.mascotPower {
-        case .charging(let level): return level >= 95 ? "充满了，拿出来就能录。" : "在充电盒里充电，现在 \(level)%。"
-        case .low: return "录音豆快没电了，放回充电盒歇一会儿吧。"
+        case .charging(let level): return level >= 95 ? String(localized: "充满了，拿出来就能录。") : String(localized: "在充电盒里充电，现在 \(level)%。")
+        case .low: return String(localized: "录音豆快没电了，放回充电盒歇一会儿吧。")
         default: break
         }
         let todos = store.openTodos.count
-        if todos > 0 { return "有 \(todos) 件事等你处理" }
-        return store.recordings.isEmpty ? "录一段试试？我来帮你整理。" : "随时可以开始，我都记着。"
+        if todos > 0 { return String(localized: "有 \(todos) 件事等你处理") }
+        return store.recordings.isEmpty ? String(localized: "录一段试试？我来帮你整理。") : String(localized: "随时可以开始，我都记着。")
     }
 
     var body: some View {

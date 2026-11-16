@@ -71,7 +71,7 @@ extension BeanStore {
         if playingID == j.id { stop() }
         if j.onMac {
             removeLocal(j.id)
-            toast("trash", "这条没有留下")
+            toast("trash", String(localized: "这条没有留下"))
             return
         }
         // 这几秒里它可能已经被别的同步带着下载了（比如把录音豆放回了充电盒）：一起清掉
@@ -79,12 +79,12 @@ extension BeanStore {
         pendingMarks.removeAll { $0.file == j.id }
         if recordings.first(where: { $0.id == j.id })?.downloaded == true { removeLocal(j.id) }
         guard link == .ready else {
-            problem = Problem(title: "录音豆没连着，这条还在录音豆里", detail: "连上之后它会出现在列表里，到时候可以从录音豆删除。")
+            problem = Problem(title: String(localized: "录音豆没连着，这条还在录音豆里"), detail: String(localized: "连上之后它会出现在列表里，到时候可以从录音豆删除。"))
             return
         }
         deleteFromDevice(j.id)
         recordings.removeAll { $0.id == j.id }
-        toast("trash", "这条没有留下")
+        toast("trash", String(localized: "这条没有留下"))
     }
 }
 
@@ -96,7 +96,7 @@ extension BeanStore {
         guard let rec = recordings.first(where: { $0.id == id }), !retitling.contains(id), analysisAvailable else { return }
         let material = [rec.summary, rec.transcript.map { String($0.prefix(3000)) }].compactMap { $0 }.joined(separator: "\n\n")
         guard !material.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            problem = Problem(title: "这条录音还没有文字", detail: "先转写出文字，才能让 AI 起标题。")
+            problem = Problem(title: String(localized: "这条录音还没有文字"), detail: String(localized: "先转写出文字，才能让 AI 起标题。"))
             return
         }
         let old = rec.title ?? ""
@@ -120,7 +120,7 @@ extension BeanStore {
                 recordings[i].titleEdited = false
                 saveLibrary()
             } catch {
-                problem = Problem(title: "没能起出新标题", detail: error.localizedDescription)
+                problem = Problem(title: String(localized: "没能起出新标题"), detail: error.localizedDescription)
             }
         }
     }

@@ -73,7 +73,7 @@ extension BeanStore {
         guard let rec = recordings.first(where: { $0.id == id }), let text = rec.transcript, !text.isEmpty,
               !studying.contains(id) else { return }
         guard analysisAvailable else {
-            problem = Problem(title: "还没设置整理纪要的模型", detail: "英语学习模式要用模型来分级单词、解析句子。先在设置里选一个本机模型，或者填自己的云端模型。", action: .settings)
+            problem = Problem(title: String(localized: "还没设置整理纪要的模型"), detail: String(localized: "英语学习模式要用模型来分级单词、解析句子。先在设置里选一个本机模型，或者填自己的云端模型。"), action: .settings)
             return
         }
         studying.insert(id)
@@ -96,9 +96,9 @@ extension BeanStore {
                 recordings[i].study = s
                 saveLibrary()
                 addLog("英语学习整理完成 \(id)：\(s.words.count) 词 \(s.phrases.count) 短语 \(s.sentences.count) 难句，模型 \(model)")
-                toast("graduationcap", "学习笔记整理好了：\(rec.displayTitle.prefix(16))")
+                toast("graduationcap", String(localized: "学习笔记整理好了：\(String(rec.displayTitle.prefix(16)))"))
             } catch {
-                problem = Problem(title: "没能整理学习笔记", detail: error.localizedDescription)
+                problem = Problem(title: String(localized: "没能整理学习笔记"), detail: error.localizedDescription)
             }
         }
     }
@@ -124,10 +124,10 @@ extension BeanStore {
 
     nonisolated static func parseStudy(_ reply: String) throws -> Study {
         guard let start = reply.firstIndex(of: "{"), let end = reply.lastIndex(of: "}") else {
-            throw AnalyzerError.badReply("模型没按格式回复")
+            throw AnalyzerError.badReply(String(localized: "模型没按格式回复"))
         }
         let data = Data(reply[start...end].utf8)
-        guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw AnalyzerError.badReply("模型没按格式回复") }
+        guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw AnalyzerError.badReply(String(localized: "模型没按格式回复")) }
         func str(_ d: [String: Any], _ k: String) -> String { (d[k] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
         var s = Study()
         s.overall = str(obj, "overall").uppercased()
@@ -153,7 +153,7 @@ extension BeanStore {
             let t = str(d, "text"); guard !t.isEmpty else { return nil }
             return Study.Sentence(text: t, translation: str(d, "translation"), structure: str(d, "structure"), points: str(d, "points"))
         }
-        guard !s.words.isEmpty || !s.sentences.isEmpty else { throw AnalyzerError.badReply("模型没整理出单词和句子") }
+        guard !s.words.isEmpty || !s.sentences.isEmpty else { throw AnalyzerError.badReply(String(localized: "模型没整理出单词和句子")) }
         return s
     }
 

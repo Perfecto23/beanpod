@@ -10,7 +10,7 @@ extension BeanStore {
     /// 成功放进录音库，或者已经确定这条导入不了（比如图文笔记没有声音），返回 true；
     /// 返回 false 表示交给后面的方式再试。
     func importWithSocialDL(_ id: UUID, _ url: String, platform: String) async -> Bool {
-        if !SocialDL.isReady { setJobTitle(id, "第一次用 social-dl，正在准备下载组件…") }
+        if !SocialDL.isReady { setJobTitle(id, String(localized: "第一次用 social-dl，正在准备下载组件…")) }
         let prepared = await SocialDL.prepare()
         guard let python = prepared.python else {
             addLog("social-dl 没准备好：\(prepared.note)")
@@ -43,11 +43,11 @@ extension BeanStore {
                 addLog("social-dl：\(platform)要登录（\(why.prefix(80))）")
                 if cookie.isEmpty {
                     linkLogin = LinkLoginRequest(platform: platform, url: url, hint: platform == "小红书"
-                        ? "小红书把这台 Mac 当成海外访问，跳到了 rednote.com，那边要登录才给看笔记。用小红书 App 扫码登录一次就行。"
+                        ? String(localized: "小红书把这台 Mac 当成海外访问，跳到了 rednote.com，那边要登录才给看笔记。用小红书 App 扫码登录一次就行。")
                         : "")
                 } else {
-                    problem = Problem(title: "这条\(platform)链接没能导入",
-                                      detail: "已经带着你在豆仓里的\(platform)登录状态试过了，还是被拦在登录页。可能是登录过期了，去设置的「连接」里退出后重新登录。")
+                    problem = Problem(title: String(localized: "这条\(platform)链接没能导入"),
+                                      detail: String(localized: "已经带着你在豆仓里的\(platform)登录状态试过了，还是被拦在登录页。可能是登录过期了，去设置的「连接」里退出后重新登录。"))
                 }
                 return true
             }
@@ -62,8 +62,8 @@ extension BeanStore {
         let media = files.first { ["mp4", "m4a", "mp3", "mov", "m4v", "webm", "aac", "flv", "mkv"].contains($0.pathExtension.lowercased()) }
         guard let media else {
             // 小红书图文笔记：只有图片，没有声音可转
-            problem = Problem(title: "这条\(platform)没有声音",
-                              detail: "「\(title.prefix(40))」是图文，没有视频或音频，转不了文字。")
+            problem = Problem(title: String(localized: "这条\(platform)没有声音"),
+                              detail: String(localized: "「\(String(title.prefix(40)))」是图文，没有视频或音频，转不了文字。"))
             return true
         }
         if let k = linkJobs.firstIndex(where: { $0.id == id }) { linkJobs[k].title = title; linkJobs[k].progress = 0.85 }

@@ -78,11 +78,11 @@ struct CardPanel: View {
 
                 // 三个数，中间用细竖线隔开，各占三分之一
                 HStack(spacing: 0) {
-                    fact("电量", card.battery.map { "\($0)%" } ?? "—")
+                    fact(String(localized: "电量"), card.battery.map { "\($0)%" } ?? "—")
                     Divider().frame(height: 34).padding(.horizontal, 16)
-                    fact("剩余空间", card.freeKB.map { ByteCountFormatter.string(fromByteCount: Int64($0) * 1024, countStyle: .file) } ?? "—")
+                    fact(String(localized: "剩余空间"), card.freeKB.map { ByteCountFormatter.string(fromByteCount: Int64($0) * 1024, countStyle: .file) } ?? "—")
                     Divider().frame(height: 34).padding(.horizontal, 16)
-                    fact("卡里", card.listed ? "\(card.files.count) 条" + (card.waiting.isEmpty ? " · 都已下载" : " · \(card.waiting.count) 条没下载") : "—")
+                    fact(String(localized: "卡里"), card.listed ? String(localized: "\(card.files.count) 条") + " · " + (card.waiting.isEmpty ? String(localized: "都已下载") : String(localized: "\(card.waiting.count) 条没下载")) : "—")
                 }
 
                 Divider()
@@ -119,7 +119,7 @@ struct CardPanel: View {
         .confirmationDialog("从录音卡上删掉这条录音？", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), presenting: deleting) { file in
             Button("从录音卡删除", role: .destructive) { card.deleteFromCard(file); deleting = nil }
         } message: { file in
-            Text("「\(title(file))」会从卡上永久删除，不能恢复。" + (card.isImported(file) ? "豆仓录音库里的那份不受影响。" : "它还没下载到豆仓，删了就没有了。"))
+            Text(String(localized: "「\(title(file))」会从卡上永久删除，不能恢复。") + (card.isImported(file) ? String(localized: "豆仓录音库里的那份不受影响。") : String(localized: "它还没下载到豆仓，删了就没有了。")))
         }
     }
 
@@ -172,7 +172,7 @@ struct CardPanel: View {
     }
 
     private func minutes(_ seconds: TimeInterval) -> String {
-        seconds < 60 ? "\(max(1, Int(seconds.rounded()))) 秒" : "\(Int((seconds / 60).rounded())) 分钟"
+        seconds < 60 ? String(localized: "\(max(1, Int(seconds.rounded()))) 秒") : String(localized: "\(Int((seconds / 60).rounded())) 分钟")
     }
 }
 

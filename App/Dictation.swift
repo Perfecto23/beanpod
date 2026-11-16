@@ -22,11 +22,11 @@ final class Dictation {
 
     /// 能用来「按住说话」的键：都是修饰键，单独按住不会往输入框里打出字符。
     static let keys: [(code: Int, name: String)] = [
-        (61, "右 Option ⌥"), (54, "右 Command ⌘"), (62, "右 Control ⌃"), (60, "右 Shift ⇧"),
-        (63, "Fn / 地球仪键"), (58, "左 Option ⌥"), (59, "左 Control ⌃"),
+        (61, String(localized: "右 Option ⌥")), (54, String(localized: "右 Command ⌘")), (62, String(localized: "右 Control ⌃")), (60, String(localized: "右 Shift ⇧")),
+        (63, String(localized: "Fn / 地球仪键")), (58, String(localized: "左 Option ⌥")), (59, String(localized: "左 Control ⌃")),
     ]
 
-    static func name(of code: Int) -> String { keys.first { $0.code == code }?.name ?? "按键 \(code)" }
+    static func name(of code: Int) -> String { keys.first { $0.code == code }?.name ?? String(localized: "按键 \(code)") }
 
     /// 这个键对应哪个修饰标志，用来判断它是按下还是松开。
     static func flag(for code: Int) -> NSEvent.ModifierFlags? {
@@ -101,15 +101,15 @@ final class Dictation {
 
     private func press() {
         guard !holding, let store else { return }
-        guard store.link == .ready else { flash(.failed("录音豆没连上")); return }
-        guard store.encryptionReady else { flash(.failed("录音豆还没准备好，稍等一下")); return }
-        guard store.recState == .idle || store.scratchFiles.contains(store.currentDeviceFile), store.info?.recording != true, store.pull == nil else { flash(.failed("录音豆正忙，先停下当前的录音或下载")); return }
-        guard store.asrAvailable else { flash(.failed("还没有转写模型，先到设置里下载")); return }
+        guard store.link == .ready else { flash(.failed(String(localized: "录音豆没连上"))); return }
+        guard store.encryptionReady else { flash(.failed(String(localized: "录音豆还没准备好，稍等一下"))); return }
+        guard store.recState == .idle || store.scratchFiles.contains(store.currentDeviceFile), store.info?.recording != true, store.pull == nil else { flash(.failed(String(localized: "录音豆正忙，先停下当前的录音或下载"))); return }
+        guard store.asrAvailable else { flash(.failed(String(localized: "还没有转写模型，先到设置里下载"))); return }
         // 录音豆的「暂停」不算结束：再开始会接着往同一条录音里录。
         // 如果那条是你自己的正式录音，语音输入不能往里掺东西，更不能事后把它删掉。
         let current = store.currentDeviceFile
         if current != 0, !store.scratchFiles.contains(current) {
-            flash(.failed("录音豆里有一条暂停中的录音，先把它下载或结束"))
+            flash(.failed(String(localized: "录音豆里有一条暂停中的录音，先把它下载或结束")))
             return
         }
         holding = true
@@ -138,7 +138,7 @@ final class Dictation {
             store.send(Command.stopRecording())
             store.addLog("语音输入：3 秒内没有收到实时声音（当前文件 \(store.live?.fileID ?? 0)）")
             store.live = nil
-            self.flash(.failed("录音豆没有开始传声音，松开再试一次"))
+            self.flash(.failed(String(localized: "录音豆没有开始传声音，松开再试一次")))
         }
         let server = store.settings.llamaServerPath
         Task { await QwenASR.shared.warmUp(serverPath: server) }
@@ -156,7 +156,7 @@ final class Dictation {
             let fid = store.live?.fileID
             store.live = nil
             cleanUp(store, fid)
-            flash(.failed("按住，等出现「在听」再说话"))
+            flash(.failed(String(localized: "按住，等出现「在听」再说话")))
             return
         }
         store.send(Command.stopRecording())      // 结束这条临时录音，下次按键是新的一条
@@ -179,12 +179,12 @@ final class Dictation {
             while let f = capture.frames[n] { audio.append(contentsOf: f); n += 1 }
         }
         guard let capture, audio.count >= OggOpus.frameSize * 10 else {
-            flash(.failed(capture?.fileID == nil ? "录音豆没有响应" : "没听到声音"))
+            flash(.failed(capture?.fileID == nil ? String(localized: "录音豆没有响应") : String(localized: "没听到声音")))
             return
         }
         guard capture.decryptor != nil else {
             store.addLog("语音输入：没拿到这条录音的解密信息")
-            flash(.failed("这次没接上，再按一次"))
+            flash(.failed(String(localized: "这次没接上，再按一次")))
             return
         }
         store.addLog("语音输入：收到 \(capture.packets) 个切片，实时从第 \(capture.firstSequence ?? 0) 帧起，可用 \(audio.count / OggOpus.frameSize) 帧")
@@ -194,7 +194,7 @@ final class Dictation {
             try OpusDecoder.writeWAV(packets: OggOpus.frames(fromRaw: audio), to: wav)
             let samples = try QwenASR.loadMono16k(wav)
             var text = try await QwenASR.shared.transcribe(samples: samples, serverPath: store.settings.llamaServerPath)
-            guard !text.isEmpty else { store.addLog("语音输入：没识别出文字"); flash(.failed("没听清")); return }
+            guard !text.isEmpty else { store.addLog("语音输入：没识别出文字"); flash(.failed(String(localized: "没听清"))); return }
             if store.settings.dictationPolish, store.analysisAvailable {
                 let raw = text
                 if let polished = try? await store.withLLM({ config in

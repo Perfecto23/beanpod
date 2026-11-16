@@ -118,8 +118,8 @@ extension BeanStore {
         Task {
             guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true else { return }
             let content = UNMutableNotificationContent()
-            content.title = "整理好了：\(title)"
-            content.body = (todos > 0 ? "\(todos) 件待办。" : "") + summary
+            content.title = String(localized: "整理好了：\(title)")
+            content.body = (todos > 0 ? String(localized: "\(todos) 件待办。") : "") + summary
             content.sound = .default
             content.userInfo = ["recording": Int(id)]
             try? await center.add(UNNotificationRequest(identifier: "done-\(id)", content: content, trigger: nil))
@@ -168,8 +168,8 @@ extension BeanStore {
                 saveLibrary()
             } catch {
                 let kept = !(rec.transcript ?? "").isEmpty
-                problem = Problem(title: "「\(rec.displayTitle)」没转写出来",
-                                  detail: error.localizedDescription + (kept ? "\n原来的文字稿和纪要都留着没动，可以再试一次。" : "\n录音本身没问题，可以再试一次。"),
+                problem = Problem(title: String(localized: "「\(rec.displayTitle)」没转写出来"),
+                                  detail: error.localizedDescription + (kept ? String(localized: "\n原来的文字稿和纪要都留着没动，可以再试一次。") : String(localized: "\n录音本身没问题，可以再试一次。")),
                                   action: .process(id))
                 return
             }
@@ -182,7 +182,7 @@ extension BeanStore {
         let transcript = flagged.isEmpty ? spoken
             : spoken + "\n\n【录音时用户特意标记为重点的句子，整理纪要时务必保留并优先体现】\n" + flagged.map { "- " + $0 }.joined(separator: "\n")
         guard transcript.count >= 8 else {
-            recordings[i].summary = "这条录音里没有识别到说话内容。"
+            recordings[i].summary = String(localized: "这条录音里没有识别到说话内容。")
             recordings[i].scene = recordings[i].scene ?? .other
             recordings[i].analyzedBy = "—"
             saveLibrary()
@@ -201,7 +201,7 @@ extension BeanStore {
                     try await Analyzer.analyze(transcript: transcript, duration: duration, profession: profession, fixedScene: fixed, config: config)
                 }
             } catch {
-                problem = Problem(title: "「\(rec.displayTitle)」没出完整纪要", detail: "分析模型这次没接通，先按关键词粗略分了类。\n原因：\(error.localizedDescription)\n检查一下设置里的分析模型，然后在这条录音上点「重新整理纪要」。", action: .settings)
+                problem = Problem(title: String(localized: "「\(rec.displayTitle)」没出完整纪要"), detail: String(localized: "分析模型这次没接通，先按关键词粗略分了类。\n原因：\(error.localizedDescription)\n检查一下设置里的分析模型，然后在这条录音上点「重新整理纪要」。"), action: .settings)
                 result = Analyzer.fallback(transcript: spoken, duration: rec.duration, fixedScene: fixed)
             }
         } else {
@@ -211,8 +211,8 @@ extension BeanStore {
         // 已经有模型出的纪要，这次模型没接通只能按关键词粗分：别用粗分把好的纪要、待办盖掉
         if result.source == "关键词规则", recordings[j].summary != nil,
            let before = recordings[j].analyzedBy, before != "关键词规则", before != "—" {
-            problem = Problem(title: "「\(rec.displayTitle)」这次没重新整理",
-                              detail: "分析模型没接通，原来的纪要和待办都留着没动。检查一下设置里的分析模型，再点「重新整理纪要」。",
+            problem = Problem(title: String(localized: "「\(rec.displayTitle)」这次没重新整理"),
+                              detail: String(localized: "分析模型没接通，原来的纪要和待办都留着没动。检查一下设置里的分析模型，再点「重新整理纪要」。"),
                               action: .settings)
             return
         }
@@ -317,7 +317,7 @@ extension BeanStore {
     /// 新增一位说话人，并把这一句标给他。
     func addSpeaker(_ id: UInt32, start: TimeInterval) {
         guard let i = index(id) else { return }
-        recordings[i].speakers.append("说话人 \(recordings[i].speakers.count + 1)")
+        recordings[i].speakers.append(String(localized: "说话人 \(recordings[i].speakers.count + 1)"))
         setSpeaker(id, start: start, to: recordings[i].speakers.count - 1)
     }
 
@@ -464,7 +464,7 @@ extension BeanStore {
         if general || picked.isEmpty {
             for r in knowledgeRecordings.filter({ $0.isAnalyzed || $0.isDictation }).prefix(8) where !picked.contains(where: { $0.id == r.id }) && picked.count < 8 { picked.append(r) }
         }
-        guard !picked.isEmpty else { answer = "记录里没有找到和这个问题相关的内容。"; answerSources = []; return }
+        guard !picked.isEmpty else { answer = String(localized: "记录里没有找到和这个问题相关的内容。"); answerSources = []; return }
 
         asking = true; answer = nil
         let context = picked.map { r in
@@ -500,9 +500,9 @@ extension BeanStore {
         md += "---\n\n# \(r.displayTitle)\n\n"
         if let s = r.summary { md += "\(s)\n\n" }
         for sec in r.sections { md += "## \(sec.heading)\n\n" + sec.items.map { "- \($0)" }.joined(separator: "\n") + "\n\n" }
-        if !r.todos.isEmpty { md += "## 待办\n\n" + r.todos.map { "- [\($0.done ? "x" : " ")] \($0.text)" }.joined(separator: "\n") + "\n\n" }
+        if !r.todos.isEmpty { md += "## " + String(localized: "待办") + "\n\n" + r.todos.map { "- [\($0.done ? "x" : " ")] \($0.text)" }.joined(separator: "\n") + "\n\n" }
         if !r.segments.isEmpty {
-            md += "## 文字稿\n\n" + r.segments.map { "**\(clock($0.start))** \($0.text)" }.joined(separator: "\n\n") + "\n"
+            md += "## " + String(localized: "文字稿") + "\n\n" + r.segments.map { "**\(clock($0.start))** \($0.text)" }.joined(separator: "\n\n") + "\n"
         }
         return md
     }
@@ -512,7 +512,7 @@ extension BeanStore {
     func exportMarkdown(_ items: [Recording]) {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.canCreateDirectories = true
-        panel.prompt = "导出到这里"
+        panel.prompt = String(localized: "导出到这里")
         if !settings.exportFolder.isEmpty { panel.directoryURL = URL(fileURLWithPath: settings.exportFolder) }
         guard panel.runModal() == .OK, let folder = panel.url else { return }
         settings.exportFolder = folder.path
@@ -523,7 +523,7 @@ extension BeanStore {
             let url = folder.appendingPathComponent(String(safe) + ".md")
             if (try? markdown(r).write(to: url, atomically: true, encoding: .utf8)) != nil { written += 1 }
         }
-        toast("checkmark.circle.fill", "已导出 \(written) 个文件到「\(folder.lastPathComponent)」")
+        toast("checkmark.circle.fill", String(localized: "已导出 \(written) 个文件到「\(folder.lastPathComponent)」"))
     }
     #endif
 
@@ -545,7 +545,7 @@ extension BeanStore {
     func beginLiveTranscript(reset: Bool = true) {
         refreshASRAvailability()
         guard settings.liveTranscribe, asrAvailable, encryptionReady, pull == nil, live == nil else {
-            liveNote = settings.liveTranscribe && !asrAvailable ? "还没有转写模型，这次不能实时出字。" : nil
+            liveNote = settings.liveTranscribe && !asrAvailable ? String(localized: "还没有转写模型，这次不能实时出字。") : nil
             return
         }
         var capture = LiveCapture()
@@ -769,10 +769,10 @@ extension BeanStore {
         let body = rec.segments.isEmpty ? (rec.transcript ?? "") : rec.segments.map { $0.clean ?? $0.text }.joined(separator: "\n")
         guard !body.isEmpty else { return }
         let material = "标题：\(rec.displayTitle)\n" + (rec.summary.map { "摘要：\($0)\n" } ?? "") + "\n内容：\n" + body
-        var instruction = template.instruction
+        var instruction = template.prompt
         let more = extra.trimmingCharacters(in: .whitespacesAndNewlines)
         if !more.isEmpty { instruction += (instruction.isEmpty ? "" : "\n另外：") + more }
-        guard !instruction.isEmpty else { toast("pencil", "先写下你想把它改成什么样"); return }
+        guard !instruction.isEmpty else { toast("pencil", String(localized: "先写下你想把它改成什么样")); return }
         rewriting.insert(id)
         let profession = settings.profession
         let finalInstruction = instruction
@@ -783,12 +783,12 @@ extension BeanStore {
                     try await Analyzer.rewrite(material: material, instruction: finalInstruction, profession: profession, config: config)
                 }
                 if let i = recordings.firstIndex(where: { $0.id == id }) {
-                    recordings[i].rewrites.insert(Rewrite(name: template == .custom ? "自定义" : template.name, text: text), at: 0)
+                    recordings[i].rewrites.insert(Rewrite(name: template == .custom ? String(localized: "自定义") : template.name, text: text), at: 0)
                     saveLibrary()
                 }
                 if worker == nil { await LocalLLM.shared.stop() }
             } catch {
-                problem = Problem(title: "这次改写没成功", detail: error.localizedDescription + "\n检查一下设置里的分析模型。", action: .settings)
+                problem = Problem(title: String(localized: "这次改写没成功"), detail: error.localizedDescription + String(localized: "\n检查一下设置里的分析模型。"), action: .settings)
             }
         }
     }
@@ -882,8 +882,8 @@ extension BeanStore {
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [.audio, .movie, .plainText, .text]
-        panel.prompt = "导入"
-        panel.message = "选择录音文件（m4a、mp3、wav 等）或文字文件，豆仓会转写并整理。"
+        panel.prompt = String(localized: "导入")
+        panel.message = String(localized: "选择录音文件（m4a、mp3、wav 等）或文字文件，豆仓会转写并整理。")
         guard panel.runModal() == .OK else { return }
         panel.urls.forEach { importFile($0, consume: false) }
     }
@@ -935,14 +935,14 @@ extension BeanStore {
         if let dash = name.firstIndex(of: "-"), name[..<dash].allSatisfy(\.isNumber) { name = String(name[name.index(after: dash)...]) }
 
         if ["md", "txt"].contains(ext) {
-            guard var text = try? String(contentsOf: file, encoding: .utf8) else { reject(file, "读不出文字", consume); return }
+            guard var text = try? String(contentsOf: file, encoding: .utf8) else { reject(file, String(localized: "读不出文字"), consume); return }
             var title: String?
             if text.hasPrefix("# "), let end = text.firstIndex(of: "\n") {
                 title = String(text[text.index(text.startIndex, offsetBy: 2)..<end]).trimmingCharacters(in: .whitespaces)
                 text = String(text[end...])
             }
             text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { reject(file, "内容是空的", consume); return }
+            guard !text.isEmpty else { reject(file, String(localized: "内容是空的"), consume); return }
             var rec = Recording(id: id, size: UInt32(text.utf8.count), date: .now, duration: 0)
             rec.downloaded = true; rec.textOnly = true; rec.origin = "文字笔记"
             rec.title = title; rec.transcript = text; rec.transcribedBy = "外部文字"
@@ -951,8 +951,8 @@ extension BeanStore {
             addLog("导入文字笔记 \(id)")
         } else {
             let source = file
-            guard let samples = Self.decodeAnyAudio(source), samples.count > 1600 else { reject(file, "不是能识别的音频", consume); return }
-            do { try QwenASR.wav(samples).write(to: wavURL(id), options: .atomic) } catch { reject(file, "写不进磁盘", consume); return }
+            guard let samples = Self.decodeAnyAudio(source), samples.count > 1600 else { reject(file, String(localized: "不是能识别的音频"), consume); return }
+            do { try QwenASR.wav(samples).write(to: wavURL(id), options: .atomic) } catch { reject(file, String(localized: "写不进磁盘"), consume); return }
             var rec = Recording(id: id, size: UInt32(samples.count * 2), date: .now, duration: Double(samples.count) / 16000)
             rec.downloaded = true; rec.origin = "导入的音频"; rec.title = name
             recordings.insert(rec, at: 0)
@@ -966,14 +966,14 @@ extension BeanStore {
     /// 处理不了的文件挪到「没能导入」里，不删，也不反复重试。
     private func reject(_ file: URL, _ why: String, _ consume: Bool = true) {
         guard consume else {
-            notice = "「\(file.lastPathComponent)」没能导入：\(why)。"
+            notice = String(localized: "「\(file.lastPathComponent)」没能导入：\(why)。")
             return
         }
         let dir = inboxFolder.appendingPathComponent("没能导入", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try? FileManager.default.moveItem(at: file, to: dir.appendingPathComponent(file.lastPathComponent))
         addLog("收件箱：\(file.lastPathComponent) 没能导入（\(why)）")
-        notice = "「\(file.lastPathComponent)」没能导入：\(why)。文件已挪到收件箱的「没能导入」文件夹。"
+        notice = String(localized: "「\(file.lastPathComponent)」没能导入：\(why)。文件已挪到收件箱的「没能导入」文件夹。")
     }
 
     /// 系统能直接解的格式自己解；解不了的（ogg、amr、微信的 silk 等）交给 ffmpeg，没装 ffmpeg 就放弃。
@@ -1054,7 +1054,7 @@ extension BeanStore {
     /// 用 Homebrew 装 llama.cpp（本机转写和本机整理模型都靠它）。用户在设置里点「安装」才会跑。
     func installLlamaServer() {
         guard serverInstall == nil, let brew = Self.brewPath else { return }
-        serverInstall = "正在安装…"
+        serverInstall = String(localized: "正在安装…")
         addLog("开始用 Homebrew 安装 llama.cpp")
         Task {
             let r = await VideoMaker.shell("'\(brew)' install llama.cpp 2>&1 | tail -20")
@@ -1064,7 +1064,7 @@ extension BeanStore {
                 addLog("llama.cpp 装好了")
             } else {
                 addLog("llama.cpp 没装上：\(VideoMaker.tail(r.output))")
-                problem = Problem(title: "llama.cpp 没装上", detail: "可以在终端里运行 brew install llama.cpp 看看报什么错。\n" + VideoMaker.tail(r.output), action: .settings)
+                problem = Problem(title: String(localized: "llama.cpp 没装上"), detail: String(localized: "可以在终端里运行 brew install llama.cpp 看看报什么错。\n") + VideoMaker.tail(r.output), action: .settings)
             }
         }
     }

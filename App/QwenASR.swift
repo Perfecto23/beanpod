@@ -58,11 +58,11 @@ actor QwenASR {
         let health = URL(string: "http://127.0.0.1:\(port)/health")!
         for _ in 0..<120 {
             try await Task.sleep(for: .milliseconds(500))
-            if !p.isRunning { process = nil; throw ASRError.startFailed("进程退出了，可能是模型文件损坏或内存不够") }
+            if !p.isRunning { process = nil; throw ASRError.startFailed(String(localized: "进程退出了，可能是模型文件损坏或内存不够")) }
             if let (_, r) = try? await URLSession.shared.data(from: health), (r as? HTTPURLResponse)?.statusCode == 200 { return port }
         }
         stop()
-        throw ASRError.startFailed("等了一分钟还没就绪")
+        throw ASRError.startFailed(String(localized: "等了一分钟还没就绪"))
     }
 
     func stop() {

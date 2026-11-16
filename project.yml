@@ -13,6 +13,9 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    # 多语言：界面文字用 String Catalog（App/Localizable.xcstrings），中文是开发语言，英文是翻译
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    SWIFT_EMIT_LOC_STRINGS: YES
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
 targets:
@@ -39,7 +42,7 @@ targets:
         CFBundleDisplayName: 豆仓
         CFBundleIconName: AppIcon
         CFBundleDevelopmentRegion: zh-Hans
-        CFBundleLocalizations: [zh-Hans]
+        CFBundleLocalizations: [zh-Hans, en]
         CFBundleAllowMixedLocalizations: true
         LSApplicationCategoryType: public.app-category.productivity
         NSBluetoothAlwaysUsageDescription: 需要蓝牙来连接你的录音豆。
@@ -79,7 +82,7 @@ targets:
       properties:
         CFBundleDisplayName: 豆仓
         CFBundleDevelopmentRegion: zh-Hans
-        CFBundleLocalizations: [zh-Hans]
+        CFBundleLocalizations: [zh-Hans, en]
         CFBundleAllowMixedLocalizations: true
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]

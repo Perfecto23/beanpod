@@ -149,7 +149,7 @@ extension BeanStore {
                 if media == nil { addLog("下载画面失败（\(id)）：\(run.errors.suffix(200))") }
             }
             guard let media else {
-                problem = Problem(title: "画面没下下来", detail: "可能是这个平台不让下载，或者网络不通。声音和文字稿不受影响；也可以点「打开原链接」去平台上看。")
+                problem = Problem(title: String(localized: "画面没下下来"), detail: String(localized: "可能是这个平台不让下载，或者网络不通。声音和文字稿不受影响；也可以点「打开原链接」去平台上看。"))
                 return
             }
             videoWorking.remove(id)     // keepVideo 自己会再标一次
@@ -171,10 +171,10 @@ extension BeanStore {
         do {
             try FileManager.default.copyItem(at: videoURL(id), to: target)
             NSWorkspace.shared.activateFileViewerSelecting([target])
-            toast("checkmark.circle.fill", "已存到「下载」：\(target.lastPathComponent)")
+            toast("checkmark.circle.fill", String(localized: "已存到「下载」：\(target.lastPathComponent)"))
             addLog("画面另存到 \(target.path)")
         } catch {
-            problem = Problem(title: "视频没存下来", detail: error.localizedDescription)
+            problem = Problem(title: String(localized: "视频没存下来"), detail: error.localizedDescription)
         }
     }
 
@@ -308,7 +308,7 @@ struct MaterialVideoCard: View {
 
     private func info(_ has: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(recording.origin ?? "视频素材").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.warm900)
+            Text(recording.origin ?? String(localized: "视频素材")).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.warm900)
             Text(detail(has)).font(.callout).foregroundStyle(Theme.warm500).monospacedDigit()
             // 按钮文字不截断：一行放得下就横排，放不下就竖排
             ViewThatFits(in: .horizontal) {
@@ -336,11 +336,13 @@ struct MaterialVideoCard: View {
     }
 
     private func detail(_ has: Bool) -> String {
-        guard has else { return "画面保存中" }
+        guard has else { return String(localized: "画面保存中") }
         let bytes = ((try? FileManager.default.attributesOfItem(atPath: store.videoURL(recording.id).path))?[.size] as? NSNumber)?.int64Value ?? 0
         let short = size.map { Int(min($0.width, $0.height)) } ?? 0
         let mb = Double(bytes) / 1_000_000
-        return "画面 \(short > 0 ? "\(short)p" : "已保存") · \(mb < 10 ? String(format: "%.1f", mb) : String(Int(mb))) MB"
+        let shown = short > 0 ? "\(short)p" : String(localized: "已保存")
+        let amount = mb < 10 ? String(format: "%.1f", mb) : String(Int(mb))
+        return String(localized: "画面 \(shown) · \(amount) MB")
     }
 
     static func naturalSize(_ url: URL) async -> CGSize? {
@@ -389,9 +391,9 @@ struct VideoKeepSettings: View {
 
     private func hint(_ k: AppSettings.KeepVideo) -> String {
         switch k {
-        case .short: "从链接导入视频时，5 分钟以内的保留 720p 画面，更长的只留声音。导入时也可以单独勾选。"
-        case .always: "从链接导入的视频都保留画面，最高 720p。长视频很占空间，留意下面的占用。"
-        case .never: "只留声音，用来转成文字。导入时也可以单独勾选保留画面。"
+        case .short: String(localized: "从链接导入视频时，5 分钟以内的保留 720p 画面，更长的只留声音。导入时也可以单独勾选。")
+        case .always: String(localized: "从链接导入的视频都保留画面，最高 720p。长视频很占空间，留意下面的占用。")
+        case .never: String(localized: "只留声音，用来转成文字。导入时也可以单独勾选保留画面。")
         }
     }
 

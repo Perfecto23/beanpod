@@ -43,9 +43,9 @@ struct ProcessingList: View {
 
     private func summary(_ total: TimeInterval, now: Date) -> some View {
         var parts: [String] = []
-        if let since = store.batchSince { parts.append("已用 \(BeanStore.spokenSpan(now.timeIntervalSince(since)))") }
+        if let since = store.batchSince { parts.append(String(localized: "已用 \(BeanStore.spokenSpan(now.timeIntervalSince(since)))")) }
         let done = now.addingTimeInterval(total)
-        parts.append("预计 \(done.formatted(date: .omitted, time: .shortened)) 全部完成（还要\(BeanStore.spokenSpan(total, rough: true))）")
+        parts.append(String(localized: "预计 \(done.formatted(date: .omitted, time: .shortened)) 全部完成（还要\(BeanStore.spokenSpan(total, rough: true))）"))
         return Text(parts.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).monospacedDigit()
     }
 
@@ -60,7 +60,7 @@ struct ProcessingList: View {
                     .font(.system(size: 15)).foregroundStyle(Theme.warm600)
                     .frame(width: 34, height: 34).background(Theme.warm100, in: .rect(cornerRadius: Theme.Radius.card))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(r?.displayTitle ?? "录音").font(.body.weight(.medium)).foregroundStyle(Theme.warm900).lineLimit(1)
+                    Text(r?.displayTitle ?? String(localized: "录音")).font(.body.weight(.medium)).foregroundStyle(Theme.warm900).lineLimit(1)
                     Text(step(item, r)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -78,25 +78,25 @@ struct ProcessingList: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(r?.displayTitle ?? "录音")，\(step(item, r))，\(eta(item, position: position))")
+        .accessibilityLabel("\(r?.displayTitle ?? String(localized: "录音"))，\(step(item, r))，\(eta(item, position: position))")
     }
 
     private func step(_ item: BeanStore.ETA, _ r: Recording?) -> String {
         switch item.stage {
         case .transcribing:
-            let len = r.map { BeanStore.spokenSpan($0.duration, rough: true).replacingOccurrences(of: "约 ", with: "") } ?? ""
-            return "把录音变成文字" + (len.isEmpty ? "" : " · \(len)的音频")
-        case .analyzing: return "整理纪要中 · 已用 \(BeanStore.spokenSpan(item.elapsed))"
-        case .queued: return "排队中"
+            let len = r.map { BeanStore.spokenSpan($0.duration, rough: true, approx: false) } ?? ""
+            return len.isEmpty ? String(localized: "把录音变成文字") : String(localized: "把录音变成文字 · \(len)的音频")
+        case .analyzing: return String(localized: "整理纪要中 · 已用 \(BeanStore.spokenSpan(item.elapsed))")
+        case .queued: return String(localized: "排队中")
         }
     }
 
     private func eta(_ item: BeanStore.ETA, position: Int) -> String {
         switch item.stage {
-        case .transcribing: return "还要\(BeanStore.spokenSpan(item.remaining, rough: true))（含整理纪要）"
-        case .analyzing: return item.elapsed < store.analysisSeconds ? "通常 \(BeanStore.spokenSpan(store.analysisSeconds, rough: true)) 左右" : "快好了，比平时久一点"
+        case .transcribing: return String(localized: "还要\(BeanStore.spokenSpan(item.remaining, rough: true))（含整理纪要）")
+        case .analyzing: return item.elapsed < store.analysisSeconds ? String(localized: "通常 \(BeanStore.spokenSpan(store.analysisSeconds, rough: true)) 左右") : String(localized: "快好了，比平时久一点")
         case .queued:
-            return "排在第 \(position + 1) 个 · 预计\(BeanStore.spokenSpan(item.startsIn ?? 0, rough: true))后开始"
+            return String(localized: "排在第 \(position + 1) 个 · 预计\(BeanStore.spokenSpan(item.startsIn ?? 0, rough: true))后开始")
         }
     }
 

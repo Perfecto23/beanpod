@@ -21,7 +21,7 @@ struct DictationView: View {
         var out: [(String, [Recording])] = []
         for r in items {
             let d = r.date ?? .distantPast
-            let title = cal.isDateInToday(d) ? "今天" : cal.isDateInYesterday(d) ? "昨天" : d.formatted(.dateTime.month().day().weekday(.abbreviated))
+            let title = cal.isDateInToday(d) ? String(localized: "今天") : cal.isDateInYesterday(d) ? String(localized: "昨天") : d.formatted(.dateTime.month().day().weekday(.abbreviated))
             if out.last?.0 == title { out[out.count - 1].1.append(r) } else { out.append((title, [r])) }
         }
         return out
@@ -115,7 +115,7 @@ private struct DictationRow: View {
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(recording.transcript ?? "", forType: .string)
-                    store.toast("doc.on.doc", "已拷贝")
+                    store.toast("doc.on.doc", String(localized: "已拷贝"))
                 } label: { Image(systemName: "doc.on.doc") }
                     .help("拷贝这句话").accessibilityLabel("拷贝")
                 Menu {
@@ -137,9 +137,9 @@ private struct DictationRow: View {
 
     private var meta: String {
         var parts: [String] = []
-        if let app = recording.typedInto, !app.isEmpty { parts.append("打进了 \(app)") }
-        if recording.textOnly { parts.append("原声已清理") }
-        else if recording.duration > 0 { parts.append("\(max(1, Int(recording.duration.rounded()))) 秒") }
-        return parts.isEmpty ? "语音输入" : parts.joined(separator: " · ")
+        if let app = recording.typedInto, !app.isEmpty { parts.append(String(localized: "打进了 \(app)")) }
+        if recording.textOnly { parts.append(String(localized: "原声已清理")) }
+        else if recording.duration > 0 { parts.append(String(localized: "\(max(1, Int(recording.duration.rounded()))) 秒")) }
+        return parts.isEmpty ? String(localized: "语音输入") : parts.joined(separator: " · ")
     }
 }

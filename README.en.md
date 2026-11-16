@@ -6,7 +6,7 @@
 
 A native macOS app for managing the AI voice recorder "bean" (model D3200) on your computer. It pulls recordings to your Mac, transcribes them, turns them into notes and to-dos, and lets you ask questions about everything you've recorded. Transcription runs on your Mac — recordings are not uploaded.
 
-> The app's interface is currently in **Simplified Chinese**. This English README explains every feature and the setup in full.
+> The app's interface is available in **English** and **Simplified Chinese** (Chinese is the default). It follows your system language — English on a non-Chinese system — and can be set in Settings → General → Language.
 
 [![BeanPod promo (click for the full video)](docs/media/beanpod-promo.gif)](docs/media/beanpod-promo.mp4)
 
@@ -80,6 +80,10 @@ A native macOS app for managing the AI voice recorder "bean" (model D3200) on yo
 - Dictation: hold a key and talk to the bean; when you let go, the text is typed into whatever app you're using. What you said is kept in its own "Dictation" section in the sidebar (like an input method's history: replay, copy, search, and which app it went into), separate from recordings and not summarized; promote anything important with "Turn into recording". Audio is kept 30 days by default and text forever; the knowledge base skips dictation by default — all adjustable in Settings
 
 ![Dictation: like an input method's history, remembering which app each sentence went into](docs/screenshots/dictation.jpg)
+
+**Languages**
+- Interface in Simplified Chinese (default) and English: follows the system by default (English when the system isn't Chinese), or pin it in Settings → General → Language. Model-written content (notes, titles, to-dos) has its own "Notes language" setting, which follows the interface by default
+- All UI text lives in `App/Localizable.xcstrings` (Apple String Catalog). To add a language: build once, run `python3 scripts/i18n-sync.py --lang ja --missing ja.json` to get the strings to translate, then `--apply` them back, and add an option in `App/Language.swift`. PRs welcome
 
 **AI assistants**
 - BeanPod ships with an MCP server and a command-line tool; Claude Code, Codex, Claude desktop and OpenClaw connect in one click. Then you can look up recordings, notes and to-dos from your assistant, or have it save content into BeanPod. See [Connect AI assistants](#connect-ai-assistants)

@@ -24,8 +24,8 @@ extension BeanStore {
         if let first = skipped.first {
             addLog("跳过导入过的 \(skipped.count) 条：\(skipped.map(\.id))")
             toast("checkmark.circle", skipped.count == 1
-                  ? "导入过了，在素材里：\(String((first.title ?? first.origin ?? "这条").prefix(18)))"
-                  : "\(skipped.count) 条之前导入过，在素材里，没再下")
+                  ? String(localized: "导入过了，在素材里：\(String((first.title ?? first.origin ?? String(localized: "这条")).prefix(18)))")
+                  : String(localized: "\(skipped.count) 条之前导入过，在素材里，没再下"))
         }
         guard linkWorker == nil else { return }
         linkWorker = Task { [weak self] in
@@ -62,7 +62,7 @@ extension BeanStore {
         }
 
         guard let tool = await Self.findTool("yt-dlp") else {
-            problem = Problem(title: "没找到下载工具 yt-dlp", detail: "从链接导入要靠它。在终端里运行下面这行装上，再试一次：\nbrew install yt-dlp ffmpeg")
+            problem = Problem(title: String(localized: "没找到下载工具 yt-dlp"), detail: String(localized: "从链接导入要靠它。在终端里运行下面这行装上，再试一次：\nbrew install yt-dlp ffmpeg"))
             linkJobs.removeAll()      // 后面排着的也都下不了
             return
         }
@@ -109,10 +109,10 @@ extension BeanStore {
                 linkLogin = LinkLoginRequest(platform: platform, url: url)
             } else if Self.needsLogin(result.errors), !login.isEmpty {
                 // 已经登录过还是被拦：再弹登录窗口只会原地打转
-                problem = Problem(title: "这条\(platform)链接没能导入",
-                                  detail: "已经带着你在豆仓里的\(platform)登录状态试过了，还是被拦下。可能是登录过期了（去设置的「连接」里清掉重新登录），也可能是\(platform)改了接口。")
+                problem = Problem(title: String(localized: "这条\(platform)链接没能导入"),
+                                  detail: String(localized: "已经带着你在豆仓里的\(platform)登录状态试过了，还是被拦下。可能是登录过期了（去设置的「连接」里清掉重新登录），也可能是\(platform)改了接口。"))
             } else {
-                problem = Problem(title: "这条\(platform)链接没能导入", detail: Self.explain(result.errors, platform: platform))
+                problem = Problem(title: String(localized: "这条\(platform)链接没能导入"), detail: Self.explain(result.errors, platform: platform))
             }
             return
         }
@@ -143,13 +143,13 @@ extension BeanStore {
         // 贴的是短链时，导入前认不出是哪条；解析出作品页后再查一次，导入过的不再放一份
         if let old = importedRecording(for: page) {
             addLog("链接导入：「\(title)」之前导入过（\(old.id)），这次下的不留")
-            toast("checkmark.circle", "导入过了，在素材里：\(String((old.title ?? title).prefix(18)))")
+            toast("checkmark.circle", String(localized: "导入过了，在素材里：\(String((old.title ?? title).prefix(18)))"))
             return
         }
         let before = Set(recordings.map(\.id))
         importFile(audio, consume: true, processNow: false)
         guard let k = recordings.firstIndex(where: { !before.contains($0.id) }) else {
-            problem = Problem(title: "这条\(platform)链接没能导入", detail: "声音下下来了，但豆仓读不出这个音频文件。")
+            problem = Problem(title: String(localized: "这条\(platform)链接没能导入"), detail: String(localized: "声音下下来了，但豆仓读不出这个音频文件。"))
             return
         }
         let rid = recordings[k].id
@@ -164,7 +164,7 @@ extension BeanStore {
         }
         saveLibrary()
         addLog("链接导入完成：\(rid)「\(title)」\(cues.count >= 3 ? "，用了平台字幕 \(cues.count) 句" : "")")
-        toast("checkmark.circle.fill", "导入好了：\(title.isEmpty ? platform : String(title.prefix(18)))")
+        toast("checkmark.circle.fill", String(localized: "导入好了：\(title.isEmpty ? platform : String(title.prefix(18)))"))
         // 画面：按设置（和导入时的勾选）决定留不留
         let override = linkJobs.first { $0.id == id }?.keepVideo
         if let video, video != audio {
@@ -205,22 +205,22 @@ extension BeanStore {
     /// 把 yt-dlp 的报错换成人话。
     nonisolated static func explain(_ errors: String, platform: String) -> String {
         let e = errors.lowercased()
-        if e.contains("unsupported url") { return "认不出这是哪个平台的视频链接。确认贴的是某一条作品的链接，不是主页或搜索页。" }
+        if e.contains("unsupported url") { return String(localized: "认不出这是哪个平台的视频链接。确认贴的是某一条作品的链接，不是主页或搜索页。") }
         if needsLogin(errors) {
-            return "\(platform)要登录之后才给看这条内容。可以用别的工具把它下载成文件，再拖进豆仓的窗口。"
+            return String(localized: "\(platform)要登录之后才给看这条内容。可以用别的工具把它下载成文件，再拖进豆仓的窗口。")
         }
-        if e.contains("private") { return "这条内容是私密的，不能导入。" }
+        if e.contains("private") { return String(localized: "这条内容是私密的，不能导入。") }
         if looksLikeRegionBlock(errors) {
-            return "\(platform)不让从现在的网络下载这条。直连和走代理都试过了，可以换个代理节点，或者关掉代理再试。"
+            return String(localized: "\(platform)不让从现在的网络下载这条。直连和走代理都试过了，可以换个代理节点，或者关掉代理再试。")
         }
-        if e.contains("429") || e.contains("too many requests") { return "\(platform)嫌请求太频繁，过几分钟再试。" }
-        if e.contains("403") || e.contains("forbidden") { return "\(platform)拒绝了这次下载（403）。可能要登录，或者它最近改了接口，可以先升级 yt-dlp：brew upgrade yt-dlp" }
+        if e.contains("429") || e.contains("too many requests") { return String(localized: "\(platform)嫌请求太频繁，过几分钟再试。") }
+        if e.contains("403") || e.contains("forbidden") { return String(localized: "\(platform)拒绝了这次下载（403）。可能要登录，或者它最近改了接口，可以先升级 yt-dlp：brew upgrade yt-dlp") }
         if looksLikeNetworkTrouble(errors) {
-            return "连不上\(platform)。看看网络，再试一次。"
+            return String(localized: "连不上\(platform)。看看网络，再试一次。")
         }
-        if e.contains("ffmpeg") || e.contains("ffprobe") { return "这台 Mac 上没有 ffmpeg，声音转不出来。在终端里运行：brew install ffmpeg" }
+        if e.contains("ffmpeg") || e.contains("ffprobe") { return String(localized: "这台 Mac 上没有 ffmpeg，声音转不出来。在终端里运行：brew install ffmpeg") }
         let last = errors.split(separator: "\n").last(where: { $0.lowercased().contains("error") }) ?? errors.split(separator: "\n").last ?? ""
-        return last.isEmpty ? "下载工具没有说明原因。" : String(last.prefix(220))
+        return last.isEmpty ? String(localized: "下载工具没有说明原因。") : String(last.prefix(220))
     }
 
     // MARK: 调外部工具
@@ -307,7 +307,7 @@ struct LinkImportSheet: View {
                 .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(typing ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.separator), lineWidth: typing ? 1.5 : 0.5))
                 .overlay(alignment: .topLeading) {
                     if text.isEmpty {
-                        Text(verbatim: "比如：https://www.bilibili.com/video/BV…").foregroundStyle(.tertiary).padding(.horizontal, 13).padding(.vertical, 8).allowsHitTesting(false)
+                        Text(verbatim: String(localized: "比如：https://www.bilibili.com/video/BV…")).foregroundStyle(.tertiary).padding(.horizontal, 13).padding(.vertical, 8).allowsHitTesting(false)
                     }
                 }
             if !urls.isEmpty {
@@ -338,7 +338,7 @@ struct LinkImportSheet: View {
                                 }
                             }
                             if let old {
-                                Text("「\(String((old.title ?? old.origin ?? "这条").prefix(30)))」已经在素材里，这条会跳过。")
+                                Text("「\(String((old.title ?? old.origin ?? String(localized: "这条")).prefix(30)))」已经在素材里，这条会跳过。")
                                     .font(.caption).foregroundStyle(.secondary)
                                     .padding(.leading, 34).fixedSize(horizontal: false, vertical: true)
                             } else if mustLogin.contains(platform), !logged, let why = Self.why(platform) {
@@ -414,8 +414,8 @@ struct LinkImportSheet: View {
 
     private static func why(_ platform: String) -> String? {
         switch platform {
-        case "小红书": "这台 Mac 走的是海外网络，小红书要登录才给看笔记。会直接打开这条笔记，在页面上登录。"
-        case "视频号": "视频号借腾讯元宝解析，要用微信扫码登录元宝，只要登一次。"
+        case "小红书": String(localized: "这台 Mac 走的是海外网络，小红书要登录才给看笔记。会直接打开这条笔记，在页面上登录。")
+        case "视频号": String(localized: "视频号借腾讯元宝解析，要用微信扫码登录元宝，只要登一次。")
         default: nil
         }
     }
@@ -511,8 +511,19 @@ struct LinkLoginSheet: View {
     @State private var saving = false
     @State private var note: String?
 
-    private var then: String { request.continueImport ? "，豆仓会接着导入" : "回到导入" }
+    private var then: String { request.continueImport ? String(localized: "，豆仓会接着导入") : String(localized: "回到导入") }
     private var onItsPage: Bool { BeanStore.loginURL(platform: request.platform, link: request.url).absoluteString == request.url }
+    /// 登录窗口顶上的说明
+    private var intro: String {
+        if request.platform == "视频号" {
+            return String(localized: "\(request.hint)视频号网页版不给下载地址，豆仓借腾讯元宝的视频号解析拿视频。在下面点「登录」用微信扫码，登好了点右边的按钮\(then)。只要登一次。")
+        }
+        if onItsPage {
+            let kind = request.platform == "小红书" ? String(localized: "笔记") : String(localized: "作品")
+            return String(localized: "\(request.hint)下面打开的就是这条\(kind)，在页面上扫码或输入账号登录，登好了点右边的按钮\(then)。")
+        }
+        return String(localized: "\(request.hint)在下面扫码或输入账号登录，登好了点右边的按钮\(then)。")
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -520,9 +531,7 @@ struct LinkLoginSheet: View {
                 Image(systemName: "person.badge.key").font(.title2).foregroundStyle(Theme.accent)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(request.platform == "视频号" ? "用微信扫码登录腾讯元宝" : "在\(request.platform)登录一下").font(.headline)
-                    Text(note ?? (request.platform == "视频号"
-                        ? "\(request.hint)视频号网页版不给下载地址，豆仓借腾讯元宝的视频号解析拿视频。在下面点「登录」用微信扫码，登好了点右边的按钮\(then)。只要登一次。"
-                        : "\(request.hint)\(onItsPage ? "下面打开的就是这条\(request.platform == "小红书" ? "笔记" : "作品")，在页面上扫码或输入账号登录" : "在下面扫码或输入账号登录")，登好了点右边的按钮\(then)。"))
+                    Text(note ?? intro)
                         .font(.callout).foregroundStyle(note == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.accent))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -534,7 +543,7 @@ struct LinkLoginSheet: View {
                         let n = await store.saveLogin(request.platform)
                         saving = false
                         if n == 0 {
-                            note = "还没有看到登录状态。确认登录成功了再点一次。"
+                            note = String(localized: "还没有看到登录状态。确认登录成功了再点一次。")
                         } else {
                             dismiss()
                             if request.continueImport { store.importLinks(request.url) }

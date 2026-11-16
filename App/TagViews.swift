@@ -162,7 +162,7 @@ struct TagEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("这条\(recording.isMaterial ? "素材" : "录音")的标签").font(.callout).foregroundStyle(.secondary)
+            Text(recording.isMaterial ? "这条素材的标签" : "这条录音的标签").font(.callout).foregroundStyle(.secondary)
             if current.isEmpty {
                 Text("还没有标签").font(.callout).foregroundStyle(.tertiary)
             } else {

@@ -9,7 +9,7 @@ enum Assistant: String, CaseIterable, Identifiable {
     var name: String {
         switch self {
         case .claudeCode: "Claude Code"
-        case .claudeDesktop: "Claude 桌面版"
+        case .claudeDesktop: String(localized: "Claude 桌面版")
         case .codex: "Codex"
         case .openclaw: "OpenClaw"
         case .grok: "Grok Bot"
@@ -29,22 +29,22 @@ enum Assistant: String, CaseIterable, Identifiable {
     /// 接上之后能怎么用，给一句照着说就行的话。
     var example: String {
         switch self {
-        case .claudeCode: "在 Claude Code 里说：「查一下豆仓里昨天的会议，把待办列出来」"
-        case .claudeDesktop: "在 Claude 里说：「豆仓里关于新品发布都说过什么？」"
-        case .codex: "在 Codex 里说：「把豆仓里最新一条录音的脚本拿出来，做成网页」"
-        case .openclaw: "在微信里对它说：「帮我查豆仓，这周答应了谁什么事」"
-        case .grok: "在 Grok Bot 里添加上面的地址，然后说：「搜一下豆仓里提到黄仁勋的录音」"
+        case .claudeCode: String(localized: "在 Claude Code 里说：「查一下豆仓里昨天的会议，把待办列出来」")
+        case .claudeDesktop: String(localized: "在 Claude 里说：「豆仓里关于新品发布都说过什么？」")
+        case .codex: String(localized: "在 Codex 里说：「把豆仓里最新一条录音的脚本拿出来，做成网页」")
+        case .openclaw: String(localized: "在微信里对它说：「帮我查豆仓，这周答应了谁什么事」")
+        case .grok: String(localized: "在 Grok Bot 里添加上面的地址，然后说：「搜一下豆仓里提到黄仁勋的录音」")
         }
     }
 
     /// 连接时改了什么，明明白白告诉用户。
     var touches: String {
         switch self {
-        case .claudeCode: "用 claude 命令添加，写在 ~/.claude.json"
-        case .claudeDesktop: "改 ~/Library/Application Support/Claude/claude_desktop_config.json，改之前会留一份备份。要在 Claude 完全退出的时候连"
-        case .codex: "用 codex 命令添加，写在 ~/.codex/config.toml"
-        case .openclaw: "用 openclaw 命令添加，写在 ~/.openclaw/openclaw.json"
-        case .grok: "Grok Bot 只认网址：拷贝豆仓的地址，到它的设置里粘贴。豆仓要开着才连得上"
+        case .claudeCode: String(localized: "用 claude 命令添加，写在 ~/.claude.json")
+        case .claudeDesktop: String(localized: "改 ~/Library/Application Support/Claude/claude_desktop_config.json，改之前会留一份备份。要在 Claude 完全退出的时候连")
+        case .codex: String(localized: "用 codex 命令添加，写在 ~/.codex/config.toml")
+        case .openclaw: String(localized: "用 openclaw 命令添加，写在 ~/.openclaw/openclaw.json")
+        case .grok: String(localized: "Grok Bot 只认网址：拷贝豆仓的地址，到它的设置里粘贴。豆仓要开着才连得上")
         }
     }
 
@@ -89,7 +89,7 @@ final class Connector {
             let pipe = Pipe()
             p.standardOutput = pipe; p.standardError = pipe
             p.standardInput = FileHandle.nullDevice
-            guard (try? p.run()) != nil else { return (false, "命令没能运行") }
+            guard (try? p.run()) != nil else { return (false, String(localized: "命令没能运行")) }
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             p.waitUntilExit()
             return (p.terminationStatus == 0, String(data: data, encoding: .utf8) ?? "")
@@ -136,33 +136,33 @@ final class Connector {
     }
 
     func connect(_ a: Assistant) async {
-        guard cliInstalled else { notes[a] = (false, "豆仓的命令行工具还没装好，连不了。"); return }
+        guard cliInstalled else { notes[a] = (false, String(localized: "豆仓的命令行工具还没装好，连不了。")); return }
         busy.insert(a); defer { busy.remove(a) }
         let cli = "'\(Self.cli)'"
         switch a {
         case .claudeCode:
             let r = await Self.shell("claude mcp add --scope user beanpod -- \(cli) mcp")
-            notes[a] = r.ok ? (true, "接上了。新开一个 Claude Code 会话就能用。") : (false, "没接上：" + Self.tail(r.output))
+            notes[a] = r.ok ? (true, String(localized: "接上了。新开一个 Claude Code 会话就能用。")) : (false, String(localized: "没接上：\(Self.tail(r.output))"))
         case .codex:
             let r = await Self.shell("codex mcp add beanpod -- \(cli) mcp")
-            notes[a] = r.ok ? (true, "接上了。新开一个 Codex 会话就能用。") : (false, "没接上：" + Self.tail(r.output))
+            notes[a] = r.ok ? (true, String(localized: "接上了。新开一个 Codex 会话就能用。")) : (false, String(localized: "没接上：\(Self.tail(r.output))"))
         case .openclaw:
             let r = await Self.shell("openclaw mcp add beanpod --command \(cli) --arg mcp")
-            notes[a] = r.ok ? (true, "接上了。") : (false, "没接上：" + Self.tail(r.output))
+            notes[a] = r.ok ? (true, String(localized: "接上了。")) : (false, String(localized: "没接上：\(Self.tail(r.output))"))
         case .claudeDesktop:
             // Claude 开着的时候会用自己内存里的设置把文件写回去，这条改动会被冲掉：要先退出它
             let running = !NSRunningApplication.runningApplications(withBundleIdentifier: "com.anthropic.claudefordesktop").isEmpty
             if running {
-                notes[a] = (false, "Claude 现在开着。它开着的时候会把设置文件写回原样，连接留不住。请先完全退出 Claude，再回来点一次「连接」。")
+                notes[a] = (false, String(localized: "Claude 现在开着。它开着的时候会把设置文件写回原样，连接留不住。请先完全退出 Claude，再回来点一次「连接」。"))
                 return
             }
             notes[a] = editDesktopConfig { servers in servers["beanpod"] = ["command": Self.cli, "args": ["mcp"]] }
-                ? (true, "接上了。现在打开 Claude 就能用。") : (false, "没能改 Claude 的设置文件。")
+                ? (true, String(localized: "接上了。现在打开 Claude 就能用。")) : (false, String(localized: "没能改 Claude 的设置文件。"))
         case .grok:
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(BeanStore.mcpAddress, forType: .string)
             NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Grok Bot.app"))
-            notes[a] = (true, "地址已经拷贝，Grok Bot 也打开了。到它的设置里添加一个 MCP，把地址粘贴进去。")
+            notes[a] = (true, String(localized: "地址已经拷贝，Grok Bot 也打开了。到它的设置里添加一个 MCP，把地址粘贴进去。"))
         }
         await refresh()
     }
@@ -172,17 +172,17 @@ final class Connector {
         switch a {
         case .claudeCode:
             let r = await Self.shell("claude mcp remove --scope user beanpod")
-            notes[a] = r.ok ? (true, "已经断开。") : (false, "没断开：" + Self.tail(r.output))
+            notes[a] = r.ok ? (true, String(localized: "已经断开。")) : (false, String(localized: "没断开：\(Self.tail(r.output))"))
         case .codex:
             let r = await Self.shell("codex mcp remove beanpod")
-            notes[a] = r.ok ? (true, "已经断开。") : (false, "没断开：" + Self.tail(r.output))
+            notes[a] = r.ok ? (true, String(localized: "已经断开。")) : (false, String(localized: "没断开：\(Self.tail(r.output))"))
         case .openclaw:
             let r = await Self.shell("openclaw mcp unset beanpod")
-            notes[a] = r.ok ? (true, "已经断开。") : (false, "没断开：" + Self.tail(r.output))
+            notes[a] = r.ok ? (true, String(localized: "已经断开。")) : (false, String(localized: "没断开：\(Self.tail(r.output))"))
         case .claudeDesktop:
-            notes[a] = editDesktopConfig { $0["beanpod"] = nil } ? (true, "已经断开。重开 Claude 之后生效。") : (false, "没能改 Claude 的设置文件。")
+            notes[a] = editDesktopConfig { $0["beanpod"] = nil } ? (true, String(localized: "已经断开。重开 Claude 之后生效。")) : (false, String(localized: "没能改 Claude 的设置文件。"))
         case .grok:
-            notes[a] = (true, "到 Grok Bot 的设置里把豆仓那一条删掉就行。")
+            notes[a] = (true, String(localized: "到 Grok Bot 的设置里把豆仓那一条删掉就行。"))
         }
         await refresh()
     }
@@ -196,20 +196,20 @@ final class Connector {
         let ours = await Self.shell("printf '%s\\n%s\\n' '\(hello)' '\(list)' | '\(Self.cli)' mcp")
         let tools = ours.output.components(separatedBy: "\"name\"").count - 1
         guard ours.ok, ours.output.contains("search_recordings") else {
-            notes[a] = (false, "豆仓这边的入口没有应答。")
+            notes[a] = (false, String(localized: "豆仓这边的入口没有应答。"))
             return
         }
         switch a {
         case .claudeCode:
             let r = await Self.shell("claude mcp get beanpod")
-            notes[a] = r.output.contains("Connected") ? (true, "通了：Claude Code 报告已连接，豆仓给了它 \(max(tools - 1, 1)) 个可用的动作。")
-                : (false, "豆仓这边正常，但 Claude Code 说没连上：" + Self.tail(r.output))
+            notes[a] = r.output.contains("Connected") ? (true, String(localized: "通了：Claude Code 报告已连接，豆仓给了它 \(max(tools - 1, 1)) 个可用的动作。"))
+                : (false, String(localized: "豆仓这边正常，但 Claude Code 说没连上：\(Self.tail(r.output))"))
         case .grok:
             let r = await Self.shell("curl -s -m 4 -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '\(list)' \(BeanStore.mcpAddress)")
-            notes[a] = r.output.contains("200") ? (true, "豆仓的网址入口是通的。Grok Bot 那边有没有填对，要在它里面问一句才知道。")
-                : (false, "豆仓的网址入口没应答，重开一次豆仓再试。")
+            notes[a] = r.output.contains("200") ? (true, String(localized: "豆仓的网址入口是通的。Grok Bot 那边有没有填对，要在它里面问一句才知道。"))
+                : (false, String(localized: "豆仓的网址入口没应答，重开一次豆仓再试。"))
         default:
-            notes[a] = (true, "豆仓这边的入口是通的。\(a.name) 那边要新开一个会话问一句才算真的验证。")
+            notes[a] = (true, String(localized: "豆仓这边的入口是通的。\(a.name) 那边要新开一个会话问一句才算真的验证。"))
         }
     }
 
@@ -230,7 +230,7 @@ final class Connector {
     }
 
     private static func tail(_ output: String) -> String {
-        let line = output.split(separator: "\n").last.map(String.init) ?? "没有给出原因"
+        let line = output.split(separator: "\n").last.map(String.init) ?? String(localized: "没有给出原因")
         return String(line.prefix(120))
     }
 }
@@ -259,7 +259,7 @@ struct ConnectView: View {
                         if BeanStore.bundledCLI != nil {
                             Button("装上") {
                                 if store.installCLI() { Task { await connector.refresh() } }
-                                else { store.toast("exclamationmark.triangle", "没装上，详情看日志") }
+                                else { store.toast("exclamationmark.triangle", String(localized: "没装上，详情看日志")) }
                             }
                             .buttonStyle(.glassProminent).fixedSize()
                         }
@@ -297,7 +297,7 @@ struct ConnectView: View {
         HStack {
             Text(text).font(.callout.monospaced()).textSelection(.enabled).lineLimit(1).truncationMode(.middle)
             Spacer()
-            Button("拷贝") { copy(text); store.toast("doc.on.doc", "已拷贝") }
+            Button("拷贝") { copy(text); store.toast("doc.on.doc", String(localized: "已拷贝")) }
         }
         .padding(.horizontal, 10).padding(.vertical, 7)
         .background(.quaternary.opacity(0.45), in: .rect(cornerRadius: Theme.Radius.card))
@@ -354,11 +354,11 @@ struct ConnectView: View {
     }
 
     private func status(_ s: Connector.State) -> String {
-        if !s.installed { return "这台 Mac 上没检测到" }
+        if !s.installed { return String(localized: "这台 Mac 上没检测到") }
         switch s.connected {
-        case .some(true): return "已连接"
-        case .some(false): return "还没连接"
-        case .none: return "已安装 · 连没连上豆仓看不出来"
+        case .some(true): return String(localized: "已连接")
+        case .some(false): return String(localized: "还没连接")
+        case .none: return String(localized: "已安装 · 连没连上豆仓看不出来")
         }
     }
 

@@ -12,7 +12,7 @@ extension BeanStore {
 
     /// 界面上怎么称呼正在用的这台机器。
     #if os(macOS)
-    static let thisDevice = "这台 Mac", deviceShort = "Mac"
+    static let thisDevice = String(localized: "这台 Mac"), deviceShort = "Mac"
     #else
     static let thisDevice = "这台 iPhone", deviceShort = "iPhone"
     #endif
@@ -23,6 +23,14 @@ extension BeanStore {
         var id: String { rawValue }
         var name: String {
             switch self {
+            case .mic: String(localized: "麦克风")
+            case .system: String(localized: "电脑里的声音")
+            case .both: String(localized: "麦克风 + 电脑里的声音")
+            }
+        }
+        /// 写进录音 origin 的那一路名字，存的是数据，固定中文（旧录音库里就是这么写的）。
+        var storedName: String {
+            switch self {
             case .mic: "麦克风"
             case .system: "电脑里的声音"
             case .both: "麦克风 + 电脑里的声音"
@@ -30,9 +38,9 @@ extension BeanStore {
         }
         var hint: String {
             switch self {
-            case .mic: "外界的声音：面对面开会、自己口述"
-            case .system: "电脑里播放的声音：视频、播客、网课"
-            case .both: "你说的话加对方的声音：线上会议、语音通话"
+            case .mic: String(localized: "外界的声音：面对面开会、自己口述")
+            case .system: String(localized: "电脑里播放的声音：视频、播客、网课")
+            case .both: String(localized: "你说的话加对方的声音：线上会议、语音通话")
             }
         }
         var icon: String {
@@ -57,16 +65,16 @@ extension BeanStore {
             var tap: SystemAudioTap?
             if source.usesMic {
                 guard await AVCaptureDevice.requestAccess(for: .audio) else {
-                    problem = Problem(title: "豆仓用不了\(Self.thisDevice)的麦克风",
-                                      detail: "到系统设置的「隐私与安全性 → 麦克风」里把豆仓打开，再点一次录音。", action: .micPermission)
+                    problem = Problem(title: String(localized: "豆仓用不了\(Self.thisDevice)的麦克风"),
+                                      detail: String(localized: "到系统设置的「隐私与安全性 → 麦克风」里把豆仓打开，再点一次录音。"), action: .micPermission)
                     return
                 }
             }
             if source.usesSystem {
                 let t = SystemAudioTap()
                 do { try await t.start() } catch {
-                    problem = Problem(title: "豆仓还不能录电脑里的声音",
-                                      detail: "系统要你亲自允许一次：到「系统设置 → 隐私与安全性 → 屏幕与系统音频录制」里把豆仓打开，然后退出豆仓再重新打开。\n豆仓只取其中的声音，不会保存屏幕画面。", action: .screenPermission)
+                    problem = Problem(title: String(localized: "豆仓还不能录电脑里的声音"),
+                                      detail: String(localized: "系统要你亲自允许一次：到「系统设置 → 隐私与安全性 → 屏幕与系统音频录制」里把豆仓打开，然后退出豆仓再重新打开。\n豆仓只取其中的声音，不会保存屏幕画面。"), action: .screenPermission)
                     addLog("系统声音没开始：\(error.localizedDescription)")
                     return
                 }
@@ -86,7 +94,7 @@ extension BeanStore {
                 ]
                 guard let r = try? AVAudioRecorder(url: url, settings: format), r.record() else {
                     await tap?.stop()
-                    problem = Problem(title: "\(Self.thisDevice)的麦克风没有开始录音", detail: "可能有别的软件正占着麦克风，或者没有接入任何麦克风。")
+                    problem = Problem(title: String(localized: "\(Self.thisDevice)的麦克风没有开始录音"), detail: String(localized: "可能有别的软件正占着麦克风，或者没有接入任何麦克风。"))
                     return
                 }
                 r.isMeteringEnabled = true
@@ -170,8 +178,8 @@ extension BeanStore {
             }.value
             for u in [micURL, systemURL].compactMap({ $0 }) { try? FileManager.default.removeItem(at: u) }
             guard let mixed else {
-                problem = Problem(title: "这次没有录到声音",
-                                  detail: source.usesSystem ? "电脑里这段时间没有播放任何声音，或者系统没有把声音交给豆仓。" : "麦克风没有录到内容。")
+                problem = Problem(title: String(localized: "这次没有录到声音"),
+                                  detail: source.usesSystem ? String(localized: "电脑里这段时间没有播放任何声音，或者系统没有把声音交给豆仓。") : String(localized: "麦克风没有录到内容。"))
                 return
             }
             let before = Set(recordings.map(\.id))
@@ -179,7 +187,7 @@ extension BeanStore {
             importFile(mixed, consume: true, processNow: !settings.askKeep)
             // 刚导进来的那一条：标上来源和重点标记，标题留空（先显示时间，整理完会自动起名）
             if let i = recordings.firstIndex(where: { !before.contains($0.id) }) {
-                recordings[i].origin = Self.deviceShort + " · " + source.name
+                recordings[i].origin = Self.deviceShort + " · " + source.storedName
                 recordings[i].title = nil
                 recordings[i].marks = marks.filter { $0 <= recordings[i].duration + 1 }
                 saveLibrary()

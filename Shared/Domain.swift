@@ -11,6 +11,22 @@ nonisolated enum Scene: String, CaseIterable, Codable, Identifiable {
 
     var name: String {
         switch self {
+        case .meeting: String(localized: "会议")
+        case .interview: String(localized: "访谈")
+        case .sales: String(localized: "销售")
+        case .talk: String(localized: "沟通")
+        case .call: String(localized: "电话")
+        case .media: String(localized: "自媒体")
+        case .conference: String(localized: "大会")
+        case .lesson: String(localized: "课程")
+        case .memo: String(localized: "灵感")
+        case .other: String(localized: "其他")
+        }
+    }
+
+    /// 给模型看的场景名，固定中文（提示词不跟界面语言走）。
+    var promptName: String {
+        switch self {
         case .meeting: "会议"
         case .interview: "访谈"
         case .sales: "销售"
@@ -105,6 +121,39 @@ nonisolated enum Profession: String, CaseIterable, Identifiable {
 
     var name: String {
         switch self {
+        case .general: String(localized: "通用")
+        case .sales: String(localized: "销售与商务")
+        case .creator: String(localized: "自媒体创作者")
+        case .product: String(localized: "产品与运营")
+        case .founder: String(localized: "创业者与管理者")
+        case .consultant: String(localized: "咨询顾问")
+        case .researcher: String(localized: "记者与研究员")
+        case .teacher: String(localized: "教师与培训师")
+        case .lawyer: String(localized: "律师")
+        case .doctor: String(localized: "医生")
+        case .student: String(localized: "学生")
+        }
+    }
+
+    var focus: String {
+        switch self {
+        case .general: String(localized: "抓住结论、事实和后续要做的事。")
+        case .sales: String(localized: "格外留意客户的真实需求、预算、决策链、异议和下一步动作；金额、日期、人名要原样记下。")
+        case .creator: String(localized: "格外留意能做成选题的观点、可直接引用的金句、有故事性的片段和具体数据。")
+        case .product: String(localized: "格外留意用户问题、需求优先级、方案取舍、排期和负责人。")
+        case .founder: String(localized: "格外留意决策、资源分配、风险、人事和需要亲自跟进的事。")
+        case .consultant: String(localized: "格外留意客户现状、痛点、假设、需要验证的数据和交付物。")
+        case .researcher: String(localized: "格外留意可引用的原话、事实与来源、前后矛盾之处和值得追问的线索。")
+        case .teacher: String(localized: "格外留意知识结构、例子、学员的疑问和需要补讲的地方。")
+        case .lawyer: String(localized: "格外留意事实经过、时间点、各方主张、证据线索和承诺；不做法律判断，只记录。")
+        case .doctor: String(localized: "格外留意主诉、病史、用药、检查和医嘱；不做诊断，只记录原话。")
+        case .student: String(localized: "格外留意知识点、考点、老师强调的内容和作业要求。")
+        }
+    }
+
+    /// 给模型看的职业名和关注点，固定中文（提示词不跟界面语言走）。
+    var promptName: String {
+        switch self {
         case .general: "通用"
         case .sales: "销售与商务"
         case .creator: "自媒体创作者"
@@ -119,7 +168,7 @@ nonisolated enum Profession: String, CaseIterable, Identifiable {
         }
     }
 
-    var focus: String {
+    var promptFocus: String {
         switch self {
         case .general: "抓住结论、事实和后续要做的事。"
         case .sales: "格外留意客户的真实需求、预算、决策链、异议和下一步动作；金额、日期、人名要原样记下。"
@@ -227,18 +276,32 @@ nonisolated enum RewriteTemplate: String, CaseIterable, Identifiable {
 
     var name: String {
         switch self {
-        case .voiceover: "口播稿"
-        case .shortVideo: "短视频脚本"
-        case .thread: "社交媒体长帖"
-        case .article: "公众号文章"
-        case .email: "会后邮件"
-        case .teardown: "拆解写法"
-        case .imitate: "照结构仿写"
-        case .custom: "自定义"
+        case .voiceover: String(localized: "口播稿")
+        case .shortVideo: String(localized: "短视频脚本")
+        case .thread: String(localized: "社交媒体长帖")
+        case .article: String(localized: "公众号文章")
+        case .email: String(localized: "会后邮件")
+        case .teardown: String(localized: "拆解写法")
+        case .imitate: String(localized: "照结构仿写")
+        case .custom: String(localized: "自定义")
         }
     }
 
     var instruction: String {
+        switch self {
+        case .voiceover: String(localized: "改写成一篇可以直接对着镜头念的口播稿：第一人称，口语但干净利落，开头三句内抛出最抓人的点，短句为主，每段不超过三句，结尾有一句收束。不要小标题，不要表情符号。")
+        case .shortVideo: String(localized: "改写成一条 60 秒左右的短视频脚本：先给一句钩子，然后按「画面 / 口播」两栏逐镜头写，5 到 8 个镜头，最后给一句行动号召。")
+        case .thread: String(localized: "改写成一条适合发在社交媒体上的长帖：开头一句话点明观点，中间分 3 到 5 个要点，每点两三句，语气直接，有具体细节和数字，结尾一句总结。")
+        case .article: String(localized: "改写成一篇公众号文章：有标题，有 3 到 4 个小标题分段，开头用一个场景或问题引入，行文连贯，保留原话里的具体例子。")
+        case .email: String(localized: "改写成一封会后跟进邮件：称呼、一句话说明来意、分点列出达成的结论和各自的待办（带负责人和时间）、礼貌收尾。简洁。")
+        case .teardown: String(localized: "把这段内容当作一条别人发布的视频文案来拆解，目的是学它的写法，不是复述内容。按这几部分写：① 开头钩子：原话是什么，用了什么手法；② 结构：按先后顺序列出每一段在做什么（抛问题、讲故事、给数据、反转、收束），每段一句话；③ 金句：摘出 3 到 5 句最值得学的原话；④ 节奏和语气：句子长短、用第几人称、有什么口头禅；⑤ 结尾怎么引导互动；⑥ 可以直接借用的写法 3 条。只依据文字稿来写，不要猜测播放量之类文字稿里没有的东西。")
+        case .imitate: String(localized: "先用三四行总结这条内容的结构（钩子、怎么展开、怎么收束），然后严格照这个结构和节奏，用「补充要求」里给的选题写一条新的口播稿：结构和手法学它，内容、例子、观点必须是新的，不要照搬原文的句子。如果补充要求里没有给选题，就先列出 3 个适合套用这个结构的选题，再用第一个来写。")
+        case .custom: ""
+        }
+    }
+
+    /// 交给模型的改写要求，固定中文（instruction 是给界面看的同一段话）。
+    var prompt: String {
         switch self {
         case .voiceover: "改写成一篇可以直接对着镜头念的口播稿：第一人称，口语但干净利落，开头三句内抛出最抓人的点，短句为主，每段不超过三句，结尾有一句收束。不要小标题，不要表情符号。"
         case .shortVideo: "改写成一条 60 秒左右的短视频脚本：先给一句钩子，然后按「画面 / 口播」两栏逐镜头写，5 到 8 个镜头，最后给一句行动号召。"
@@ -355,15 +418,15 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
         var id: String { rawValue }
         var name: String {
             switch self {
-            case .bean: "录音豆"
-            case .card: "录音卡"
-            case .feishu: "飞书"
+            case .bean: String(localized: "录音豆")
+            case .card: String(localized: "录音卡")
+            case .feishu: String(localized: "飞书")
             case .mac: "Mac"
             case .iphone: "iPhone"
-            case .imported: "导入"
-            case .note: "文字"
-            case .dictation: "语音输入"
-            case .link: "链接"
+            case .imported: String(localized: "导入")
+            case .note: String(localized: "文字")
+            case .dictation: String(localized: "语音输入")
+            case .link: String(localized: "链接")
             }
         }
         var icon: String {
@@ -382,15 +445,15 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
         /// 悬停时的一句解释。
         var help: String {
             switch self {
-            case .bean: "在录音豆上录的，连上后同步过来"
-            case .card: "在得到录音卡上录的，连上后同步过来"
-            case .feishu: "手机录音豆 App 同步进飞书妙记的，从飞书拉回来"
-            case .mac: "用这台 Mac 录的"
-            case .iphone: "用 iPhone 录的"
-            case .imported: "从文件导入的音频"
-            case .note: "导入的文字笔记"
-            case .dictation: "按住快捷键说的话"
-            case .link: "从链接导入的素材"
+            case .bean: String(localized: "在录音豆上录的，连上后同步过来")
+            case .card: String(localized: "在得到录音卡上录的，连上后同步过来")
+            case .feishu: String(localized: "手机录音豆 App 同步进飞书妙记的，从飞书拉回来")
+            case .mac: String(localized: "用这台 Mac 录的")
+            case .iphone: String(localized: "用 iPhone 录的")
+            case .imported: String(localized: "从文件导入的音频")
+            case .note: String(localized: "导入的文字笔记")
+            case .dictation: String(localized: "按住快捷键说的话")
+            case .link: String(localized: "从链接导入的素材")
             }
         }
     }
@@ -420,7 +483,7 @@ nonisolated struct Recording: Identifiable, Equatable, Codable {
 
     var displayTitle: String {
         if let title, !title.isEmpty { return title }
-        guard let date else { return "录音 \(id)" }
+        guard let date else { return String(localized: "录音 \(id)") }
         return date.formatted(.dateTime.month().day().hour().minute())
     }
 
@@ -489,6 +552,13 @@ nonisolated func clock(_ t: TimeInterval) -> String {
 
 nonisolated func spokenDuration(_ t: TimeInterval) -> String {
     let m = Int(t / 60)
+    if m >= 60 { return m % 60 == 0 ? String(localized: "\(m / 60) 小时") : String(localized: "\(m / 60) 小时 \(m % 60) 分") }
+    return m >= 1 ? String(localized: "\(m) 分钟") : String(localized: "\(Int(t)) 秒")
+}
+
+/// 给模型看的时长，固定中文（提示词不跟界面语言走）。
+nonisolated func promptDuration(_ t: TimeInterval) -> String {
+    let m = Int(t / 60)
     if m >= 60 { return m % 60 == 0 ? "\(m / 60) 小时" : "\(m / 60) 小时 \(m % 60) 分" }
     return m >= 1 ? "\(m) 分钟" : "\(Int(t)) 秒"
 }
@@ -505,11 +575,11 @@ nonisolated struct WiFiSync: Equatable {
 
     var text: String {
         switch phase {
-        case .opening: "正在让录音豆打开 Wi‑Fi…"
-        case .joining: "正在连到录音豆上…"
-        case .connecting: "连上了，马上开始传…"
-        case .transferring: total > 1 ? "Wi‑Fi 快传 · 第 \(index) / \(total) 条" : "Wi‑Fi 快传中…"
-        case .closing: "传完了，正在连回原来的 Wi‑Fi…"
+        case .opening: String(localized: "正在让录音豆打开 Wi‑Fi…")
+        case .joining: String(localized: "正在连到录音豆上…")
+        case .connecting: String(localized: "连上了，马上开始传…")
+        case .transferring: total > 1 ? String(localized: "Wi‑Fi 快传 · 第 \(index) / \(total) 条") : String(localized: "Wi‑Fi 快传中…")
+        case .closing: String(localized: "传完了，正在连回原来的 Wi‑Fi…")
         }
     }
 }

@@ -96,14 +96,16 @@ extension BeanStore {
     }
 
     /// 「1 分 30 秒」「约 4 分钟」「20 秒」这样的说法
-    nonisolated static func spokenSpan(_ t: TimeInterval, rough: Bool = false) -> String {
+    /// approx：粗略说法前面要不要带「约」（只说音频多长时不带）
+    nonisolated static func spokenSpan(_ t: TimeInterval, rough: Bool = false, approx: Bool = true) -> String {
         let s = max(0, Int(t.rounded()))
-        if s < 60 { return rough ? "\(max(5, (s + 4) / 5 * 5)) 秒" : "\(s) 秒" }
+        if s < 60 { return rough ? String(localized: "\(max(5, (s + 4) / 5 * 5)) 秒") : String(localized: "\(s) 秒") }
         if s < 3600 {
             let m = s / 60, sec = s % 60
-            return rough ? "约 \(sec >= 30 ? m + 1 : m) 分钟" : (sec == 0 ? "\(m) 分钟" : "\(m) 分 \(sec) 秒")
+            if rough { let r = sec >= 30 ? m + 1 : m; return approx ? String(localized: "约 \(r) 分钟") : String(localized: "\(r) 分钟") }
+            return sec == 0 ? String(localized: "\(m) 分钟") : String(localized: "\(m) 分 \(sec) 秒")
         }
-        return "约 \(s / 3600) 小时 \(s % 3600 / 60) 分钟"
+        return approx ? String(localized: "约 \(s / 3600) 小时 \(s % 3600 / 60) 分钟") : String(localized: "\(s / 3600) 小时 \(s % 3600 / 60) 分钟")
     }
 }
 

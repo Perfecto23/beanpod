@@ -178,7 +178,7 @@ final class NotchPanel {
             play(.peek)
         } else if old != .idle, new == .idle {
             sampler?.cancel()
-            play(.printing(Ticket(title: "录音 · " + NotchView.clock(lastElapsed), date: .now, wave: wave)))
+            play(.printing(Ticket(title: String(localized: "录音 · \(NotchView.clock(lastElapsed))"), date: .now, wave: wave)))
         }
     }
 
@@ -189,7 +189,7 @@ final class NotchPanel {
             let v: Double = abs(sin(x * 0.37) * sin(x * 0.11 + 1))
             return Float(0.2 + 0.8 * v)
         }
-        play(peek ? .peek : .printing(Ticket(title: "录音 · 00:48", date: .now, wave: demo)))
+        play(peek ? .peek : .printing(Ticket(title: String(localized: "录音 · \("00:48")"), date: .now, wave: demo)))
     }
 
     func play(_ s: Show) {
@@ -338,7 +338,7 @@ struct NotchView: View {
             if store.link == .ready {
                 Text(store.displayDeviceName).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
                 Circle().fill(Theme.ok).frame(width: 6, height: 6).padding(.leading, 2)
-                Text("已连接" + (store.info.map { " · 电量 \($0.micBattery)%" } ?? ""))
+                Text(store.info.map { String(localized: "已连接 · 电量 \($0.micBattery)%") } ?? String(localized: "已连接"))
                     .font(.system(size: 12)).foregroundStyle(.white.opacity(0.6))
             } else {
                 Text(store.recordingOnMac ? "正在用这台 Mac 录" : "录音豆没连上 · 可以用这台 Mac 录")
@@ -355,9 +355,9 @@ struct NotchView: View {
         case .idle:
             HStack(spacing: 8) {
                 if store.link == .ready {
-                    pill("用录音豆录", primary: true) { Circle().fill(.white).frame(width: 7, height: 7) } action: { store.startRecording() }
+                    pill(String(localized: "用录音豆录"), primary: true) { Circle().fill(.white).frame(width: 7, height: 7) } action: { store.startRecording() }
                 }
-                pill("用 Mac 录", primary: store.link != .ready) {
+                pill(String(localized: "用 Mac 录"), primary: store.link != .ready) {
                     Image(systemName: "laptopcomputer").font(.system(size: 10, weight: .semibold))
                 } action: { store.startMacRecording(withSystem ? .both : .mic) }
                 // 用 Mac 录时要不要连电脑里的声音一起录（线上会议、视频）；勾选记住
@@ -382,10 +382,10 @@ struct NotchView: View {
                         .foregroundStyle(.white.opacity(paused ? 0.6 : 1))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                pill(paused ? "继续" : "暂停", primary: false) {
+                pill(paused ? String(localized: "继续") : String(localized: "暂停"), primary: false) {
                     Image(systemName: paused ? "play.fill" : "pause.fill").font(.system(size: 9, weight: .bold))
                 } action: { paused ? store.resumeRecording() : store.pauseRecording() }
-                pill("结束", primary: true) {
+                pill(String(localized: "结束"), primary: true) {
                     RoundedRectangle(cornerRadius: 1.5).fill(.white).frame(width: 7, height: 7)
                 } action: { store.finishRecording() }
             }
@@ -449,9 +449,9 @@ struct NotchView: View {
 
     private func progressLine(_ job: LinkJob) -> String {
         let title = (job.title ?? "").isEmpty ? "" : " · " + (job.title ?? "")
-        let more = store.linkJobs.count > 1 ? "（还有 \(store.linkJobs.count - 1) 条）" : ""
-        guard let p = job.progress else { return "正在准备 \(job.platform)\(title)\(more)" }
-        return "正在下载 \(job.platform)\(title) \(Int(p * 100))%\(more)"
+        let more = store.linkJobs.count > 1 ? String(localized: "（还有 \(store.linkJobs.count - 1) 条）") : ""
+        guard let p = job.progress else { return String(localized: "正在准备 \(job.platform)\(title)\(more)") }
+        return String(localized: "正在下载 \(job.platform)\(title) \(Int(p * 100))%\(more)")
     }
 
     // MARK: 录音中的耳朵

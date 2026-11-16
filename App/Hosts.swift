@@ -18,8 +18,8 @@ struct Host: Codable, Identifiable, Hashable {
     var faceText: String? {
         switch face {
         case nil, "active": nil
-        case "pending", "processing", "reviewing": "人脸审核中"
-        default: faceNote.map { "审核没通过：\($0)" } ?? "人脸审核没通过"
+        case "pending", "processing", "reviewing": String(localized: "人脸审核中")
+        default: faceNote.map { String(localized: "审核没通过：\($0)") } ?? String(localized: "人脸审核没通过")
         }
     }
     var usable: Bool { face == nil || face == "active" }
@@ -41,8 +41,8 @@ final class HostLibrary {
 
     /// 内置的两位示例主播（虚构人物）。只在第一次打开时放进主播列表；用户移除后不再回来。
     static let samples = [
-        Host(material: "", sample: "sample_office", name: "示例 · 职业装", ratio: "9:16"),
-        Host(material: "", sample: "sample_home", name: "示例 · 居家", ratio: "16:9"),
+        Host(material: "", sample: "sample_office", name: String(localized: "示例 · 职业装"), ratio: "9:16"),
+        Host(material: "", sample: "sample_home", name: String(localized: "示例 · 居家"), ratio: "16:9"),
     ]
     static func sampleURL(_ name: String) -> URL? { Bundle.main.url(forResource: name, withExtension: "jpg") }
 
@@ -73,12 +73,12 @@ final class HostLibrary {
     /// 示例主播第一次用来做视频时，把 App 包里的图传到用户自己的 Renoise 账号，换成素材编号。不花积分。
     func ensureUploaded(_ host: Host) async -> Host? {
         guard host.material.isEmpty else { return host }
-        guard let s = host.sample, let url = Self.sampleURL(s) else { error = "示例主播的图片不见了。"; return nil }
+        guard let s = host.sample, let url = Self.sampleURL(s) else { error = String(localized: "示例主播的图片不见了。"); return nil }
         busy = true; error = nil
         defer { busy = false }
         let r = await VideoMaker.shell("renoise upload '\(url.path.replacingOccurrences(of: "'", with: "'\\''"))' --type image --json")
         guard r.ok, let id = Self.materialID(r.output) else {
-            error = Self.explain(r.output, fallback: "示例主播没传上去")
+            error = Self.explain(r.output, fallback: String(localized: "示例主播没传上去"))
             return nil
         }
         var h = host
@@ -116,12 +116,12 @@ final class HostLibrary {
 
     /// 上传一张照片到用户的 Renoise 账号，存成主播。不花积分。
     func add(photo: URL, name: String) async -> Bool {
-        guard let image = NSImage(contentsOf: photo) else { error = "这张图片打不开。"; return false }
+        guard let image = NSImage(contentsOf: photo) else { error = String(localized: "这张图片打不开。"); return false }
         busy = true; error = nil
         defer { busy = false }
         let r = await VideoMaker.shell("renoise upload '\(photo.path.replacingOccurrences(of: "'", with: "'\\''"))' --type image --json")
         guard r.ok, let id = Self.materialID(r.output) else {
-            error = Self.explain(r.output, fallback: "上传没成功")
+            error = Self.explain(r.output, fallback: String(localized: "上传没成功"))
             return false
         }
         Self.writeThumb(image, material: id)
@@ -136,11 +136,11 @@ final class HostLibrary {
     /// 已经在 Renoise 上传过的人像：填素材编号加进来，缩略图从 Renoise 取。
     func add(material raw: String, name: String) async -> Bool {
         let id = raw.replacingOccurrences(of: "material:", with: "").trimmingCharacters(in: .whitespaces)
-        guard !id.isEmpty, id.allSatisfy(\.isNumber) else { error = "素材编号应该是一串数字。"; return false }
+        guard !id.isEmpty, id.allSatisfy(\.isNumber) else { error = String(localized: "素材编号应该是一串数字。"); return false }
         busy = true; error = nil
         defer { busy = false }
-        guard let m = await Self.material(id) else { error = "在你的 Renoise 账号里没找到编号 \(id) 的素材。"; return false }
-        guard (m["type"] as? String) == "image" else { error = "编号 \(id) 不是图片。"; return false }
+        guard let m = await Self.material(id) else { error = String(localized: "在你的 Renoise 账号里没找到编号 \(id) 的素材。"); return false }
+        guard (m["type"] as? String) == "image" else { error = String(localized: "编号 \(id) 不是图片。"); return false }
         var ratio = "9:16"
         if let meta = (m["metadata"] as? String).flatMap({ try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] }),
            let w = VideoMaker.number(meta["width"]), let h = VideoMaker.number(meta["height"]) { ratio = w > h ? "16:9" : "9:16" }
@@ -148,7 +148,7 @@ final class HostLibrary {
            let (data, _) = try? await URLSession.shared.data(from: url), let image = NSImage(data: data) {
             Self.writeThumb(image, material: id)
         }
-        var host = Host(material: id, name: name.isEmpty ? (m["name"] as? String ?? "主播") : name, ratio: ratio)
+        var host = Host(material: id, name: name.isEmpty ? (m["name"] as? String ?? String(localized: "主播")) : name, ratio: ratio)
         Self.applyFace(m, to: &host)
         hosts.removeAll { $0.material == id }
         hosts.append(host)
@@ -210,9 +210,9 @@ final class HostLibrary {
 
     private static func explain(_ output: String, fallback: String) -> String {
         let o = output.lowercased()
-        if o.contains("command not found") || o.contains("not found: renoise") { return "这台 Mac 上还没装 Renoise 命令行。到「连接 AI 助手 → 创作工具」里装上并登录。" }
-        if o.contains("auth") || o.contains("401") || o.contains("login") { return "Renoise 还没登录。到「连接 AI 助手 → 创作工具」里登录。" }
-        return "\(fallback)：\(VideoMaker.tail(output))"
+        if o.contains("command not found") || o.contains("not found: renoise") { return String(localized: "这台 Mac 上还没装 Renoise 命令行。到「连接 AI 助手 → 创作工具」里装上并登录。") }
+        if o.contains("auth") || o.contains("401") || o.contains("login") { return String(localized: "Renoise 还没登录。到「连接 AI 助手 → 创作工具」里登录。") }
+        return String(localized: "\(fallback)：\(VideoMaker.tail(output))")
     }
 }
 
@@ -272,7 +272,7 @@ struct HostCard: View {
         .buttonStyle(.plain)
         .onHover { hover = $0 }
         .contextMenu { Button("改名…", action: onRename); Button("从豆仓移除", role: .destructive, action: onRemove) }
-        .accessibilityLabel("主播 \(host.name)，\(host.ratio)\(host.isSample ? "，示例" : "")\(picked ? "，已选中" : "")")
+        .accessibilityLabel("主播 \(host.name)，\(host.ratio)\(host.isSample ? String(localized: "，示例") : "")\(picked ? String(localized: "，已选中") : "")")
         .accessibilityAction(named: "改名", onRename)
         .accessibilityAction(named: "从豆仓移除", onRemove)
     }
@@ -331,7 +331,7 @@ struct AddHostSheet: View {
 
     @State private var photo: URL?
     @State private var image: NSImage?
-    @State private var name = "我"
+    @State private var name = String(localized: "我")
     @State private var consent = false
     @State private var byID = false
     @State private var materialID = ""
@@ -401,11 +401,11 @@ struct AddHostSheet: View {
                 HStack {
                     Text("照片方向")
                     Spacer()
-                    Text(image.map { HostLibrary.ratio(of: $0) == "9:16" ? "竖图 · 适合 9:16" : "横图 · 适合 16:9" } ?? "—").foregroundStyle(.secondary)
+                    Text(image.map { HostLibrary.ratio(of: $0) == "9:16" ? String(localized: "竖图 · 适合 9:16") : String(localized: "横图 · 适合 16:9") } ?? "—").foregroundStyle(.secondary)
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     Text("怎样的照片效果好").font(.callout.weight(.semibold))
-                    ForEach(["正脸、看得清五官", "光线均匀、没有遮挡", "半身、背景简单"], id: \.self) { t in
+                    ForEach([String(localized: "正脸、看得清五官"), String(localized: "光线均匀、没有遮挡"), String(localized: "半身、背景简单")], id: \.self) { t in
                         Label { Text(t).font(.callout) } icon: { Image(systemName: "checkmark").foregroundStyle(Theme.accent) }
                     }
                 }
@@ -448,13 +448,13 @@ struct AddHostSheet: View {
     private func choose() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.jpeg, .png, .heic, .webP]
-        panel.prompt = "选择"
-        panel.message = "选一张正脸、光线均匀的半身照"
+        panel.prompt = String(localized: "选择")
+        panel.message = String(localized: "选一张正脸、光线均匀的半身照")
         if panel.runModal() == .OK, let url = panel.url { pick(url) }
     }
 
     private func pick(_ url: URL) {
-        guard let img = NSImage(contentsOf: url) else { library.error = "这张图片打不开。"; return }
+        guard let img = NSImage(contentsOf: url) else { library.error = String(localized: "这张图片打不开。"); return }
         photo = url; image = img; library.error = nil
     }
 
