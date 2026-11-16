@@ -11,6 +11,8 @@ enum Route: Hashable {
     case project(UUID)
     /// 带某个标签的录音和素材。
     case tag(String)
+    /// 最近删除（TrashView.swift）。
+    case trash
 
     /// 是不是录音列表那一类页面（全部、素材、项目、场景）。
     var isList: Bool {
@@ -62,6 +64,7 @@ struct RootView: View {
             case .dashboard: DashboardView().background(Backdrop())
             case .knowledge: KnowledgeView().background(Backdrop())
             case .device: DeviceView().background(Backdrop())
+            case .trash: TrashView().background(Backdrop())
             case .all, .starred, .scene, .materials, .project, .tag: RecordingsView().background(Backdrop())
             }
         }
@@ -84,7 +87,15 @@ struct RootView: View {
         .toolbar(nav.stageOpen && store.recState != .idle ? .hidden : .automatic, for: .windowToolbar)
         .overlay(alignment: .top) {
             if let banner = store.banner {
-                Label(banner.text, systemImage: banner.icon)
+                HStack(spacing: 12) {
+                    Label(banner.text, systemImage: banner.icon)
+                    if !banner.undo.isEmpty {
+                        Divider().frame(height: 14)
+                        Button("撤销") { store.restore(banner.undo); store.banner = nil }
+                            .buttonStyle(.plain).foregroundStyle(Theme.accent).fontWeight(.semibold)
+                            .keyboardShortcut("z", modifiers: .command)
+                    }
+                }
                     .font(.callout.weight(.medium))
                     .padding(.horizontal, 16).padding(.vertical, 10)
                     .glassEffect(.regular, in: .capsule)
@@ -309,7 +320,7 @@ struct Sidebar: View {
         case .all, .starred, .scene: 1
         case .knowledge: 2
         case .materials: 3
-        case .device, .project, .tag: -1
+        case .device, .project, .tag, .trash: -1
         }
     }
 
@@ -344,6 +355,29 @@ struct Sidebar: View {
             projectList.padding(.top, 20)
             SidebarTags().padding(.top, 16)
             Spacer(minLength: 0)
+            // 最近删除：里面有东西（或者正开着）才出现
+            if !store.trash.isEmpty || nav.route == .trash {
+                let on = nav.route == .trash
+                Button { nav.route = .trash } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "trash").font(.system(size: 12)).frame(width: 20)
+                            .foregroundStyle(on ? Theme.accent : Theme.warm400)
+                        Text("最近删除").font(.system(size: 13, weight: on ? .semibold : .regular))
+                            .foregroundStyle(on ? Theme.accent : Theme.warm700)
+                        Spacer()
+                        if !store.trash.isEmpty {
+                            Text("\(store.trash.count)").font(.system(size: 11)).monospacedDigit()
+                                .foregroundStyle(on ? Theme.accent : Theme.warm400)
+                        }
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(on ? Theme.accent.opacity(0.12) : .clear, in: .rect(cornerRadius: 10))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 8)
+                .accessibilityLabel("最近删除，\(store.trash.count) 条")
+            }
             Divider().overlay(Theme.warm200.opacity(0.6)).padding(.horizontal, -16).padding(.bottom, 14)
             HStack(spacing: 6) {
                 DeviceChip()
@@ -716,7 +750,6 @@ struct RecordingsView: View {
     /// 多选：开着的时候点一张卡片是勾选，不是打开。
     @State private var selecting = false
     @State private var picked: Set<UInt32> = []
-    @State private var confirmBatchDelete = false
     @State private var listWidth: CGFloat = 368
     /// 素材库里按平台筛。
     @State private var platform: String?
@@ -989,16 +1022,6 @@ struct RecordingsView: View {
         }
         .onChange(of: items.map(\.id)) { pickFirstIfNeeded(); picked.formIntersection(Set(items.map(\.id))) }
         .onChange(of: nav.route) { selecting = false; picked = []; platform = nil }
-        .confirmationDialog("从这台 Mac 删除这 \(picked.count) 条？", isPresented: $confirmBatchDelete) {
-            Button("删除", role: .destructive) {
-                for id in picked where store.recordings.first(where: { $0.id == id })?.downloaded == true { store.removeLocal(id) }
-                picked = []; selecting = false
-            }
-        } message: {
-            Text(picked.allSatisfy { id in store.recordings.first { $0.id == id }?.isMaterial == true }
-                 ? "文字稿、纪要和译文会一起删除。原视频还在原来的平台上，需要的话可以重新导入。"
-                 : "文字稿和纪要会一起删除。还在录音豆里的原件不受影响，可以再下载。")
-        }
         .onChange(of: nav.route) { if nav.route == .starred { nav.route = .all; quick = .starred } }
     }
 
@@ -1058,7 +1081,10 @@ struct RecordingsView: View {
                 Label("星标", systemImage: "star").font(.system(size: 12, weight: .medium))
             }
             .buttonStyle(.plain)
-            Button { confirmBatchDelete = true } label: {
+            Button {
+                store.trashWithUndo(picked.filter { id in store.recordings.first(where: { $0.id == id })?.downloaded == true })
+                picked = []; selecting = false
+            } label: {
                 Label("删除", systemImage: "trash").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.accent)
             }
             .buttonStyle(.plain)
@@ -1137,7 +1163,7 @@ struct RecordingsView: View {
             Divider()
             // 删除要再确认一次，确认框挂在详情页上，所以先选中这一条
             if rec.downloaded {
-                Button("从这台 Mac 删除…", role: .destructive) { nav.selection = rec.id; Task { nav.confirmLocalDelete = true } }
+                Button("移到最近删除", role: .destructive) { store.trashWithUndo([rec.id]) }
             }
             if rec.onDevice, store.link == .ready, !rec.inProgress {
                 Button("从录音豆删除…", role: .destructive) { nav.selection = rec.id; Task { nav.confirmDeviceDelete = true } }
@@ -1368,11 +1394,6 @@ struct RecordingDetail: View {
         } message: {
             Text(recording.downloaded ? "这台 Mac 上已下载的副本会保留。" : "这条录音还没下载，删除后无法找回。")
         }
-        .confirmationDialog("从这台 Mac 删除这条录音？", isPresented: Bindable(nav).confirmLocalDelete) {
-            Button("删除", role: .destructive) { store.removeLocal(recording.id) }
-        } message: {
-            Text(recording.onDevice ? "文字稿和纪要会一起删除。录音豆里的原件还在，可以再下载。" : "录音豆里已经没有这条了，删除后无法找回。")
-        }
     }
 
     /// 顶上一块：场景、时间、一排工具；下面是标题和三个页签。
@@ -1465,7 +1486,7 @@ struct RecordingDetail: View {
                 .disabled(store.stages[recording.id] != nil)
             }
             IconMenu("trash", help: "删除", danger: true) {
-                if recording.downloaded { Button("从这台 Mac 删除…") { nav.confirmLocalDelete = true } }
+                if recording.downloaded { Button("移到最近删除") { store.trashWithUndo([recording.id]) } }
                 if recording.onDevice { Button("从录音豆删除…") { nav.confirmDeviceDelete = true } }
             }
         }

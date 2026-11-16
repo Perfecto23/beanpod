@@ -103,6 +103,8 @@ final class BeanStore {
     @ObservationIgnored var scratchTried: Set<UInt32> = []
     var info: DeviceInfo?
     var encryptionReady = false
+    /// 最近删除（Trash.swift）：本机删掉的录音放 7 天，可以恢复。
+    var trash: [TrashedRecording] = []
 
     // 录音
     var recordings: [Recording] = []
@@ -167,7 +169,8 @@ final class BeanStore {
     }
     /// 窗口顶部滑出来的一条轻提示，几秒后自己消失。
     var banner: Banner?
-    struct Banner: Equatable { var icon: String; var text: String; var id = UUID() }
+    /// `undo`：这条提示能撤销时，要恢复的「最近删除」条目。
+    struct Banner: Equatable { var icon: String; var text: String; var undo: [UUID] = []; var id = UUID() }
 
     /// 照着提示里给的办法去做。
     func resolve(_ action: Problem.Action) {
@@ -188,10 +191,11 @@ final class BeanStore {
         }
     }
 
-    func toast(_ icon: String, _ text: String) {
-        let b = Banner(icon: icon, text: text)
+    func toast(_ icon: String, _ text: String, undo: [UUID] = []) {
+        let b = Banner(icon: icon, text: text, undo: undo)
         banner = b
-        Task { try? await Task.sleep(for: .seconds(3.5)); if banner == b { banner = nil } }
+        // 能撤销的多留一会儿，给人反应的时间
+        Task { try? await Task.sleep(for: .seconds(undo.isEmpty ? 3.5 : 7)); if banner == b { banner = nil } }
     }
 
     /// 录音豆是不是在充电盒里（在盒里时它在充电）。
@@ -253,6 +257,7 @@ final class BeanStore {
 
     init() {
         loadLibrary()
+        loadTrash()
         loadProjects()
         refreshASRAvailability()
         watchInbox()
@@ -263,6 +268,13 @@ final class BeanStore {
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
             if self?.settings.autoProcess == true { self?.upgradeRoughNotes() }
+        }
+        // 最近删除：到期的彻底删掉。启动时一次，之后每 6 小时一次
+        Task { [weak self] in
+            while let self {
+                self.purgeTrash()
+                try? await Task.sleep(for: .seconds(6 * 3600))
+            }
         }
         ble.onLink = { [weak self] in self?.linkChanged($0) }
         ble.onFound = { [weak self] in self?.found = $0; self?.autoConnectIfObvious() }
@@ -962,20 +974,10 @@ final class BeanStore {
         saveLibrary()
     }
 
+    /// 从这台设备删除：先移到「最近删除」，7 天内能恢复（Trash.swift）。
     func removeLocal(_ id: UInt32) {
         addLog("用户从本机删除录音 \(id)")
-        if playingID == id { stop() }
-        try? FileManager.default.removeItem(at: oggURL(id))
-        try? FileManager.default.removeItem(at: wavURL(id))
-        #if os(macOS)
-        try? FileManager.default.removeItem(at: videoURL(id))
-        try? FileManager.default.removeItem(at: videoThumbURL(id))
-        #endif
-        if let i = recordings.firstIndex(where: { $0.id == id }) {
-            if recordings[i].onDevice { recordings[i] = Recording(id: id, size: recordings[i].size, date: recordings[i].date, duration: recordings[i].duration, onDevice: true) }
-            else { recordings.remove(at: i) }
-        }
-        saveLibrary()
+        moveToTrash(id)
     }
 
     #if os(macOS)

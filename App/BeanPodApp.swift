@@ -85,7 +85,7 @@ struct BeanPodApp: App {
                     Button("下载选中素材的画面（最高 720p）") { if let id = chosen?.id { store.fetchVideo(id) } }
                         .disabled(chosen?.isMaterial != true || chosen?.source == nil || chosen.map { store.videoWorking.contains($0.id) } == true)
                 }
-                Button("从这台 Mac 删除选中的录音…") { nav.confirmLocalDelete = true }
+                Button("把选中的录音移到最近删除") { if let id = chosen?.id { store.trashWithUndo([id]) } }
                     .keyboardShortcut(.delete, modifiers: .command)
                     .disabled(chosen?.downloaded != true || store.recState != .idle)
                 Button("从录音豆删除选中的录音…") { nav.confirmDeviceDelete = true }
