@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import SwiftUI
 
 /// 把一篇口播稿做成带完整包装的数字人口播视频。
@@ -281,14 +282,32 @@ final class VideoMaker {
         }
     }
 
-    /// 成片出来了：拷进录音库，挂到那条录音下面。出错也记一笔，之后不再看这个文件夹。
+    /// 成片出来了：视频、封面、成片口播稿、包装说明、质检结果、素材编号一起拷进录音库，挂到那条录音下面。
+    /// 没做成也在那条录音下面留一条，写明原因和已经花了多少积分。之后不再看这个文件夹。
     private func deliver(_ folder: URL, _ r: [String: Any], store: BeanStore, current: Bool) {
         let info = Self.readJSON(folder.appendingPathComponent("job.json")) ?? [:]
         let fm = FileManager.default
+        let rec = UInt32(Self.number(info["recording"]) ?? Double(recording))
+        let quote = Self.readJSON(folder.appendingPathComponent("quote.json")).map(Self.parseQuote)
+        func clip(file: String) -> VideoClip {
+            var c = VideoClip(file: file, host: info["host"] as? String ?? "数字人",
+                              seconds: Int(Self.number(r["seconds"]) ?? Double(quote?.seconds ?? 0)),
+                              credits: Int(Self.number(r["credits_spent"]) ?? (file.isEmpty ? 0 : quote?.credits ?? 0)))
+            c.style = info["style"] as? String
+            c.ratio = info["ratio"] as? String
+            c.script = Self.finalScript(folder, r)
+            c.summary = (r["summary"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            c.checks = (r["checks"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            c.material = (r["material"] as? String) ?? Self.number(r["material"]).map { String(Int($0)) }
+            return c
+        }
         func close(_ failure: String?) {
             fm.createFile(atPath: folder.appendingPathComponent(".done").path, contents: nil)
             if let failure {
                 store.addLog("做视频：\(folder.lastPathComponent) 没做成：\(failure)")
+                var failed = clip(file: "")
+                failed.error = failure
+                store.addVideo(rec, failed)
                 if current { phase = .failed(failure) }
             }
         }
@@ -302,18 +321,47 @@ final class VideoMaker {
             }
             return
         }
-        let rec = UInt32(Self.number(info["recording"]) ?? Double(recording))
-        let name = "\(rec)-video-\(Int(Date.now.timeIntervalSince1970)).mp4"
+        let stamp = Int(Date.now.timeIntervalSince1970)
+        let name = "\(rec)-video-\(stamp).mp4"
         let out = store.folder.appendingPathComponent(name)
         do { try fm.copyItem(at: local, to: out) } catch { close("成片拷不进录音库：\(error.localizedDescription)"); return }
-        let quote = Self.readJSON(folder.appendingPathComponent("quote.json")).map(Self.parseQuote)
-        let spent = Int(Self.number(r["credits_spent"]) ?? quote?.credits ?? 0)
-        let seconds = Int(Self.number(r["seconds"]) ?? Double(quote?.seconds ?? 0))
-        store.addVideo(rec, file: name, host: "\(info["style"] as? String ?? "口播") · \(info["host"] as? String ?? "数字人")", seconds: seconds, credits: spent)
-        store.addLog("做视频：交付 \(name)，花了 \(spent) 积分。\(r["summary"] as? String ?? "")")
+        var c = clip(file: name)
+        // 封面：Claude 给了就用它的，没给就从成片里取一帧
+        let coverName = "\(rec)-video-\(stamp).jpg"
+        let coverOut = store.folder.appendingPathComponent(coverName)
+        if let given = (r["cover"] as? String).map({ $0.hasPrefix("/") ? URL(fileURLWithPath: $0) : folder.appendingPathComponent($0) }),
+           fm.fileExists(atPath: given.path), (try? fm.copyItem(at: given, to: coverOut)) != nil {
+            c.cover = coverName
+        } else if Self.writeFrame(of: out, to: coverOut) {
+            c.cover = coverName
+        }
+        store.addVideo(rec, c)
+        store.addLog("做视频：交付 \(name)，花了 \(c.credits) 积分。\(c.summary ?? "")")
         store.toast("checkmark.circle.fill", "视频做好了：\(info["title"] as? String ?? "")")
         close(nil)
         if current { phase = .finished(out) }
+    }
+
+    /// 成片里实际念的口播全文：result.json 的 script，没有就拼 script.json 里每段的 t。
+    nonisolated static func finalScript(_ folder: URL, _ r: [String: Any]) -> String? {
+        if let s = r["script"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return s }
+        guard let data = try? Data(contentsOf: folder.appendingPathComponent("script.json")),
+              let any = try? JSONSerialization.jsonObject(with: data) else { return nil }
+        let takes = (any as? [[String: Any]]) ?? ((any as? [String: Any])?["takes"] as? [[String: Any]]) ?? []
+        let lines = takes.compactMap { ($0["t"] ?? $0["text"] ?? $0["line"]) as? String }.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
+    }
+
+    /// 从视频里取一帧存成 JPEG（第 1 秒，太短就取开头）。
+    nonisolated static func writeFrame(of video: URL, to url: URL) -> Bool {
+        let gen = AVAssetImageGenerator(asset: AVURLAsset(url: video))
+        gen.appliesPreferredTrackTransform = true
+        gen.maximumSize = CGSize(width: 720, height: 720)
+        guard let cg = (try? gen.copyCGImage(at: CMTime(seconds: 1, preferredTimescale: 600), actualTime: nil))
+                ?? (try? gen.copyCGImage(at: .zero, actualTime: nil)) else { return false }
+        let rep = NSBitmapImageRep(cgImage: cg)
+        guard let jpg = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) else { return false }
+        return (try? jpg.write(to: url, options: .atomic)) != nil
     }
 
     nonisolated static func parseQuote(_ q: [String: Any]) -> Quote {
@@ -395,8 +443,8 @@ final class VideoMaker {
     Each time you start a stage, overwrite ./progress.json with {"index": n, "total": 6, "step": "<name>", "detail": "<one short Chinese sentence>"}.
     Stages in order: 1 生成口播, 2 检查拼接, 3 剪辑规划, 4 包装配乐, 5 渲染质检, 6 下载交付.
     While the sandbox engineer works, check its PROGRESS.md at least every 5 minutes (the sandbox pauses after 15 idle minutes) and keep progress.json current.
-    When done, write ./result.json: {"video": "out/final.mp4", "seconds": n, "material": "Renoise material id of the final cut", "credits_spent": n, "summary": "一两句中文：用了哪些包装", "checks": "一句中文：质检结果"}, and tell the user it is in BeanPod.
-    On any blocker, write ./result.json {"error": "一句中文原因"}; never stop silently.
+    When done, write ./result.json: {"video": "out/final.mp4", "cover": "out/cover.jpg (a frame or the designed cover; optional)", "seconds": n, "material": "Renoise material id of the final cut", "credits_spent": n, "script": "成片里实际念的口播全文，一段一行", "summary": "一两句中文：用了哪些包装", "checks": "一句中文：质检结果"}, and tell the user it is in BeanPod.
+    On any blocker, write ./result.json {"error": "一句中文原因", "credits_spent": n}; never stop silently.
     """
 
     // MARK: 小工具

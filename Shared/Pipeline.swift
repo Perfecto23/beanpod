@@ -777,15 +777,24 @@ extension BeanStore {
         }
     }
 
-    func addVideo(_ id: UInt32, file: String, host: String, seconds: Int, credits: Int) {
+    func addVideo(_ id: UInt32, _ clip: VideoClip) {
         guard let i = index(id) else { return }
-        recordings[i].videos.insert(VideoClip(file: file, host: host, seconds: seconds, credits: credits), at: 0)
+        recordings[i].videos.insert(clip, at: 0)
+        saveLibrary()
+    }
+
+    /// 旧版交付的成片没有封面：打开时补一张。
+    func setVideoCover(_ id: UInt32, _ video: UUID, cover: String) {
+        guard let i = index(id), let n = recordings[i].videos.firstIndex(where: { $0.id == video }) else { return }
+        recordings[i].videos[n].cover = cover
         saveLibrary()
     }
 
     func deleteVideo(_ id: UInt32, _ video: UUID) {
         guard let i = index(id), let n = recordings[i].videos.firstIndex(where: { $0.id == video }) else { return }
-        try? FileManager.default.trashItem(at: folder.appendingPathComponent(recordings[i].videos[n].file), resultingItemURL: nil)
+        let clip = recordings[i].videos[n]
+        if !clip.file.isEmpty { try? FileManager.default.trashItem(at: folder.appendingPathComponent(clip.file), resultingItemURL: nil) }
+        if let cover = clip.cover { try? FileManager.default.removeItem(at: folder.appendingPathComponent(cover)) }
         recordings[i].videos.remove(at: n)
         saveLibrary()
     }

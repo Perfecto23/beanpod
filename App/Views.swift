@@ -1853,24 +1853,20 @@ struct RewriteView: View {
                     }
                 }
             }
-            // 用这条录音做出来的视频
-            ForEach(recording.videos) { clip in
-                let url = store.folder.appendingPathComponent(clip.file)
-                HStack(spacing: 12) {
-                    Image(systemName: "play.rectangle.fill").font(.title2).foregroundStyle(Theme.accent)
-                        .frame(width: 44, height: 44).background(Theme.accent.opacity(0.14), in: .rect(cornerRadius: 11))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("数字人口播 · \(clip.host)").font(.body.weight(.semibold))
-                        Text(clip.date.formatted(date: .abbreviated, time: .shortened) + (clip.seconds > 0 ? " · 约 \(clip.seconds) 秒" : "") + " · \(clip.credits) 积分")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+            // 正在做的视频：一直挂在最上面，点「看进度」打开那张单子
+            if maker.recording == recording.id, maker.busy {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(maker.statusLine)
+                        .foregroundStyle(.secondary)
                     Spacer()
-                    Button("打开") { NSWorkspace.shared.open(url) }.buttonStyle(.glassProminent)
-                    Button("在访达中显示", systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }.labelStyle(.iconOnly).buttonStyle(.borderless)
-                    Button("删除", systemImage: "trash") { store.deleteVideo(recording.id, clip.id) }.labelStyle(.iconOnly).buttonStyle(.borderless)
-                        .help("把这条视频移到废纸篓")
+                    Button("看进度") { makingVideo = true }
                 }
-                .padding(14).panel(radius: 14)
+                .padding(12).panel(radius: 12)
+            }
+            // 用这条录音做出来的视频：成片、封面、口播稿、包装说明、质检都回到这里（VideoResultCard）
+            ForEach(recording.videos) { clip in
+                VideoResultCard(recording: recording, clip: clip)
             }
             ForEach(recording.rewrites) { item in
                 Card {
@@ -1892,16 +1888,6 @@ struct RewriteView: View {
                     }
                     MarkdownView(text: item.text)
                 }
-            }
-            if maker.recording == recording.id, maker.busy {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(maker.statusLine)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("看进度") { makingVideo = true }
-                }
-                .padding(12).panel(radius: 12)
             }
             if recording.rewrites.isEmpty {
                 Text("改写会按你在设置里选的职业来把握语气。结果由模型生成，发出去之前请自己过一遍。")

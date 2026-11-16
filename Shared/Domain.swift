@@ -195,11 +195,30 @@ nonisolated struct Rewrite: Codable, Equatable, Identifiable {
 /// 用这条录音的稿子做出来的视频。文件和录音放在同一个文件夹里。
 nonisolated struct VideoClip: Codable, Equatable, Identifiable {
     var id = UUID()
+    /// 成片文件名（在录音库文件夹里）。没做成的那条是空的。
     var file: String
     var host: String
     var seconds: Int
     var credits: Int
     var date = Date()
+    // 下面都是成片一起带回来的内容。都是可选的：旧的录音库里没有这些字段也能读
+    /// 剪辑风格、画幅（来自交付时的 job.json）。
+    var style: String?
+    var ratio: String?
+    /// 成片里实际念的口播全文（Claude 可能在原稿上收紧、加了开场钩子）。
+    var script: String?
+    /// 一两句：用了哪些包装。
+    var summary: String?
+    /// 一句：质检结果。
+    var checks: String?
+    /// Renoise 里成片的素材编号。
+    var material: String?
+    /// 封面图文件名（在录音库文件夹里）。
+    var cover: String?
+    /// 没做成的原因；有它的时候 file 是空的。
+    var error: String?
+
+    var failed: Bool { error != nil }
 }
 
 nonisolated enum RewriteTemplate: String, CaseIterable, Identifiable {
