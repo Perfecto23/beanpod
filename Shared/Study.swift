@@ -90,7 +90,8 @@ extension BeanStore {
                 s.model = model
                 guard let i = recordings.firstIndex(where: { $0.id == id }) else { return }
                 Self.locate(&s, in: recordings[i])
-                let words = excerpt.split { !$0.isLetter && $0 != "'" }.filter { $0.allSatisfy(\.isASCII) }.count
+                // 语速按整条文字稿算（送给模型的只是前一段，不能拿它除以整条时长）
+                let words = text.split { !$0.isLetter && $0 != "'" }.filter { $0.allSatisfy(\.isASCII) }.count
                 if recordings[i].duration > 30, words > 50 { s.wordsPerMinute = Int(Double(words) / (recordings[i].duration / 60)) }
                 recordings[i].study = s
                 saveLibrary()
@@ -169,6 +170,22 @@ extension BeanStore {
         for i in s.words.indices { s.words[i].time = time(s.words[i].example) }
         for i in s.phrases.indices { s.phrases[i].time = time(s.phrases[i].example) }
         for i in s.sentences.indices { s.sentences[i].time = time(s.sentences[i].text) }
+    }
+}
+
+// 每个字段都容错读取：以后加字段、改字段，旧的学习笔记照样能打开，不会整份丢掉
+extension Study {
+    nonisolated init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        overall = (try? c.decodeIfPresent(String.self, forKey: .overall)) ?? ""
+        note = (try? c.decodeIfPresent(String.self, forKey: .note)) ?? ""
+        levels = (try? c.decodeIfPresent([String: Double].self, forKey: .levels)) ?? [:]
+        wordsPerMinute = try? c.decodeIfPresent(Int.self, forKey: .wordsPerMinute)
+        words = (try? c.decodeIfPresent([Word].self, forKey: .words)) ?? []
+        phrases = (try? c.decodeIfPresent([Phrase].self, forKey: .phrases)) ?? []
+        sentences = (try? c.decodeIfPresent([Sentence].self, forKey: .sentences)) ?? []
+        model = (try? c.decodeIfPresent(String.self, forKey: .model)) ?? ""
+        date = (try? c.decodeIfPresent(Date.self, forKey: .date)) ?? Date()
     }
 }
 

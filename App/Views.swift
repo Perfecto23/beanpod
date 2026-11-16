@@ -2230,6 +2230,8 @@ struct TranscriptView: View {
                     .help("播放时把正在播的那句滚到中间")
             }
             .buttonStyle(.glass).controlSize(.small)
+            // 「修改」时在编辑框里打字：⌥↑ ⌥↓ 要留给光标，⌥R ⌥L 不能被拿去换句、开循环
+            .disabled(editing)
             Text("点一句就从那里播 · 空格 暂停 · ⌥↑ ⌥↓ 换句 · ⌥R 这句再听 · ⌥L 单句循环")
                 .font(.caption).foregroundStyle(.tertiary)
         }

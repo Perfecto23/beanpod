@@ -34,7 +34,7 @@ final class FeishuSync {
         var start: Date { recorded ?? uploaded.map { $0.addingTimeInterval(-duration) } ?? .now }
     }
 
-    enum Status: Equatable { case new, inLibrary(UInt32), skipped, pulling, failed(String) }
+    enum Status: Equatable { case new, inLibrary(UInt32), removed, skipped, pulling, failed(String) }
 
     var link: Link = .unknown
     var minutes: [Minute] = []
@@ -107,8 +107,10 @@ final class FeishuSync {
 
     func status(of m: Minute) -> Status {
         if pulling.contains(m.id) { return .pulling }
-        if let id = imported[m.id], store?.recordings.contains(where: { $0.id == id }) == true || store?.trash.contains(where: { $0.recording.id == id }) == true {
-            return .inLibrary(id)
+        if let id = imported[m.id] {
+            let still = store?.recordings.contains(where: { $0.id == id }) == true || store?.trash.contains(where: { $0.recording.id == id }) == true
+            // 拉回过、后来又被彻底删掉的：不再当成新的，免得自动同步又拉回来
+            return still ? .inLibrary(id) : .removed
         }
         if let id = match(m) { return .inLibrary(id) }
         if let e = errors[m.id] { return .failed(e) }
@@ -117,14 +119,16 @@ final class FeishuSync {
 
     var newOnes: [Minute] { minutes.filter { status(of: $0) == .new } }
 
-    /// 录音库（和最近删除）里已经有的同一段：时长差不到 2 秒；标题里带录音时间的再要求时间对得上。
+    /// 录音库（和最近删除）里已经有的同一段：时长差不到 2 秒，而且时间对得上——
+    /// 标题里带录音时间的，差两分钟以内；没有的（飞书给改了标题），要录在上传之前、一周以内。
     private func match(_ m: Minute) -> UInt32? {
         guard let store else { return nil }
         let all = store.recordings.filter { !$0.isMaterial } + store.trash.map(\.recording)
         return all.first { r in
-            guard abs(r.duration - m.duration) < 2 else { return false }
-            if let rec = m.recorded, let d = r.date { return abs(d.timeIntervalSince(rec)) < 120 }
-            return m.duration >= 20          // 只靠时长认的，太短的容易撞
+            guard abs(r.duration - m.duration) < 2, let d = r.date else { return false }
+            if let rec = m.recorded { return abs(d.timeIntervalSince(rec)) < 120 }
+            guard m.duration >= 20, let up = m.uploaded else { return false }     // 太短的只靠时长容易撞
+            return d <= up.addingTimeInterval(600) && up.timeIntervalSince(d) < 7 * 86_400
         }?.id
     }
 
@@ -182,7 +186,12 @@ final class FeishuSync {
         }
         var done = 0
         for token in ids {
+            // 另一轮拉回（定时的或手动的）可能已经把它拉进来了：轮到它时再看一眼
             guard let m = minutes.first(where: { $0.id == token }), !pulling.contains(token) else { continue }
+            switch status(of: m) {
+            case .new, .skipped, .failed: break
+            default: continue
+            }
             pulling.insert(token); errors[token] = nil
             defer { pulling.remove(token) }
             let dir = FileManager.default.temporaryDirectory.appendingPathComponent("feishu-\(token)", isDirectory: true)
@@ -377,6 +386,8 @@ extension BeanStore {
     /// 给只有文字稿的飞书录音补上音频：写 wav、不再是纯文字，重新转写（纪要、标题、标签照常更新）。
     func attachFeishuAudio(_ file: URL, to id: UInt32) async -> Bool {
         let samples = await Task.detached { BeanStore.decodeAnyAudio(file) }.value
+        // 正在处理（转写或整理）的先不动：process 会因为它在队列里直接返回，补上的音频就没被转写，以后也不会再补
+        guard stages[id] == nil else { addLog("飞书录音 \(id) 正在处理，等处理完再补音频"); return false }
         guard let samples, samples.count > 1600, let i = recordings.firstIndex(where: { $0.id == id }) else { return false }
         do { try QwenASR.wav(samples).write(to: wavURL(id), options: .atomic) } catch { return false }
         recordings[i].textOnly = false

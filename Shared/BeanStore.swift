@@ -1078,10 +1078,14 @@ final class BeanStore {
 
     /// 播一句：loop 为真就一直循环这句，否则播完这句自己停（「这句再听」）。
     func playSpan(_ id: UInt32, _ span: ClosedRange<TimeInterval>, loop: Bool) {
-        loopSpan = loop ? span : nil
-        loopCount = loop ? 1 : 0
-        stopAt = loop ? nil : span.upperBound
+        // 先切到这条、跳到句首（切换录音会 stop()，把循环和停点清掉），再设循环 / 停点
         play(id, at: span.lowerBound)
+        // 最后一句的句尾就是音频结尾：留一点余量，不然 100ms 一次的检查容易错过、播放器先自己停了
+        let duration = recordings.first { $0.id == id }?.duration ?? span.upperBound
+        let end = max(span.lowerBound + 0.3, min(span.upperBound, duration - 0.15))
+        loopSpan = loop ? span.lowerBound...end : nil
+        loopCount = loop ? 1 : 0
+        stopAt = loop ? nil : end
     }
 
     func endLoop() { loopSpan = nil; loopCount = 0 }
@@ -1159,7 +1163,7 @@ final class BeanStore {
     func play(_ id: UInt32, at time: TimeInterval) {
         // 跳到循环那句外面去了：不再循环 / 不再到句尾停
         if let s = loopSpan, !s.contains(time) { endLoop() }
-        if let e = stopAt, time >= e { stopAt = nil }
+        stopAt = nil          // 「这句再听」的停点只对那一次有效；playSpan 会在跳过去之后重新设
         if playingID != id { togglePlay(id) }
         seek(time)
         if !isPlaying { player?.play(); isPlaying = true; tick() }
@@ -1186,6 +1190,13 @@ final class BeanStore {
                     return
                 }
                 if !player.isPlaying {
+                    // 循环的是最后一句、播放器已经播到结尾自己停了：回句首接着循环
+                    if self.isPlaying, let span = self.loopSpan {
+                        player.currentTime = span.lowerBound; self.playhead = span.lowerBound; self.loopCount += 1
+                        player.play()
+                        try? await Task.sleep(for: .milliseconds(100))
+                        continue
+                    }
                     if self.isPlaying { self.isPlaying = false; self.playhead = 0 }  // 自然播完
                     return
                 }

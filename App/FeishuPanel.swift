@@ -71,6 +71,7 @@ struct FeishuPanel: View {
         let fresh = sync.minutes.filter { m in
             let st = sync.status(of: m)
             if case .inLibrary = st { return false }
+            if st == .removed { return false }
             return st != .skipped
         }
         return Array((fresh.isEmpty ? sync.minutes : fresh).prefix(8))
@@ -123,6 +124,8 @@ struct FeishuPanel: View {
             case .inLibrary(let id):
                 Button { nav.route = .all; nav.selection = id } label: { Label("已在豆仓", systemImage: "checkmark") }
                     .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary).help("打开这条录音")
+            case .removed:
+                Text("拉回后删掉了").font(.caption).foregroundStyle(.tertiary).help("在豆仓里删掉过，不会再自动拉回")
             case .skipped:
                 Text("没要").font(.caption).foregroundStyle(.tertiary)
             case .pulling:
@@ -152,6 +155,7 @@ struct FeishuPanel: View {
             guard sync.picked.contains(m.id) else { return false }
             let st = sync.status(of: m)
             if case .inLibrary = st { return false }
+            if st == .removed { return false }
             return st != .pulling
         }.map(\.id)
     }

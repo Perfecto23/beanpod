@@ -218,15 +218,14 @@ struct StudyView: View {
     static func marked(_ sentence: String, _ target: String) -> AttributedString {
         var a = AttributedString(sentence)
         a.foregroundColor = Theme.warm500
-        let lower = sentence.lowercased()
-        let t = target.lowercased()
-        var range = lower.range(of: t)
-        if range == nil, t.count >= 5, !t.contains(" ") {
-            let stem = String(t.prefix(t.count - 2))
-            if let r = lower.range(of: stem) {
-                // 延伸到这个词结尾
+        // 直接在原句上不分大小写地找（先转小写再找，遇到转小写后长度会变的字符时下标会错位）
+        var range = sentence.range(of: target, options: [.caseInsensitive, .diacriticInsensitive])
+        if range == nil, target.count >= 5, !target.contains(" ") {
+            let stem = String(target.prefix(target.count - 2))
+            if let r = sentence.range(of: stem, options: [.caseInsensitive, .diacriticInsensitive]) {
+                // 延伸到这个词结尾（learned、learning 这类变形）
                 var end = r.upperBound
-                while end < lower.endIndex, lower[end].isLetter { end = lower.index(after: end) }
+                while end < sentence.endIndex, sentence[end].isLetter { end = sentence.index(after: end) }
                 range = r.lowerBound..<end
             }
         }
