@@ -33,3 +33,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+录音豆（Anker soundcore 录音豆）蓝牙协议
+--------------------------------
+豆仓连接、下载、解密录音豆的工作，起步于 tacshi 整理的协议笔记：
+https://github.com/tacshi/Soundcore
+豆仓的代码是用 Swift 独立编写的，没有使用该项目的代码；在此致谢原作者。
+
+如本仓库的任何内容侵犯了你的权益，请在 GitHub Issues 中联系，确认后会及时删除或下架。

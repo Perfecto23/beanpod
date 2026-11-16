@@ -1,5 +1,9 @@
 # 豆仓 BeanPod
 
+**简体中文** | [English](README.en.md)
+
+[![macOS 26](https://img.shields.io/badge/macOS-26-black)](#开始前要准备的东西) [![MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE) [![Renoise MCP](https://img.shields.io/badge/video-Renoise%20MCP-ff7a1a)](https://renoise.ai/mcp?utm_medium=xcom&utm_source=official)
+
 一个原生 macOS App，用来在电脑上管理 AI 录音豆（型号 D3200）。它能把录音拉到本地并转成文字，再整理成纪要和待办，之后可以直接提问。转写在本机完成，录音不上传。
 
 [![豆仓宣传片（点开看完整视频）](docs/media/beanpod-promo.gif)](docs/media/beanpod-promo.mp4)
@@ -8,7 +12,11 @@
 
 ![总览](docs/screenshots/overview.jpg)
 
+> **特别感谢两位原作者**：录音豆（Anker soundcore 录音豆）的通信协议最早由 **[tacshi](https://github.com/tacshi)** 在 [tacshi/Soundcore](https://github.com/tacshi/Soundcore) 里整理出来；得到 AI 录音卡的协议由 **[Shawn-TKD](https://github.com/Shawn-TKD)** 在 [Shawn-TKD/getseed-ble-protocol](https://github.com/Shawn-TKD/getseed-ble-protocol) 里抓包、分析并验证。没有他们的工作就没有豆仓，详见[致谢](#致谢)。
+
 > 非官方项目，与设备厂商及其合作方没有任何关系，仅用于管理你自己设备上的你自己的录音。产品名和商标归各自的所有者。
+>
+> 如果本项目的任何内容侵犯了你的权益（代码、协议资料、图片、商标或其它），请在 [Issues](../../issues) 里告诉我们，确认后会第一时间删除或下架。
 >
 > README 里的截图都是用[示例数据](#示例数据模式)拍的，人名和内容是虚构的。
 
@@ -45,6 +53,7 @@
 - 改写成口播稿、短视频脚本、社媒长帖、公众号、会后邮件；外语内容可以翻译成双语对照
 - 分析模型可以自己选：豆仓自带的本机模型（Qwen3‑4B，约 2.5 GB）、本机的 Ollama / LM Studio，或云端服务。内置了小米 MiMo、DeepSeek、通义千问、Kimi、豆包、智谱 GLM、MiniMax、硅基流动、OpenRouter、Gemini、Claude、OpenAI 的地址，选一家、填你自己的密钥就能用；别的兼容 OpenAI 接口的服务选「自定义」。可以设成「云端优先，连不上时用本机」。用本机模型时，文字稿也不出这台电脑
 - 云端服务的密钥存在系统钥匙串里
+- 处理进度：总览里每条录音在哪一步（转写、整理、排队）、进度条、还要多久，整批预计几点做完；速度按这台 Mac 实际跑出来的自动学习，越用越准
 
 **找回来**
 - 总览：待处理、待办、最近的录音
@@ -104,6 +113,34 @@
 
 - **转写模型**（约 1 GB）在「设置 → 模型」或引导里一键下载；不想下载可以填云端转写服务的地址和你自己的密钥
 - **飞书妙记同步**要装飞书命令行工具并授权，见上面「使用前要知道」
+
+## 开始前要准备的东西
+
+按用途分成「必需」和「用到才准备」。第一次装建议先把必需的四样准备好，其它的用到再说。
+
+**必需**
+
+| 准备什么 | 做什么用 | 怎么准备 |
+|---|---|---|
+| 一台 Mac，**macOS 26** | 运行豆仓 | 推荐 Apple 芯片（M 系列）：本机转写和本机整理模型在 Apple 芯片上快得多 |
+| **Xcode 26** | 从源码编译豆仓 | Mac App Store 免费下载；装好后打开一次，同意许可、装完附加组件 |
+| **Homebrew** | 装编译和运行要用的工具 | 按 [brew.sh](https://brew.sh) 首页那一行命令安装 |
+| **Apple ID**（免费的就行） | 给豆仓签名，蓝牙授权才不会每次编译后失效 | Xcode → Settings → Accounts → 点「+」登录 Apple ID；下面的「团队号」（Team ID，10 位字母数字）在这里能看到 |
+
+有录音豆（D3200，并且已经在官方 App 里开通过）就能用全部设备功能；没有也能用：Mac 自己录、导入音频、贴链接导入，转写整理都一样。
+
+**用到才准备**
+
+| 准备什么 | 什么时候需要 | 怎么准备 |
+|---|---|---|
+| 整理纪要用的模型 | 想要摘要、待办、知识库问答（只要文字稿可以不配） | 二选一：① 豆仓设置里一键下载本机模型（约 2.5 GB，不联网）；② 注册一家云端服务拿密钥：小米 MiMo、DeepSeek、通义千问、Kimi、豆包、智谱、MiniMax、硅基流动、OpenRouter、Gemini、Claude、OpenAI 都内置了地址，到对应开放平台注册 → 创建 API Key → 粘进「设置 → 模型」。密钥存在系统钥匙串里 |
+| 云端转写（可选） | 不想下载 1 GB 的本机转写模型，或个别录音想转得更准 | 兼容 OpenAI `/audio/transcriptions` 的服务（硅基流动、OpenAI、Groq）或小米 MiMo，同样在开放平台拿密钥 |
+| **Claude Code** | 想在 Claude 里直接查录音、纪要和待办（MCP） | 按 [Claude Code 官方文档](https://docs.claude.com/en/docs/claude-code/overview) 安装，用 Claude 账号（Pro / Max）或 Anthropic API 登录一次；然后在豆仓「帮助 → 连接 AI 助手」里点 Claude Code 的「连接」 |
+| **Claude 桌面版** | 「做成视频」（把口播稿交给 Claude 做成数字人视频）；或者想在桌面版里问豆仓 | 从 [claude.ai/download](https://claude.ai/download) 下载，登录同一个 Claude 账号；「做成视频」会在它的 Code 页里开新会话，所以桌面版要能用 Claude Code |
+| **Renoise 账号** | 「做成视频」要用它生成数字人口播、剪辑包装 | 在 **[Renoise](https://renoise.ai/mcp?utm_medium=xcom&utm_source=official)** 注册（浏览器登录，不用粘 API Key），再把 Renoise 接进 Claude，见下面[用 Renoise 把录音做成视频](#用-renoise-把录音做成视频可选)。生成前会先报价，你确认了才花积分 |
+| `yt-dlp` | 贴视频、播客链接导入 | `brew install yt-dlp`；小红书、抖音、视频号的下载器第一次用时豆仓会自动装进独立的 Python 环境 |
+| Node.js + 飞书命令行工具 | 手机 App 把录音同步进飞书妙记后，想拉回豆仓 | `brew install node`，再按[使用前要知道](#使用前要知道)里的四步授权 |
+| Codex / OpenClaw | 想在它们里面查豆仓 | 装好后在「连接 AI 助手」里一键连接；OpenClaw 还能接微信 |
 
 ## 安装
 
@@ -235,12 +272,28 @@ beanpod todos
 
 通过 [OpenClaw](https://github.com/openclaw/openclaw) 和它的微信插件，可以在微信里问豆仓里的录音和待办。先在豆仓里把 OpenClaw 连上，再按 OpenClaw 的说明装微信插件、扫码登录，并给它配一个模型。
 
-### 做成数字人视频（可选）
+### 用 Renoise 把录音做成视频（可选）
 
-录音的「改写」页里，口播稿可以一键「做成视频」：豆仓在 Claude 桌面版里新开一个会话，把任务交给 [Renoise](https://renoise.ai) 生成数字人口播并剪辑包装，成片自动回到豆仓。需要：
+录音的「改写」页里，口播稿可以一键「做成视频」：豆仓在 Claude 桌面版里新开一个 Claude Code 会话，把任务交给 **[Renoise](https://renoise.ai/mcp?utm_medium=xcom&utm_source=official)**（一个能通过 MCP 被 Claude 调用的 AI 视频平台）生成数字人口播，再剪辑、加字幕花字和包装，成片、封面、口播稿自动回到豆仓那条录音下面。
 
-- Claude 桌面版，并且已添加 Renoise MCP
-- Renoise 账号和积分。生成前会先报价，你在 Claude 里确认了才会花积分
+**一次性准备**
+
+1. 在 **[Renoise](https://renoise.ai/mcp?utm_medium=xcom&utm_source=official)** 注册账号（浏览器登录，不用粘 API Key）
+2. 装好并登录 [Claude 桌面版](https://claude.ai/download)
+3. 把 Renoise 接进 Claude，按你用的方式选一个：
+
+| 用在哪 | 怎么接 |
+|---|---|
+| Claude 桌面版 / claude.ai | 设置 → 连接器（Connectors）→ **Add custom connector** → 名称 `Renoise`，地址 `https://renoise.ai/api/public/mcp`，按提示在浏览器里登录 |
+| Claude Code | 在 Claude Code 里运行 `/plugin marketplace add ArcoCodes/renoise-plugins-official`，再 `/plugin install renoise@renoise-plugins-official` |
+| Codex | `codex mcp add renoise --url https://renoise.ai/api/public/mcp`，再 `codex mcp login renoise` |
+
+装好后在 Claude 里问一句「查一下我的 Renoise 余额」，能查到就连上了。最新的接入方法以 [renoise.ai/plugin](https://renoise.ai/plugin) 为准。
+
+**用的时候**
+
+- 豆仓打开「做成视频」时会先检查 Claude 桌面版和 Renoise 在不在
+- 生成前 Claude 会先给出报价（要花多少积分），你在 Claude 里确认了才开始；不确认不花钱
 - 一个主播。豆仓内置两位示例主播（AI 生成的虚构人物，「示例 · 职业装」和「示例 · 居家」），第一次用某位示例主播做视频时，会先把它的照片传到你自己的 Renoise 账号（不花积分）。想让「你」来讲，就点「添加主播」，上传一张你自己的正面半身照，或者填一个你 Renoise 账号里已有的人像素材编号；添加时要确认「这是我本人，或者我已获得照片中本人的授权」。Renoise 会在生成时审核人像；如果审核状态是「审核中」或「没通过」，卡片上会标出来，这个主播暂时不能用
 
 主播记录和缩略图存在 `~/Library/Application Support/BeanPod/Hosts/`。从豆仓移除主播不会删除 Renoise 账号里的素材。
@@ -291,9 +344,9 @@ scripts/           示例录音库生成脚本
 
 ## 致谢
 
-协议方面参考了 [tacshi/Soundcore](https://github.com/tacshi/Soundcore) 的协议笔记，它是第一个把这台设备的协议整理出来的项目。本项目的代码是用 Swift 独立编写的，没有使用该项目的代码；在真机上核对时发现并修正了其中几处字段含义，详见协议笔记。
+录音豆的协议方面参考了 **[tacshi](https://github.com/tacshi)** 的 [tacshi/Soundcore](https://github.com/tacshi/Soundcore) 协议笔记，它是第一个把这台 Anker soundcore 录音豆的协议整理出来的项目，豆仓的设备连接、下载和解密都是在它的基础上起步的。本项目的代码是用 Swift 独立编写的，没有使用该项目的代码；在真机上核对时发现并修正了其中几处字段含义，详见协议笔记。
 
-得到 AI 录音卡的协议全部来自 [Shawn-TKD/getseed-ble-protocol](https://github.com/Shawn-TKD/getseed-ble-protocol)（MIT 许可，Copyright (c) 2026 Shawn-TKD），原作者用实机抓包和固件分析整理并验证了这份协议。豆仓按那份文档用 Swift 从零实现，没有使用该项目的代码；许可声明见 [NOTICE](NOTICE)。
+得到 AI 录音卡的协议全部来自 **[Shawn-TKD](https://github.com/Shawn-TKD)** 的 [Shawn-TKD/getseed-ble-protocol](https://github.com/Shawn-TKD/getseed-ble-protocol)（MIT 许可，Copyright (c) 2026 Shawn-TKD），原作者用实机抓包和固件分析整理并验证了这份协议。豆仓按那份文档用 Swift 从零实现，没有使用该项目的代码；许可声明见 [NOTICE](NOTICE)。
 
 转写模型是 Qwen3‑ASR（GGUF 版来自 [ggml-org/Qwen3-ASR-0.6B-GGUF](https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF)），本机推理用 [llama.cpp](https://github.com/ggml-org/llama.cpp)。
 
