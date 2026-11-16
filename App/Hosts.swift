@@ -231,14 +231,14 @@ struct HostCard: View {
         Button(action: onPick) {
             VStack(spacing: 8) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.08))
+                    RoundedRectangle(cornerRadius: Theme.Radius.card).fill(Color.secondary.opacity(0.08))
                     if let img = HostLibrary.image(for: host) {
                         Image(nsImage: img).resizable().scaledToFill()
                     } else {
                         Image(systemName: "person.crop.rectangle").font(.system(size: 30)).foregroundStyle(.tertiary)
                     }
                 }
-                .frame(width: 104, height: 128).clipShape(.rect(cornerRadius: 10))
+                .frame(width: 104, height: 128).clipShape(.rect(cornerRadius: Theme.Radius.card))
                 .overlay(alignment: .topLeading) {
                     if host.isSample {
                         Text("示例").font(.caption2.weight(.semibold)).padding(.horizontal, 6).padding(.vertical, 2)
@@ -258,8 +258,8 @@ struct HostCard: View {
                 .frame(width: 112)
             }
             .padding(10)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(picked ? 1 : 0.6), in: .rect(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(picked ? Theme.accent : Color.secondary.opacity(0.22), lineWidth: picked ? 2 : 0.5))
+            .background(Color(nsColor: .controlBackgroundColor).opacity(picked ? 1 : 0.6), in: .rect(cornerRadius: Theme.Radius.panel))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel).strokeBorder(picked ? Theme.accent : Color.secondary.opacity(0.22), lineWidth: picked ? 2 : 0.5))
             .overlay(alignment: .topTrailing) {
                 if picked {
                     Image(systemName: "checkmark.circle.fill").font(.system(size: 20)).foregroundStyle(.white, Theme.accent).padding(6)
@@ -300,7 +300,7 @@ struct AddHostCard: View {
             }
             .foregroundStyle(.secondary)
             .frame(width: 124, height: 186)
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.secondary.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel).strokeBorder(Color.secondary.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -319,7 +319,7 @@ struct NoHostCard: View {
             Button("添加主播…", action: action).buttonStyle(.glassProminent).controlSize(.large).padding(.top, 4)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 26)
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.secondary.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel).strokeBorder(Color.secondary.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
     }
 }
 
@@ -372,7 +372,7 @@ struct AddHostSheet: View {
         HStack(alignment: .top, spacing: 24) {
             VStack(spacing: 8) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14).fill(Color.secondary.opacity(0.07))
+                    RoundedRectangle(cornerRadius: Theme.Radius.panel).fill(Color.secondary.opacity(0.07))
                     if let image {
                         Image(nsImage: image).resizable().scaledToFill()
                     } else {
@@ -383,8 +383,8 @@ struct AddHostSheet: View {
                         .foregroundStyle(.secondary)
                     }
                 }
-                .frame(width: 200, height: 272).clipShape(.rect(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(dropping ? Theme.accent : Color.secondary.opacity(image == nil ? 0.35 : 0), style: StrokeStyle(lineWidth: dropping ? 2 : 1, dash: image == nil ? [5, 4] : [])))
+                .frame(width: 200, height: 272).clipShape(.rect(cornerRadius: Theme.Radius.panel))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel).strokeBorder(dropping ? Theme.accent : Color.secondary.opacity(image == nil ? 0.35 : 0), style: StrokeStyle(lineWidth: dropping ? 2 : 1, dash: image == nil ? [5, 4] : [])))
                 .contentShape(.rect)
                 .onTapGesture(perform: choose)
                 .onDrop(of: [.fileURL], isTargeted: $dropping) { providers in
@@ -409,7 +409,7 @@ struct AddHostSheet: View {
                         Label { Text(t).font(.callout) } icon: { Image(systemName: "checkmark").foregroundStyle(Theme.accent) }
                     }
                 }
-                .padding(14).frame(maxWidth: .infinity, alignment: .leading).panel(radius: 12)
+                .padding(14).frame(maxWidth: .infinity, alignment: .leading).panel(radius: Theme.Radius.card)
                 consentToggle
                 Button("已在 Renoise 上传过？填素材编号") { byID = true; library.error = nil }
                     .buttonStyle(.link).font(.caption).foregroundStyle(.secondary)

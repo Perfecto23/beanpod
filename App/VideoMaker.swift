@@ -644,12 +644,12 @@ struct VideoSheet: View {
         let picked = maker.style == s
         return Button { maker.style = s } label: {
             VStack(spacing: 8) {
-                StylePreview(style: s).frame(maxWidth: .infinity).frame(height: 112).clipShape(.rect(cornerRadius: 8))
+                StylePreview(style: s).frame(maxWidth: .infinity).frame(height: 112).clipShape(.rect(cornerRadius: Theme.Radius.card))
                 Text(s.name).font(.callout.weight(.semibold))
             }
             .padding(8)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(picked ? 1 : 0.6), in: .rect(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(picked ? Theme.accent : Color.secondary.opacity(0.22), lineWidth: picked ? 2 : 0.5))
+            .background(Color(nsColor: .controlBackgroundColor).opacity(picked ? 1 : 0.6), in: .rect(cornerRadius: Theme.Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(picked ? Theme.accent : Color.secondary.opacity(0.22), lineWidth: picked ? 2 : 0.5))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -670,7 +670,7 @@ struct VideoSheet: View {
                 step(2, "第一次用会让你输入 /mcp 登录 Renoise，登好回它一句。")
                 step(3, "它写稿、逐项核价，报价会同时显示在这里，不花积分。")
             }
-            .padding(12).panel(radius: 12)
+            .padding(12).panel(radius: Theme.Radius.card)
             TimelineView(.periodic(from: .now, by: 30)) { _ in
                 if let m = maker.stalledMinutes {
                 Label("交出去 \(m) 分钟了还没有报价。在 Claude 里按发送了吗？没看到那个会话就点「再开一次」。", systemImage: "exclamationmark.circle")
@@ -708,7 +708,7 @@ struct VideoSheet: View {
                         Text(q.plan).font(.callout).fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .padding(12).panel(radius: 12)
+                .padding(12).panel(radius: Theme.Radius.card)
                 ForEach(q.notes, id: \.self) { note in
                     Label(note, systemImage: "exclamationmark.triangle.fill").font(.callout).foregroundStyle(Theme.accent).fixedSize(horizontal: false, vertical: true)
                 }

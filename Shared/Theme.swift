@@ -2,6 +2,17 @@ import SwiftUI
 
 /// 豆仓的颜色：暖灰的底，玫瑰红是强调色（选中、要点、播放、录音），琥珀色只用在场景小图标和设备上。不用蓝和紫。
 nonisolated enum Theme {
+    /// 圆角：跟 Chrome 的尺度走，别太圆（2026-11-16 用户要求）。新写的界面只用这几档；
+    /// 纯圆形按钮（Circle）、真正的胶囊（Capsule、开关）不在此列。
+    enum Radius {
+        /// 大面板、卡片底板、弹窗里的分组
+        static let panel: CGFloat = 10
+        /// 列表里的一张张卡片、缩略图、按钮、输入框
+        static let card: CGFloat = 8
+        /// 小标签、筛选胶囊、图标底块
+        static let chip: CGFloat = 6
+    }
+
     /// 强调色：玫瑰红。浅色 rose-500，深色 rose-400。
     static let accent = dynamic(light: (0.957, 0.247, 0.369), dark: (0.984, 0.443, 0.522))
     /// 场景小图标、设备卡用的暖琥珀。

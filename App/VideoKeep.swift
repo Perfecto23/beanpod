@@ -297,7 +297,7 @@ struct MaterialVideoCard: View {
             }
         }
         .frame(width: vertical ? 200 : 360, height: vertical ? 356 : 203)
-        .clipShape(.rect(cornerRadius: 12))
+        .clipShape(.rect(cornerRadius: Theme.Radius.card))
         .overlay {
             // 点画面 = 播放/暂停（用按钮而不是点按手势，读屏和键盘也能按）
             Button { store.togglePlay(recording.id) } label: { Color.clear.contentShape(.rect) }

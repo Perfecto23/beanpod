@@ -33,7 +33,7 @@ struct SidebarTags: View {
                                         .foregroundStyle(on ? Theme.accent : Theme.warm400)
                                 }
                                 .padding(.horizontal, 12).padding(.vertical, 6)
-                                .background(on ? Theme.accent.opacity(0.12) : .clear, in: .rect(cornerRadius: 10))
+                                .background(on ? Theme.accent.opacity(0.12) : .clear, in: .rect(cornerRadius: Theme.Radius.card))
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -182,7 +182,7 @@ struct TagEditor: View {
             TextField("输入标签", text: $text)
                 .textFieldStyle(.plain).font(.body)
                 .padding(.horizontal, 10).padding(.vertical, 7)
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(focused ? Theme.accent : Theme.warm300, lineWidth: focused ? 1.5 : 1))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(focused ? Theme.accent : Theme.warm300, lineWidth: focused ? 1.5 : 1))
                 .focused($focused)
                 .onSubmit { add(suggestions.first(where: { $0.tag == query })?.tag ?? (query.isEmpty ? suggestions.first?.tag : query)) }
             if !suggestions.isEmpty || !query.isEmpty {
@@ -195,7 +195,7 @@ struct TagEditor: View {
                                 Text("\(s.count) 条").font(.caption).foregroundStyle(.secondary)
                             }
                             .padding(.horizontal, 10).padding(.vertical, 6)
-                            .background(i == 0 && !query.isEmpty ? Theme.accent.opacity(0.1) : .clear, in: .rect(cornerRadius: 7))
+                            .background(i == 0 && !query.isEmpty ? Theme.accent.opacity(0.1) : .clear, in: .rect(cornerRadius: Theme.Radius.chip))
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)

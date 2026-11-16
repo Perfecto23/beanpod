@@ -48,7 +48,7 @@ struct CardPanel: View {
                                     Spacer()
                                     Text("连接").foregroundStyle(Theme.accent)
                                 }
-                                .padding(10).glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12)).contentShape(Rectangle())
+                                .padding(10).glassEffect(.regular.interactive(), in: .rect(cornerRadius: Theme.Radius.card)).contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }

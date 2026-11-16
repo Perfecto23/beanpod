@@ -103,7 +103,7 @@ struct WelcomeView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(current ? Theme.accent.opacity(0.12) : .clear, in: .rect(cornerRadius: 10))
+        .background(current ? Theme.accent.opacity(0.12) : .clear, in: .rect(cornerRadius: Theme.Radius.card))
         .contentShape(.rect)
         .accessibilityLabel("第 \(s.rawValue + 1) 步：\(s.name)\(isDone ? "，已完成" : "")")
     }
@@ -182,14 +182,14 @@ struct WelcomeView: View {
                 feature("sparkles", "AI 助手直接查", "Claude、Codex 这些助手连上后，可以直接问豆仓里的录音、纪要和待办。")
             }
             .padding(.vertical, 4)
-            .panel(radius: 14)
+            .panel(radius: Theme.Radius.panel)
         }
     }
 
     private func feature(_ icon: String, _ title: String, _ detail: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon).font(.system(size: 16)).foregroundStyle(Theme.warm600)
-                .frame(width: 34, height: 34).background(Theme.warm100, in: .rect(cornerRadius: 9))
+                .frame(width: 34, height: 34).background(Theme.warm100, in: .rect(cornerRadius: Theme.Radius.card))
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.headline).foregroundStyle(Theme.warm900)
                 Text(detail).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -207,7 +207,7 @@ struct WelcomeView: View {
                 ok: store.link == .ready) {
                 Button("去连接") { nav.route = .device; finish() }.buttonStyle(.glass)
             }
-            .panel(radius: 14)
+            .panel(radius: Theme.Radius.panel)
             Text("也支持得到 AI 录音卡（按公开协议实现，还没在实机上测过）。手机 App 已经把录音同步进飞书妙记的，可以在最后一步打开「飞书妙记同步」拉回来。")
                 .font(.caption).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true).padding(.top, 12)
         }
@@ -226,7 +226,7 @@ struct WelcomeView: View {
                     Button("下载") { store.downloadASRModel() }.buttonStyle(.glass)
                 }
             }
-            .panel(radius: 14)
+            .panel(radius: Theme.Radius.panel)
             Text("不想下载也可以：在 设置 → 模型 里填一个云端转写服务（比如小米 MiMo），用你自己的密钥。")
                 .font(.caption).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true).padding(.top, 12)
         }
@@ -245,7 +245,7 @@ struct WelcomeView: View {
                     Button("打开设置") { SettingsView.open(.models, with: openSettings) }.buttonStyle(.glass)
                 }
             }
-            .panel(radius: 14)
+            .panel(radius: Theme.Radius.panel)
         }
     }
 
@@ -260,7 +260,7 @@ struct WelcomeView: View {
                     }
                 }
             }
-            .panel(radius: 14)
+            .panel(radius: Theme.Radius.panel)
             Text("不开也能用：没开的那项功能用不了，其它照常。")
                 .font(.caption).foregroundStyle(.tertiary).padding(.top, 12)
         }
@@ -299,7 +299,7 @@ struct WelcomeView: View {
                     Button("去连接") { openWindow(id: "connect") }.buttonStyle(.glass)
                 }
             }
-            .panel(radius: 14)
+            .panel(radius: Theme.Radius.panel)
         }
         .task { if FeishuSync.shared.link == .unknown { await FeishuSync.shared.check() } }
     }
@@ -317,7 +317,7 @@ struct WelcomeView: View {
                 .buttonStyle(.plain).foregroundStyle(Theme.warm500).help("拷贝").accessibilityLabel("拷贝命令")
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(Theme.warm100, in: .rect(cornerRadius: 8))
+        .background(Theme.warm100, in: .rect(cornerRadius: Theme.Radius.card))
     }
 
     /// 一行：图标、名字、说明，右边是「已开/已就绪」或者一个按钮
@@ -325,7 +325,7 @@ struct WelcomeView: View {
                                      @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(spacing: 14) {
             Image(systemName: icon).font(.system(size: 17)).foregroundStyle(Theme.warm600)
-                .frame(width: 36, height: 36).background(Theme.warm100, in: .rect(cornerRadius: 10))
+                .frame(width: 36, height: 36).background(Theme.warm100, in: .rect(cornerRadius: Theme.Radius.card))
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.headline).foregroundStyle(Theme.warm900)
                 Text(detail).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

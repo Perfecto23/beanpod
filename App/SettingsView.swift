@@ -89,7 +89,7 @@ private struct SettingsGroup<Content: View, Accessory: View>: View {
                     }
                 }
             }
-            .panel(radius: 14)
+            .panel(radius: Theme.Radius.panel)
             if let footer {
                 Text(footer).font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true).padding(.horizontal, 4)
@@ -206,8 +206,8 @@ private struct AppearanceTile: View {
             VStack(spacing: 8) {
                 preview
                     .frame(height: 74)
-                    .clipShape(.rect(cornerRadius: 9))
-                    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(.black.opacity(0.1), lineWidth: 0.5))
+                    .clipShape(.rect(cornerRadius: Theme.Radius.card))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(.black.opacity(0.1), lineWidth: 0.5))
                 HStack(spacing: 5) {
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(selected ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.tertiary))
@@ -217,9 +217,9 @@ private struct AppearanceTile: View {
             }
             .padding(10)
             .frame(maxWidth: .infinity)
-            .background(.background.opacity(selected ? 0.9 : 0.4), in: .rect(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.separator), lineWidth: selected ? 2 : 0.5))
-            .contentShape(.rect(cornerRadius: 12))
+            .background(.background.opacity(selected ? 0.9 : 0.4), in: .rect(cornerRadius: Theme.Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(selected ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.separator), lineWidth: selected ? 2 : 0.5))
+            .contentShape(.rect(cornerRadius: Theme.Radius.card))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(mode.name)
@@ -369,7 +369,7 @@ private struct ModelCard<Content: View>: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .panel(radius: 16)
+        .panel(radius: Theme.Radius.panel)
     }
 }
 
@@ -693,7 +693,7 @@ private struct CloudServiceSheet: View {
                     }
                 }
             }
-            .padding(14).panel(radius: 12)
+            .padding(14).panel(radius: Theme.Radius.card)
             HStack(alignment: .center) {
                 if let testResult {
                     Text(testResult.text).font(.callout).foregroundStyle(testResult.ok ? Theme.ok : Theme.amber)
@@ -734,8 +734,8 @@ private struct CloudServiceSheet: View {
                 Text(p.name).font(.callout.weight(.medium)).lineLimit(1)
             }
             .frame(maxWidth: .infinity).padding(.vertical, 12)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(picked ? 1 : 0.6), in: .rect(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(picked ? Theme.accent : Color.secondary.opacity(0.22), lineWidth: picked ? 2 : 0.5))
+            .background(Color(nsColor: .controlBackgroundColor).opacity(picked ? 1 : 0.6), in: .rect(cornerRadius: Theme.Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(picked ? Theme.accent : Color.secondary.opacity(0.22), lineWidth: picked ? 2 : 0.5))
             .overlay(alignment: .topTrailing) {
                 if picked { Image(systemName: "checkmark.circle.fill").foregroundStyle(.white, Theme.accent).padding(5) }
             }
@@ -836,7 +836,7 @@ private struct CloudASRSheet: View {
                     SecureField("API Key", text: $settings.asrKey).textFieldStyle(.roundedBorder)
                 }
             }
-            .padding(14).panel(radius: 12)
+            .padding(14).panel(radius: Theme.Radius.card)
             HStack {
                 if let result {
                     Text(result.text).font(.callout).foregroundStyle(result.ok ? Theme.ok : Theme.amber).fixedSize(horizontal: false, vertical: true)

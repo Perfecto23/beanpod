@@ -47,8 +47,8 @@ struct DictationView: View {
                     }
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .frame(width: 240)
-                    .background(Theme.surface, in: .rect(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.warm200, lineWidth: 1))
+                    .background(Theme.surface, in: .rect(cornerRadius: Theme.Radius.card))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.warm200, lineWidth: 1))
                 }
 
                 if items.isEmpty {
@@ -70,7 +70,7 @@ struct DictationView: View {
                                 }
                             }
                             .padding(.vertical, 4)
-                            .panel(radius: 14)
+                            .panel(radius: Theme.Radius.panel)
                         }
                     }
                 }

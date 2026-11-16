@@ -264,7 +264,7 @@ struct ConnectView: View {
                             .buttonStyle(.glassProminent).fixedSize()
                         }
                     }
-                    .padding(12).panel(radius: 12)
+                    .padding(12).panel(radius: Theme.Radius.card)
                 }
 
                 ForEach(Assistant.allCases) { card($0) }
@@ -300,7 +300,7 @@ struct ConnectView: View {
             Button("拷贝") { copy(text); store.toast("doc.on.doc", "已拷贝") }
         }
         .padding(.horizontal, 10).padding(.vertical, 7)
-        .background(.quaternary.opacity(0.45), in: .rect(cornerRadius: 8))
+        .background(.quaternary.opacity(0.45), in: .rect(cornerRadius: Theme.Radius.card))
     }
 
     private func card(_ a: Assistant) -> some View {
@@ -311,7 +311,7 @@ struct ConnectView: View {
                 Image(systemName: a.icon).font(.system(size: 17, weight: .medium))
                     .foregroundStyle(state.installed ? Theme.accent : Color.secondary)
                     .frame(width: 40, height: 40)
-                    .background((state.installed ? Theme.accent : Color.secondary).opacity(0.14), in: .rect(cornerRadius: 11))
+                    .background((state.installed ? Theme.accent : Color.secondary).opacity(0.14), in: .rect(cornerRadius: Theme.Radius.card))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(a.name).font(.title3.weight(.semibold))
                     HStack(spacing: 6) {

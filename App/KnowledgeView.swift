@@ -91,7 +91,7 @@ struct KnowledgeView: View {
                     .help("提问（回车）").accessibilityLabel("提问")
             }
             .padding(.horizontal, 16).padding(.vertical, 14)
-            .panel(radius: 18)
+            .panel(radius: Theme.Radius.panel)
 
             if !store.analysisAvailable {
                 HStack {
@@ -148,7 +148,7 @@ struct KnowledgeView: View {
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .panel(radius: 16)
+                .panel(radius: Theme.Radius.panel)
             }
         }
     }
@@ -171,7 +171,7 @@ struct KnowledgeView: View {
                         Text(r.summary ?? "").font(.callout).foregroundStyle(.secondary).lineLimit(3).multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, minHeight: 54, alignment: .topLeading)
                     }
-                    .padding(14).panel(radius: 14).contentShape(Rectangle())
+                    .padding(14).panel(radius: Theme.Radius.panel).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -184,7 +184,7 @@ struct KnowledgeView: View {
             Button { nav.open(r.id) } label: {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: (r.scene ?? .other).icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accent)
-                        .frame(width: 30, height: 30).background(Theme.accent.opacity(0.14), in: .rect(cornerRadius: 8))
+                        .frame(width: 30, height: 30).background(Theme.accent.opacity(0.14), in: .rect(cornerRadius: Theme.Radius.card))
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
                             Text(r.displayTitle).font(.body.weight(.semibold)).lineLimit(1)
@@ -217,7 +217,7 @@ struct KnowledgeView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .panel(radius: 14)
+        .panel(radius: Theme.Radius.panel)
     }
 
     /// 搜索时的收窄条件：时间、场景、人物。

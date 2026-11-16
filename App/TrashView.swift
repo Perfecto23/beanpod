@@ -38,7 +38,7 @@ struct TrashView: View {
                         }
                     }
                     .padding(.vertical, 6)
-                    .panel(radius: 14)
+                    .panel(radius: Theme.Radius.panel)
                 }
             }
             .padding(28)
@@ -101,11 +101,11 @@ struct TrashView: View {
         let jpg = entry.files.first { $0.hasSuffix(".video.jpg") }
         if let jpg, let image = NSImage(contentsOf: store.trashFolder.appendingPathComponent(entry.folder).appendingPathComponent(jpg)) {
             Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
-                .frame(width: 48, height: 48).clipShape(.rect(cornerRadius: 10))
+                .frame(width: 48, height: 48).clipShape(.rect(cornerRadius: Theme.Radius.card))
         } else {
             Image(systemName: entry.recording.isMaterial ? "play.rectangle" : entry.recording.textOnly ? "doc.text" : "waveform")
                 .font(.system(size: 18)).foregroundStyle(Theme.warm500)
-                .frame(width: 48, height: 48).background(Theme.warm100, in: .rect(cornerRadius: 10))
+                .frame(width: 48, height: 48).background(Theme.warm100, in: .rect(cornerRadius: Theme.Radius.card))
         }
     }
 

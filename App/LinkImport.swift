@@ -303,8 +303,8 @@ struct LinkImportSheet: View {
                 .scrollContentBackground(.hidden)
                 .padding(8)
                 .frame(height: 110)
-                .background(.background.opacity(0.6), in: .rect(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(typing ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.separator), lineWidth: typing ? 1.5 : 0.5))
+                .background(.background.opacity(0.6), in: .rect(cornerRadius: Theme.Radius.card))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(typing ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.separator), lineWidth: typing ? 1.5 : 0.5))
                 .overlay(alignment: .topLeading) {
                     if text.isEmpty {
                         Text(verbatim: "比如：https://www.bilibili.com/video/BV…").foregroundStyle(.tertiary).padding(.horizontal, 13).padding(.vertical, 8).allowsHitTesting(false)
@@ -320,7 +320,7 @@ struct LinkImportSheet: View {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 10) {
                                 Image(systemName: "play.fill").font(.caption).foregroundStyle(Theme.accent)
-                                    .frame(width: 24, height: 24).background(Theme.accent.opacity(0.14), in: .rect(cornerRadius: 7))
+                                    .frame(width: 24, height: 24).background(Theme.accent.opacity(0.14), in: .rect(cornerRadius: Theme.Radius.chip))
                                 Text(platform).fontWeight(.medium)
                                 Text(url.replacingOccurrences(of: #"^https?://(www\.)?"#, with: "", options: .regularExpression))
                                     .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
@@ -351,7 +351,7 @@ struct LinkImportSheet: View {
                     }
                 }
                 .padding(12)
-                .panel(radius: 10)
+                .panel(radius: Theme.Radius.card)
             } else if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Label("这段文字里没有找到链接。", systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(.secondary)
             }
@@ -399,13 +399,13 @@ struct LinkImportSheet: View {
         } else if mustLogin.contains(platform) {
             HStack(spacing: 6) {
                 Text("要先登录").font(.caption2.weight(.semibold)).foregroundStyle(Theme.accent)
-                    .padding(.horizontal, 6).padding(.vertical, 3).background(Theme.accent.opacity(0.1), in: .rect(cornerRadius: 5))
+                    .padding(.horizontal, 6).padding(.vertical, 3).background(Theme.accent.opacity(0.1), in: .rect(cornerRadius: Theme.Radius.chip))
                 Button("登录") { login = LinkLoginRequest(platform: platform, url: url, continueImport: false) }
                     .buttonStyle(.plain).font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
                     .padding(.horizontal, 9).padding(.vertical, 3)
-                    .background(Theme.surface, in: .rect(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.accent.opacity(0.75), lineWidth: 1))
-                    .contentShape(.rect(cornerRadius: 6))
+                    .background(Theme.surface, in: .rect(cornerRadius: Theme.Radius.chip))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.chip).strokeBorder(Theme.accent.opacity(0.75), lineWidth: 1))
+                    .contentShape(.rect(cornerRadius: Theme.Radius.chip))
             }
         } else {
             Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.ok)

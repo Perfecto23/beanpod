@@ -147,7 +147,7 @@ struct RenoiseCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 Image(systemName: "play.rectangle.on.rectangle").font(.system(size: 17, weight: .medium)).foregroundStyle(Theme.accent)
-                    .frame(width: 40, height: 40).background(Theme.accent.opacity(0.14), in: .rect(cornerRadius: 11))
+                    .frame(width: 40, height: 40).background(Theme.accent.opacity(0.14), in: .rect(cornerRadius: Theme.Radius.card))
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Renoise · 做视频").font(.title3.weight(.semibold))
                     HStack(spacing: 6) {

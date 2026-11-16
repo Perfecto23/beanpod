@@ -171,7 +171,7 @@ struct DashboardView: View {
                             Text(spokenDuration(r.duration)).font(.callout).foregroundStyle(.tertiary).monospacedDigit()
                         }
                         .padding(.horizontal, 12).padding(.vertical, 11)
-                        .panel(radius: 14)
+                        .panel(radius: Theme.Radius.panel)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -402,13 +402,13 @@ struct LinkModule: View {
                 Button(action: go) {
                     Text("导入").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
                         .padding(.horizontal, 14).padding(.vertical, 6)
-                        .background(ready ? Theme.accent : Theme.warm400, in: .rect(cornerRadius: 8))
+                        .background(ready ? Theme.accent : Theme.warm400, in: .rect(cornerRadius: Theme.Radius.card))
                 }
                 .buttonStyle(.plain).disabled(!ready)
             }
             .padding(.leading, 12).padding(.trailing, 6).padding(.vertical, 6)
-            .background(Theme.warm100.opacity(0.7), in: .rect(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.warm200.opacity(0.8), lineWidth: 1))
+            .background(Theme.warm100.opacity(0.7), in: .rect(cornerRadius: Theme.Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.warm200.opacity(0.8), lineWidth: 1))
             Text("支持抖音、B 站、YouTube、TikTok、X 等公开内容。导入后和录音放在一起，可以拆解写法、照结构仿写。")
                 .font(.system(size: 11)).foregroundStyle(Theme.warm500)
             if !recent.isEmpty {
@@ -417,7 +417,7 @@ struct LinkModule: View {
                         Button { nav.route = .materials; nav.selection = r.id } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "play.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.amber)
-                                    .frame(width: 26, height: 26).background(Theme.amber.opacity(0.12), in: .rect(cornerRadius: 7))
+                                    .frame(width: 26, height: 26).background(Theme.amber.opacity(0.12), in: .rect(cornerRadius: Theme.Radius.chip))
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(r.displayTitle).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.warm900).lineLimit(1)
                                     Text("\(RecordingsView.platform(of: r)) • \(clock(r.duration))").font(.system(size: 11)).foregroundStyle(Theme.warm500)
@@ -426,8 +426,8 @@ struct LinkModule: View {
                             }
                             .padding(10)
                             .frame(maxWidth: .infinity)
-                            .background(Theme.surface, in: .rect(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.warm200.opacity(0.6), lineWidth: 1))
+                            .background(Theme.surface, in: .rect(cornerRadius: Theme.Radius.card))
+                            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(Theme.warm200.opacity(0.6), lineWidth: 1))
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -437,8 +437,8 @@ struct LinkModule: View {
             }
         }
         .padding(20)
-        .background(Theme.warm50, in: .rect(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.warm200.opacity(0.8), lineWidth: 1))
+        .background(Theme.warm50, in: .rect(cornerRadius: Theme.Radius.panel))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel).strokeBorder(Theme.warm200.opacity(0.8), lineWidth: 1))
     }
 
     private func go() {

@@ -28,7 +28,7 @@ struct VideoResultCard: View {
                             HStack(alignment: .firstTextBaseline, spacing: 12) {
                                 Text(String(format: "s%02d", i + 1)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                                     .padding(.horizontal, 6).padding(.vertical, 2)
-                                    .background(Theme.warm100, in: .rect(cornerRadius: 5))
+                                    .background(Theme.warm100, in: .rect(cornerRadius: Theme.Radius.chip))
                                 Text(line).font(.callout).foregroundStyle(Theme.warm800).textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
@@ -41,7 +41,7 @@ struct VideoResultCard: View {
                 }
             }
         }
-        .padding(16).panel(radius: 14)
+        .padding(16).panel(radius: Theme.Radius.panel)
         .task(id: clip.id) { await fillCover() }
         .confirmationDialog("删掉这条视频？", isPresented: $confirmDelete) {
             Button("删掉", role: .destructive) { store.deleteVideo(recording.id, clip.id) }
@@ -98,7 +98,7 @@ struct VideoResultCard: View {
     private var failedRow: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill").font(.title3).foregroundStyle(Theme.amber)
-                .frame(width: 44, height: 44).background(Theme.amber.opacity(0.14), in: .rect(cornerRadius: 11))
+                .frame(width: 44, height: 44).background(Theme.amber.opacity(0.14), in: .rect(cornerRadius: Theme.Radius.card))
             VStack(alignment: .leading, spacing: 4) {
                 Text("没做成 · \(heading)").font(.headline)
                 Text(clip.error ?? "").font(.callout).foregroundStyle(Theme.warm700).fixedSize(horizontal: false, vertical: true)
@@ -123,7 +123,7 @@ struct VideoResultCard: View {
                 .frame(width: 40, height: 40).background(.black.opacity(0.35), in: .circle)
         }
         .frame(width: size.width, height: size.height)
-        .clipShape(.rect(cornerRadius: 10))
+        .clipShape(.rect(cornerRadius: Theme.Radius.card))
     }
 
     /// 旧版把「风格 · 主播」拼在 host 里，没有单独的 style：拆开显示。

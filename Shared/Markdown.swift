@@ -61,7 +61,7 @@ struct MarkdownView: View {
         case .code(let s):
             Text(s).font(.callout.monospaced()).lineSpacing(3)
                 .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 8))
+                .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: Theme.Radius.card))
         case .rule:
             Divider().padding(.vertical, 4)
         case .table(let header, let rows):
@@ -97,8 +97,8 @@ struct MarkdownView: View {
                 }
             }
         }
-        .clipShape(.rect(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator.opacity(0.6), lineWidth: 0.5))
+        .clipShape(.rect(cornerRadius: Theme.Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).strokeBorder(.separator.opacity(0.6), lineWidth: 0.5))
     }
 
     // MARK: 解析
