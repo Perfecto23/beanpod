@@ -118,7 +118,7 @@ struct DashboardView: View {
             .frame(maxWidth: .infinity)
         }
         .navigationTitle("总览")
-        .navigationSubtitle("职业：\(store.settings.profession.name)")
+        .navigationSubtitle("职业：\(store.settings.profession.label)")
     }
 
     @AppStorage("dashShowStats") private var showStats = false
