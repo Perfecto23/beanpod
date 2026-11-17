@@ -111,7 +111,7 @@ nonisolated enum Scene: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-// 职业（内置预设和自定义）在 Profession.swift。
+// 职业预设的枚举仍叫 Profession，和自定义项一起放在 Profession.swift（方便不带界面做测试）。
 
 // MARK: - 录音
 

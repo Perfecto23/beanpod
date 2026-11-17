@@ -65,7 +65,7 @@ final class AppSettings {
     var customProfessions: [CustomProfession] {
         didSet { UserDefaults.standard.set(ProfessionLibrary.stored(customProfessions), forKey: ProfessionLibrary.customKey) }
     }
-    var profession: Profession { Profession.resolve(professionID, customs: customProfessions) }
+    var profession: SelectedProfession { SelectedProfession.resolve(professionID, customs: customProfessions) }
     var currentCustomProfession: CustomProfession? { customProfessions.first { $0.id == professionID } }
     var engine: Engine { didSet { save("engine", engine.rawValue) } }
     var language: String { didSet { save("language", language) } }
@@ -192,18 +192,18 @@ final class AppSettings {
 
     /// 新建自定义职业并选中它。名称或提示词不合格时什么都不改，返回给界面显示的原因。
     @discardableResult
-    func addCustomProfession(label: String, prompt: String) -> ProfessionEditError? {
+    func addCustomProfession(name: String, prompt: String) -> ProfessionEditError? {
         var library = professionLibrary
-        if let error = library.add(label: label, prompt: prompt) { return error }
+        if let error = library.add(name: name, prompt: prompt) { return error }
         professionLibrary = library
         return nil
     }
 
     /// 修改自己建的职业。id 不变。
     @discardableResult
-    func updateCustomProfession(id: String, label: String, prompt: String) -> ProfessionEditError? {
+    func updateCustomProfession(id: String, name: String, prompt: String) -> ProfessionEditError? {
         var library = professionLibrary
-        if let error = library.update(id: id, label: label, prompt: prompt) { return error }
+        if let error = library.update(id: id, name: name, prompt: prompt) { return error }
         professionLibrary = library
         return nil
     }

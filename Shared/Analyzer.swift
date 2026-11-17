@@ -88,7 +88,7 @@ nonisolated enum Analyzer {
 
     // MARK: 整理
 
-    static func analyze(transcript: String, duration: TimeInterval, profession: Profession, fixedScene: Scene?,
+    static func analyze(transcript: String, duration: TimeInterval, profession: SelectedProfession, fixedScene: Scene?,
                         config: LLMConfig) async throws -> Analysis {
         // 长录音先分块压成要点，再整体整理，避免超出模型的上下文
         var material = transcript
@@ -105,7 +105,7 @@ nonisolated enum Analyzer {
 
         // 场景仍按每条录音判断（或用用户锁定的场景），职业只决定前面那一句关注点。
         let sceneGuide = Scene.allCases.map {
-            Profession.sceneGuideLine(code: $0.rawValue, name: $0.promptName, definition: $0.definition, headings: $0.headings)
+            SelectedProfession.sceneGuideLine(code: $0.rawValue, name: $0.promptName, definition: $0.definition, headings: $0.headings)
         }.joined(separator: "\n")
         let titleHint = NotesLanguage.isEnglish ? "一句话英文标题，不超过 10 个单词" : "一句话标题，不超过 18 个字"
         let system = profession.analysisSystem(fixedSceneCode: fixedScene?.rawValue, sceneGuide: sceneGuide,
@@ -197,7 +197,7 @@ nonisolated enum Analyzer {
 
     // MARK: 改写
 
-    static func rewrite(material: String, instruction: String, profession: Profession, config: LLMConfig) async throws -> String {
+    static func rewrite(material: String, instruction: String, profession: SelectedProfession, config: LLMConfig) async throws -> String {
         try await chat(config, system: profession.rewriteSystem(instruction: instruction), user: material, json: false)
     }
 

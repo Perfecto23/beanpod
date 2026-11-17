@@ -26,11 +26,11 @@ struct SettingsScreen: View {
                 Section {
                     Picker("我的职业", selection: $settings.professionID) {
                         Section("预设") {
-                            ForEach(Profession.builtins) { Text($0.label).tag($0.id) }
+                            ForEach(Profession.allCases) { Text($0.name).tag($0.rawValue) }
                         }
                         if !settings.customProfessions.isEmpty {
                             Section("自定义") {
-                                ForEach(settings.customProfessions) { Text($0.label).tag($0.id) }
+                                ForEach(settings.customProfessions) { Text($0.name).tag($0.id) }
                             }
                         }
                     }
@@ -126,7 +126,7 @@ struct SettingsScreen: View {
                 Button(String(localized: "删除"), role: .destructive) { store.settings.deleteCustomProfession(id: item.id) }
                 Button(String(localized: "取消"), role: .cancel) {}
             } message: { item in
-                Text(String(localized: "删掉「\(item.label)」之后会改回「通用」。已经整理好的纪要不会改。"))
+                Text(String(localized: "删掉「\(item.name)」之后会改回「通用」。已经整理好的纪要不会改。"))
             }
             .task(id: settings.llmBaseURL + settings.llmKey) {
                 guard !settings.llmBaseURL.isEmpty else { return }

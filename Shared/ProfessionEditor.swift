@@ -6,7 +6,7 @@ struct ProfessionEditorSheet: View {
 
     @Environment(BeanStore.self) private var store
     @Environment(\.dismiss) private var dismiss
-    @State private var label: String
+    @State private var name: String
     @State private var prompt: String
     @State private var error: String?
     @State private var confirmDiscard = false
@@ -14,12 +14,12 @@ struct ProfessionEditorSheet: View {
 
     init(existing: CustomProfession?) {
         self.existing = existing
-        _label = State(initialValue: existing?.label ?? "")
+        _name = State(initialValue: existing?.name ?? "")
         _prompt = State(initialValue: existing?.prompt ?? "")
     }
 
     private var dirty: Bool {
-        label != (existing?.label ?? "") || prompt != (existing?.prompt ?? "")
+        name != (existing?.name ?? "") || prompt != (existing?.prompt ?? "")
     }
 
     var body: some View {
@@ -51,7 +51,7 @@ struct ProfessionEditorSheet: View {
         .padding(24)
         .frame(width: 480)
         .onAppear { focusName = true }
-        .onChange(of: label) { _, _ in error = nil }
+        .onChange(of: name) { _, _ in error = nil }
         .onChange(of: prompt) { _, _ in error = nil }
         .interactiveDismissDisabled(dirty)
         .discardAlert($confirmDiscard) { dismiss() }
@@ -60,7 +60,7 @@ struct ProfessionEditorSheet: View {
     private var fields: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(String(localized: "名称")).font(.callout)
-            TextField(String(localized: "名称"), text: $label, prompt: Text(String(localized: "比如：开源维护者")))
+            TextField(String(localized: "名称"), text: $name, prompt: Text(String(localized: "比如：开源维护者")))
                 .textFieldStyle(.roundedBorder)
                 .focused($focusName)
             Text(String(localized: "整理时要留意什么")).font(.callout).padding(.top, 4)
@@ -76,7 +76,7 @@ struct ProfessionEditorSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField(String(localized: "名称"), text: $label, prompt: Text(String(localized: "比如：开源维护者")))
+                    TextField(String(localized: "名称"), text: $name, prompt: Text(String(localized: "比如：开源维护者")))
                         .focused($focusName)
                 } header: {
                     Text("名称")
@@ -102,7 +102,7 @@ struct ProfessionEditorSheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button(String(localized: "保存"), action: save) }
             }
             .onAppear { focusName = true }
-            .onChange(of: label) { _, _ in error = nil }
+            .onChange(of: name) { _, _ in error = nil }
             .onChange(of: prompt) { _, _ in error = nil }
             .interactiveDismissDisabled(dirty)
             .discardAlert($confirmDiscard) { dismiss() }
@@ -125,9 +125,9 @@ struct ProfessionEditorSheet: View {
     private func save() {
         let result: ProfessionEditError?
         if let existing {
-            result = store.settings.updateCustomProfession(id: existing.id, label: label, prompt: prompt)
+            result = store.settings.updateCustomProfession(id: existing.id, name: name, prompt: prompt)
         } else {
-            result = store.settings.addCustomProfession(label: label, prompt: prompt)
+            result = store.settings.addCustomProfession(name: name, prompt: prompt)
         }
         if let result {
             error = result.message

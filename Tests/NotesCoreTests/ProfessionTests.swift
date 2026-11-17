@@ -30,7 +30,7 @@ private let sceneRows: [(String, String, String, [String])] = [
 ]
 
 private func sceneGuide() -> String {
-    sceneRows.map { Profession.sceneGuideLine(code: $0.0, name: $0.1, definition: $0.2, headings: $0.3) }.joined(separator: "\n")
+    sceneRows.map { SelectedProfession.sceneGuideLine(code: $0.0, name: $0.1, definition: $0.2, headings: $0.3) }.joined(separator: "\n")
 }
 
 private func defaults() -> UserDefaults {
@@ -46,7 +46,7 @@ private func defaults() -> UserDefaults {
     let analyzer = try String(contentsOf: root.appendingPathComponent("Shared/Analyzer.swift"), encoding: .utf8)
     let pipeline = try String(contentsOf: root.appendingPathComponent("Shared/Pipeline.swift"), encoding: .utf8)
     #expect(analyzer.contains("Scene.allCases.map"))
-    #expect(analyzer.contains("Profession.sceneGuideLine"))
+    #expect(analyzer.contains("SelectedProfession.sceneGuideLine"))
     #expect(analyzer.contains("profession.analysisSystem"))
     #expect(analyzer.contains("profession.rewriteSystem(instruction:"))
     #expect(!analyzer.contains("promptFocus"))
@@ -56,13 +56,13 @@ private func defaults() -> UserDefaults {
 
 @Test func builtinIdentifiersAndPromptsStayPut() {
     #expect(ProfessionLibrary.selectionKey == "profession")
-    #expect(BuiltinProfession.allCases.map(\.rawValue) == builtinPrompts.map(\.0))
+    #expect(Profession.allCases.map(\.rawValue) == builtinPrompts.map(\.0))
     for row in builtinPrompts {
-        let builtin = BuiltinProfession(rawValue: row.0)!
+        let builtin = Profession(rawValue: row.0)!
         #expect(builtin.promptName == row.1)
-        #expect(builtin.prompt == row.2)
-        let profile = builtin.profile
-        #expect(profile.builtin && profile.id == row.0 && profile.promptName == row.1 && profile.prompt == row.2)
+        #expect(builtin.promptFocus == row.2)
+        let profile = SelectedProfession(builtin: builtin)
+        #expect(profile.builtin && profile.id == row.0 && profile.promptName == row.1 && profile.promptFocus == row.2)
     }
 }
 
@@ -73,7 +73,7 @@ private func defaults() -> UserDefaults {
         let loaded = ProfessionLibrary.load(from: d)
         #expect(!loaded.selectionWasInvalid)
         #expect(loaded.library.selectedID == row.0)
-        #expect(loaded.library.selected.prompt == row.2)
+        #expect(loaded.library.selected.promptFocus == row.2)
         #expect(d.string(forKey: "profession") == row.0)
     }
 
@@ -100,34 +100,34 @@ private func defaults() -> UserDefaults {
     #expect(library.selectedID == "founder")
 
     let before = library
-    #expect(library.add(label: "   ", prompt: "留意兼容性") == .emptyLabel)
-    #expect(library.add(label: "开源维护者", prompt: " \n\n ") == .emptyPrompt)
-    #expect(library.add(label: "通用", prompt: "随便写一点") == .duplicateLabel("通用"))
-    #expect(library.add(label: " General ", prompt: "随便写一点") == .duplicateLabel("General"))
-    #expect(library.add(label: "销售与商务", prompt: "随便写一点") == .duplicateLabel("销售与商务"))
+    #expect(library.add(name: "   ", prompt: "留意兼容性") == .emptyName)
+    #expect(library.add(name: "开源维护者", prompt: " \n\n ") == .emptyPrompt)
+    #expect(library.add(name: "通用", prompt: "随便写一点") == .duplicateName("通用"))
+    #expect(library.add(name: " General ", prompt: "随便写一点") == .duplicateName("General"))
+    #expect(library.add(name: "销售与商务", prompt: "随便写一点") == .duplicateName("销售与商务"))
     #expect(library == before)
 
-    #expect(library.add(label: " 开源维护者 ", prompt: "留意兼容性。\n不要替用户做决定。") == nil)
+    #expect(library.add(name: " 开源维护者 ", prompt: "留意兼容性。\n不要替用户做决定。") == nil)
     let created = library.customs[0]
-    #expect(created.label == "开源维护者")
+    #expect(created.name == "开源维护者")
     #expect(created.prompt == "留意兼容性。\n不要替用户做决定。")
     #expect(library.selectedID == created.id)
-    #expect(BuiltinProfession(rawValue: created.id) == nil)
+    #expect(Profession(rawValue: created.id) == nil)
     #expect(library.selected.promptName == "开源维护者")
-    #expect(library.selected.prompt == created.prompt)
+    #expect(library.selected.promptFocus == created.prompt)
     #expect(!library.selected.builtin)
 
-    #expect(library.add(label: "pm", prompt: "留意排期") == nil)
+    #expect(library.add(name: "pm", prompt: "留意排期") == nil)
     #expect(library.customs.count == 2)
     let pm = library.customs[1]
-    #expect(library.update(id: created.id, label: "PM", prompt: "别的说明") == .duplicateLabel("PM"))
-    #expect(library.customs[0].label == "开源维护者")
-    #expect(library.update(id: pm.id, label: "PM", prompt: "留意排期和负责人") == nil)
-    #expect(library.customs[1].label == "PM" && library.customs[1].id == pm.id)
-    #expect(library.update(id: created.id, label: "开源维护者", prompt: "留意兼容性和发行说明。") == nil)
+    #expect(library.update(id: created.id, name: "PM", prompt: "别的说明") == .duplicateName("PM"))
+    #expect(library.customs[0].name == "开源维护者")
+    #expect(library.update(id: pm.id, name: "PM", prompt: "留意排期和负责人") == nil)
+    #expect(library.customs[1].name == "PM" && library.customs[1].id == pm.id)
+    #expect(library.update(id: created.id, name: "开源维护者", prompt: "留意兼容性和发行说明。") == nil)
     #expect(library.customs[0].id == created.id)
     #expect(library.customs[0].prompt == "留意兼容性和发行说明。")
-    #expect(library.update(id: "missing", label: "别的", prompt: "内容") == .notFound)
+    #expect(library.update(id: "missing", name: "别的", prompt: "内容") == .notFound)
 
     library.selectedID = "founder"
     let removedPM = library.delete(id: pm.id)
@@ -142,13 +142,13 @@ private func defaults() -> UserDefaults {
     #expect(library.selectedID == "founder")
     #expect(library.customs.isEmpty)
 
-    #expect(library.add(label: "播客主播", prompt: "留意可以独立成集的故事和需要核对的数字。") == nil)
+    #expect(library.add(name: "播客主播", prompt: "留意可以独立成集的故事和需要核对的数字。") == nil)
     library.save(to: d)
     let again = ProfessionLibrary.load(from: d)
     #expect(!again.selectionWasInvalid)
     #expect(again.library.customs == library.customs)
     #expect(again.library.selectedID == library.selectedID)
-    #expect(again.library.selected.prompt == "留意可以独立成集的故事和需要核对的数字。")
+    #expect(again.library.selected.promptFocus == "留意可以独立成集的故事和需要核对的数字。")
 
     // 旧的职业选择旁边可以同时存着自定义项，重新读出来两边都在。
     d.set("lawyer", forKey: "profession")
@@ -160,9 +160,9 @@ private func defaults() -> UserDefaults {
 
 @Test func deletingTheSelectedCustomFallsBackWithoutTouchingOthers() {
     var library = ProfessionLibrary(customs: [], selectedID: "sales")
-    #expect(library.add(label: "第一项", prompt: "留意甲") == nil)
+    #expect(library.add(name: "第一项", prompt: "留意甲") == nil)
     let first = library.selectedID
-    #expect(library.add(label: "第二项", prompt: "留意乙") == nil)
+    #expect(library.add(name: "第二项", prompt: "留意乙") == nil)
     let second = library.selectedID
     let removedSecond = library.delete(id: second)
     #expect(removedSecond)
@@ -188,13 +188,13 @@ private func defaults() -> UserDefaults {
 }
 
 @Test func settingsDetailKeepsBuiltinFocusAndShortensCustomPrompt() {
-    let founder = BuiltinProfession.founder.profile
+    let founder = SelectedProfession(builtin: .founder)
     #expect(founder.settingsDetail == founder.focus)
     var library = ProfessionLibrary(customs: [], selectedID: "general")
-    #expect(library.add(label: "编辑", prompt: "第一行\n第二行还要留意引用") == nil)
+    #expect(library.add(name: "编辑", prompt: "第一行\n第二行还要留意引用") == nil)
     #expect(library.selected.settingsDetail == "第一行 第二行还要留意引用")
     let long = String(repeating: "留意", count: 40)
-    #expect(library.add(label: "长提示", prompt: long) == nil)
+    #expect(library.add(name: "长提示", prompt: long) == nil)
     #expect(library.selected.settingsDetail.count == 73)
     #expect(library.selected.settingsDetail.hasSuffix("…"))
 }
@@ -204,19 +204,19 @@ private func defaults() -> UserDefaults {
     let chinese = "全部用简体中文。"
     let title = "一句话标题，不超过 18 个字"
     for row in builtinPrompts {
-        let text = BuiltinProfession(rawValue: row.0)!.profile.analysisSystem(
+        let text = SelectedProfession(builtin: Profession(rawValue: row.0)!).analysisSystem(
             fixedSceneCode: nil, sceneGuide: guide, titleHint: title, notesRule: chinese)
         #expect(text.hasPrefix("你是录音整理助手。使用者的职业是「\(row.1)」，\(row.2)\n"))
         #expect(text.contains("\n先判断场景，从下面的英文代号里选一个。\n" + guide + "\n"))
         #expect(!text.contains("场景已经确定是"))
     }
 
-    let sales = BuiltinProfession.sales.profile.analysisSystem(
+    let sales = SelectedProfession(builtin: .sales).analysisSystem(
         fixedSceneCode: "sales", sceneGuide: guide, titleHint: title, notesRule: chinese)
     #expect(sales.contains("场景已经确定是 sales，不要改。"))
     #expect(!sales.contains("先判断场景"))
     for code in ["meeting", "interview", "sales"] {
-        let text = BuiltinProfession.founder.profile.analysisSystem(
+        let text = SelectedProfession(builtin: .founder).analysisSystem(
             fixedSceneCode: code, sceneGuide: guide, titleHint: title, notesRule: chinese)
         #expect(text.contains("场景已经确定是 \(code)，不要改。"))
         #expect(text.contains(guide))
@@ -233,7 +233,7 @@ private func defaults() -> UserDefaults {
     #expect(sales.contains("\"title\": \"一句话标题，不超过 18 个字，说清这段录音是什么事\""))
     #expect(sales.hasSuffix("- \(chinese)"))
 
-    let english = BuiltinProfession.general.profile.analysisSystem(
+    let english = SelectedProfession(builtin: .general).analysisSystem(
         fixedSceneCode: nil, sceneGuide: guide,
         titleHint: "一句话英文标题，不超过 10 个单词", notesRule: "全部用英文（English）写：title、summary。")
     #expect(english.contains("\"title\": \"一句话英文标题，不超过 10 个单词，说清这段录音是什么事\""))
@@ -241,7 +241,7 @@ private func defaults() -> UserDefaults {
     #expect(!english.contains("一句话标题，不超过 18 个字"))
 
     var library = ProfessionLibrary(customs: [], selectedID: "general")
-    #expect(library.add(label: "开源维护者", prompt: "格外留意兼容性、破坏性改动和发行说明。") == nil)
+    #expect(library.add(name: "开源维护者", prompt: "格外留意兼容性、破坏性改动和发行说明。") == nil)
     let custom = library.selected.analysisSystem(fixedSceneCode: nil, sceneGuide: guide, titleHint: title, notesRule: chinese)
     #expect(custom.hasPrefix("你是录音整理助手。使用者的职业是「开源维护者」，格外留意兼容性、破坏性改动和发行说明。\n"))
     #expect(custom.contains(guide))
@@ -250,17 +250,17 @@ private func defaults() -> UserDefaults {
 }
 
 @Test func sceneGuideLineMatchesTheExistingSentence() {
-    #expect(Profession.sceneGuideLine(
+    #expect(SelectedProfession.sceneGuideLine(
         code: "sales", name: "销售",
         definition: "向客户介绍产品、谈价格、处理异议、推进成交",
         headings: ["客户需求", "顾虑与异议", "预算与决策人", "下一步"])
         == "- sales（销售）：向客户介绍产品、谈价格、处理异议、推进成交。栏目：客户需求、顾虑与异议、预算与决策人、下一步")
-    #expect(Profession.sceneGuideLine(
+    #expect(SelectedProfession.sceneGuideLine(
         code: "meeting", name: "会议",
         definition: "多人围绕议题讨论并形成决定的内部会议、例会、评审",
         headings: ["结论与决定", "讨论要点", "分歧与风险"])
         == "- meeting（会议）：多人围绕议题讨论并形成决定的内部会议、例会、评审。栏目：结论与决定、讨论要点、分歧与风险")
-    #expect(Profession.sceneGuideLine(
+    #expect(SelectedProfession.sceneGuideLine(
         code: "interview", name: "访谈",
         definition: "一方提问一方回答：采访、用户访谈、面试、调研",
         headings: ["核心观点", "原话金句", "值得追问"])
@@ -268,7 +268,7 @@ private func defaults() -> UserDefaults {
 }
 
 @Test func rewriteUsesBuiltinNameOnlyAndCustomPrompt() {
-    let teacher = BuiltinProfession.teacher.profile.rewriteSystem(instruction: "改成一封邮件")
+    let teacher = SelectedProfession(builtin: .teacher).rewriteSystem(instruction: "改成一封邮件")
     #expect(teacher == """
     你是一位文字编辑。使用者的职业是「教师与培训师」。下面是他一段录音的内容，请按要求改写。
     要求：改成一封邮件
@@ -278,7 +278,7 @@ private func defaults() -> UserDefaults {
     #expect(!teacher.contains("格外留意"))
 
     var library = ProfessionLibrary(customs: [], selectedID: "teacher")
-    #expect(library.add(label: "开源维护者", prompt: "格外留意兼容性和发行说明。") == nil)
+    #expect(library.add(name: "开源维护者", prompt: "格外留意兼容性和发行说明。") == nil)
     let custom = library.selected.rewriteSystem(instruction: "改成发布说明")
     #expect(custom.hasPrefix("你是一位文字编辑。使用者的职业是「开源维护者」，格外留意兼容性和发行说明。\n下面是他一段录音的内容，请按要求改写。\n"))
     #expect(custom.contains("要求：改成发布说明"))
@@ -287,7 +287,7 @@ private func defaults() -> UserDefaults {
 
 @Test func fullAnalysisTemplateStaysByteForByte() {
     let guide = "- meeting（会议）：定义。栏目：结论与决定"
-    let text = BuiltinProfession.founder.profile.analysisSystem(
+    let text = SelectedProfession(builtin: .founder).analysisSystem(
         fixedSceneCode: nil, sceneGuide: guide,
         titleHint: "一句话标题，不超过 18 个字", notesRule: "全部用简体中文。")
     #expect(text == """

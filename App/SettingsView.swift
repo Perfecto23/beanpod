@@ -177,18 +177,18 @@ private struct GeneralPane: View {
                             Button(String(localized: "编辑…")) { editor = ProfessionEditorRequest(existing: current) }
                             Button(role: .destructive) { deleting = current } label: { Image(systemName: "trash") }
                                 .buttonStyle(.borderless)
-                                .help(String(localized: "删除「\(current.label)」"))
-                                .accessibilityLabel(String(localized: "删除「\(current.label)」"))
+                                .help(String(localized: "删除「\(current.name)」"))
+                                .accessibilityLabel(String(localized: "删除「\(current.name)」"))
                         }
                         Button(String(localized: "新建…")) { editor = ProfessionEditorRequest(existing: nil) }
                             .help(String(localized: "新建自定义职业"))
                         Picker(String(localized: "我的职业"), selection: $settings.professionID) {
                             Section(String(localized: "预设")) {
-                                ForEach(Profession.builtins) { Text($0.label).tag($0.id) }
+                                ForEach(Profession.allCases) { Text($0.name).tag($0.rawValue) }
                             }
                             if !settings.customProfessions.isEmpty {
                                 Section(String(localized: "自定义")) {
-                                    ForEach(settings.customProfessions) { Text($0.label).tag($0.id) }
+                                    ForEach(settings.customProfessions) { Text($0.name).tag($0.id) }
                                 }
                             }
                         }
@@ -224,7 +224,7 @@ private struct GeneralPane: View {
             Button(String(localized: "删除"), role: .destructive) { settingsDelete(item) }
             Button(String(localized: "取消"), role: .cancel) {}
         } message: { item in
-            Text(String(localized: "删掉「\(item.label)」之后会改回「通用」。已经整理好的纪要不会改。"))
+            Text(String(localized: "删掉「\(item.name)」之后会改回「通用」。已经整理好的纪要不会改。"))
         }
     }
 

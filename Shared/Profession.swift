@@ -10,49 +10,14 @@ extension String {
 
 // MARK: - 职业
 
-/// 一条可选的职业。内置和自定义都是：稳定 id、界面名称（label）、写进整理提示词的指令（prompt）。
-/// 相等只看 id，这样改名称不会被当成换了一项。
-nonisolated struct Profession: Identifiable, Hashable, Sendable {
-    /// 内置项是原来的英文代号（general、sales…）；自定义项是创建时生成的 UUID。
-    var id: String
-    /// 界面上的名称。内置项随界面语言变；自定义项是用户输入的原文。
-    var label: String
-    /// 写进提示词的职业名。内置项固定中文，不跟界面语言走；自定义项等于 label。
-    var promptName: String
-    /// 写进提示词的整理指令。内置项固定中文；自定义项是用户输入的原文。
-    var prompt: String
-    /// 设置里名称下面那一句。内置项是本地化的关注点；自定义项就是 prompt。
-    var focus: String
-    var builtin: Bool
-
-    static func == (lhs: Profession, rhs: Profession) -> Bool { lhs.id == rhs.id }
-    func hash(into hasher: inout Hasher) { hasher.combine(id) }
-
-    static var builtins: [Profession] { BuiltinProfession.allCases.map(\.profile) }
-    static var general: Profession { BuiltinProfession.general.profile }
-
-    static func resolve(_ id: String, customs: [CustomProfession]) -> Profession {
-        if let builtin = BuiltinProfession(rawValue: id)?.profile { return builtin }
-        if let custom = customs.first(where: { $0.id == id })?.profile { return custom }
-        return general
-    }
-
-    /// 设置行里的说明。内置项用完整的本地化关注点；自定义项把多行收成一行，太长就截断。
-    var settingsDetail: String {
-        guard !builtin else { return focus }
-        let flat = prompt.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        guard flat.count > 72 else { return flat }
-        return String(flat.prefix(72)) + "…"
-    }
-}
-
-/// 内置职业。rawValue 是存进偏好里的稳定代号，和原来的枚举一致。
-nonisolated enum BuiltinProfession: String, CaseIterable, Identifiable, Sendable {
+/// 使用者的职业。决定整理纪要时更看重什么。
+/// 预设的属性和文案保持原样。自己加的职业是 CustomProfession，选中后折成 SelectedProfession 再交给原来的提示词。
+nonisolated enum Profession: String, CaseIterable, Identifiable, Sendable {
     case general, sales, creator, product, founder, consultant, researcher, teacher, lawyer, doctor, student
 
     var id: String { rawValue }
 
-    var label: String {
+    var name: String {
         switch self {
         case .general: String(localized: "通用")
         case .sales: String(localized: "销售与商务")
@@ -101,7 +66,7 @@ nonisolated enum BuiltinProfession: String, CaseIterable, Identifiable, Sendable
         }
     }
 
-    var prompt: String {
+    var promptFocus: String {
         switch self {
         case .general: "抓住结论、事实和后续要做的事。"
         case .sales: "格外留意客户的真实需求、预算、决策链、异议和下一步动作；金额、日期、人名要原样记下。"
@@ -116,48 +81,65 @@ nonisolated enum BuiltinProfession: String, CaseIterable, Identifiable, Sendable
         case .student: "格外留意知识点、考点、老师强调的内容和作业要求。"
         }
     }
-
-    /// 英文界面名。用来拦「General」这种和预设重名的自定义，即使用户当前界面是中文。
-    var englishName: String {
-        switch self {
-        case .general: "General"
-        case .sales: "Sales & business"
-        case .creator: "Content creator"
-        case .product: "Product & operations"
-        case .founder: "Founder / manager"
-        case .consultant: "Consultant"
-        case .researcher: "Journalist / researcher"
-        case .teacher: "Teacher / trainer"
-        case .lawyer: "Lawyer"
-        case .doctor: "Doctor"
-        case .student: "Student"
-        }
-    }
-
-    var profile: Profession {
-        Profession(id: rawValue, label: label, promptName: promptName, prompt: prompt, focus: focus, builtin: true)
-    }
 }
 
-/// 用户自己加的职业。只存在这台设备的偏好里，不写进录音。
+/// 用户自己加的职业：名称，加上写进整理提示词的那段话。只存在这台设备的偏好里，不写进录音。
 nonisolated struct CustomProfession: Codable, Equatable, Identifiable, Hashable, Sendable {
     var id: String
-    var label: String
+    var name: String
     var prompt: String
+}
 
-    var profile: Profession {
-        Profession(id: id, label: label, promptName: label, prompt: prompt, focus: prompt, builtin: false)
+/// 当前选中的职业。预设走原来的 name / focus / promptName / promptFocus；自定义项用用户写的 name 和 prompt 填进同样的位置。
+nonisolated struct SelectedProfession: Identifiable, Equatable, Hashable, Sendable {
+    var id: String
+    var name: String
+    var focus: String
+    var promptName: String
+    var promptFocus: String
+    var builtin: Bool
+
+    init(builtin: Profession) {
+        id = builtin.rawValue
+        name = builtin.name
+        focus = builtin.focus
+        promptName = builtin.promptName
+        promptFocus = builtin.promptFocus
+        self.builtin = true
+    }
+
+    init(custom: CustomProfession) {
+        id = custom.id
+        name = custom.name
+        focus = custom.prompt
+        promptName = custom.name
+        promptFocus = custom.prompt
+        builtin = false
+    }
+
+    static func resolve(_ id: String, customs: [CustomProfession]) -> SelectedProfession {
+        if let builtin = Profession(rawValue: id) { return SelectedProfession(builtin: builtin) }
+        if let custom = customs.first(where: { $0.id == id }) { return SelectedProfession(custom: custom) }
+        return SelectedProfession(builtin: .general)
+    }
+
+    /// 设置行里的说明。内置项用完整的本地化关注点；自定义项把多行收成一行，太长就截断。
+    var settingsDetail: String {
+        guard !builtin else { return focus }
+        let flat = focus.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard flat.count > 72 else { return flat }
+        return String(flat.prefix(72)) + "…"
     }
 }
 
 nonisolated enum ProfessionEditError: Equatable, Sendable {
-    case emptyLabel, emptyPrompt, duplicateLabel(String), notFound
+    case emptyName, emptyPrompt, duplicateName(String), notFound
 
     var message: String {
         switch self {
-        case .emptyLabel: String(localized: "请填写名称。")
+        case .emptyName: String(localized: "请填写名称。")
         case .emptyPrompt: String(localized: "请填写整理时要留意的内容。")
-        case .duplicateLabel(let name): String(localized: "已经有一个叫「\(name)」的职业。")
+        case .duplicateName(let name): String(localized: "已经有一个叫「\(name)」的职业。")
         case .notFound: String(localized: "这个自定义职业已经不在了。")
         }
     }
@@ -168,17 +150,25 @@ nonisolated struct ProfessionLibrary: Equatable, Sendable {
     static let selectionKey = "profession"
     static let customKey = "customProfessions"
 
+    /// 英文界面名。用来拦「General」这种和预设重名的自定义，即使用户当前界面是中文。
+    private static let englishNames = [
+        "general": "General", "sales": "Sales & business", "creator": "Content creator",
+        "product": "Product & operations", "founder": "Founder / manager", "consultant": "Consultant",
+        "researcher": "Journalist / researcher", "teacher": "Teacher / trainer",
+        "lawyer": "Lawyer", "doctor": "Doctor", "student": "Student",
+    ]
+
     var customs: [CustomProfession]
     var selectedID: String
 
-    var selected: Profession { Profession.resolve(selectedID, customs: customs) }
+    var selected: SelectedProfession { SelectedProfession.resolve(selectedID, customs: customs) }
 
     /// 读偏好。selectionWasInvalid 为 true 时，存着的 id 已经对不上任何职业，调用方应把选中项写回「通用」。
     /// 空着没存过不算无效，也不写盘，避免给没改过设置的人凭空加一条偏好。
     static func load(from defaults: UserDefaults) -> (library: ProfessionLibrary, selectionWasInvalid: Bool) {
         let customs = readCustoms(defaults)
         let stored = defaults.string(forKey: selectionKey) ?? ""
-        let resolved = Profession.resolve(stored, customs: customs)
+        let resolved = SelectedProfession.resolve(stored, customs: customs)
         let invalid = !stored.isEmpty && resolved.id != stored
         return (ProfessionLibrary(customs: customs, selectedID: resolved.id), invalid)
     }
@@ -189,10 +179,10 @@ nonisolated struct ProfessionLibrary: Equatable, Sendable {
     }
 
     static func stored(_ customs: [CustomProfession]) -> [[String: String]] {
-        customs.map { ["id": $0.id, "label": $0.label, "prompt": $0.prompt] }
+        customs.map { ["id": $0.id, "name": $0.name, "prompt": $0.prompt] }
     }
 
-    static func cleanLabel(_ raw: String) -> String {
+    static func cleanName(_ raw: String) -> String {
         raw.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
@@ -201,32 +191,32 @@ nonisolated struct ProfessionLibrary: Equatable, Sendable {
     }
 
     static func normalize(_ raw: String) -> String {
-        cleanLabel(raw).folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "zh-Hans"))
+        cleanName(raw).folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "zh-Hans"))
     }
 
-    func validate(label rawLabel: String, prompt rawPrompt: String, editing: String?) -> ProfessionEditError? {
-        let label = Self.cleanLabel(rawLabel)
+    func validate(name rawName: String, prompt rawPrompt: String, editing: String?) -> ProfessionEditError? {
+        let name = Self.cleanName(rawName)
         let prompt = Self.cleanPrompt(rawPrompt)
-        if label.isEmpty { return .emptyLabel }
+        if name.isEmpty { return .emptyName }
         if prompt.isEmpty { return .emptyPrompt }
-        if takenNames(editing: editing).contains(Self.normalize(label)) { return .duplicateLabel(label) }
+        if takenNames(editing: editing).contains(Self.normalize(name)) { return .duplicateName(name) }
         return nil
     }
 
     /// 加上并选中。校验不过时列表和选中项都不变。
-    mutating func add(label: String, prompt: String) -> ProfessionEditError? {
-        if let error = validate(label: label, prompt: prompt, editing: nil) { return error }
-        let item = CustomProfession(id: UUID().uuidString, label: Self.cleanLabel(label), prompt: Self.cleanPrompt(prompt))
+    mutating func add(name: String, prompt: String) -> ProfessionEditError? {
+        if let error = validate(name: name, prompt: prompt, editing: nil) { return error }
+        let item = CustomProfession(id: UUID().uuidString, name: Self.cleanName(name), prompt: Self.cleanPrompt(prompt))
         customs.append(item)
         selectedID = item.id
         return nil
     }
 
     /// 改名称或提示词，id 不变，所以正在用它的选择还在。
-    mutating func update(id: String, label: String, prompt: String) -> ProfessionEditError? {
+    mutating func update(id: String, name: String, prompt: String) -> ProfessionEditError? {
         guard let index = customs.firstIndex(where: { $0.id == id }) else { return .notFound }
-        if let error = validate(label: label, prompt: prompt, editing: id) { return error }
-        customs[index].label = Self.cleanLabel(label)
+        if let error = validate(name: name, prompt: prompt, editing: id) { return error }
+        customs[index].name = Self.cleanName(name)
         customs[index].prompt = Self.cleanPrompt(prompt)
         return nil
     }
@@ -236,19 +226,19 @@ nonisolated struct ProfessionLibrary: Equatable, Sendable {
     mutating func delete(id: String) -> Bool {
         guard let index = customs.firstIndex(where: { $0.id == id }) else { return false }
         customs.remove(at: index)
-        if selectedID == id { selectedID = BuiltinProfession.general.rawValue }
+        if selectedID == id { selectedID = Profession.general.rawValue }
         return true
     }
 
     private func takenNames(editing: String?) -> Set<String> {
         var names: [String] = []
-        for builtin in BuiltinProfession.allCases {
+        for builtin in Profession.allCases {
             names.append(builtin.promptName)
-            names.append(builtin.label)
-            names.append(builtin.englishName)
+            names.append(builtin.name)
+            if let english = Self.englishNames[builtin.rawValue] { names.append(english) }
         }
         for custom in customs where custom.id != editing {
-            names.append(custom.label)
+            names.append(custom.name)
         }
         return Set(names.map(Self.normalize))
     }
@@ -257,26 +247,26 @@ nonisolated struct ProfessionLibrary: Equatable, Sendable {
         guard let raw = defaults.array(forKey: customKey) else { return [] }
         return raw.compactMap { item in
             guard let row = item as? [String: Any],
-                  let id = row["id"] as? String, !id.isEmpty, BuiltinProfession(rawValue: id) == nil,
-                  let label = row["label"] as? String, !label.isEmpty,
+                  let id = row["id"] as? String, !id.isEmpty, Profession(rawValue: id) == nil,
+                  let name = (row["name"] as? String) ?? (row["label"] as? String), !name.isEmpty,
                   let prompt = row["prompt"] as? String, !prompt.isEmpty else { return nil }
-            return CustomProfession(id: id, label: label, prompt: prompt)
+            return CustomProfession(id: id, name: name, prompt: prompt)
         }
     }
 }
 
-extension Profession {
+extension SelectedProfession {
     /// 场景说明在提示词里的一行。整理时仍由 Scene 逐条提供内容，这里只固定拼接格式。
     static func sceneGuideLine(code: String, name: String, definition: String, headings: [String]) -> String {
         "- \(code)（\(name)）：\(definition)。栏目：\(headings.joined(separator: "、"))"
     }
 
-    /// 整理纪要的系统提示词。职业那一句的位置和内置文案与原来一致；场景规则和栏目说明原样接在后面。
+    /// 整理纪要的系统提示词。职业那一句仍是原来的 promptName、promptFocus；场景规则和栏目说明接在后面。
     func analysisSystem(fixedSceneCode: String?, sceneGuide: String, titleHint: String, notesRule: String) -> String {
         let sceneRule = fixedSceneCode.map { "场景已经确定是 \($0)，不要改。" }
             ?? "先判断场景，从下面的英文代号里选一个。"
         return """
-        你是录音整理助手。使用者的职业是「\(promptName)」，\(prompt)
+        你是录音整理助手。使用者的职业是「\(promptName)」，\(promptFocus)
 
         \(sceneRule)
         \(sceneGuide)
@@ -303,7 +293,7 @@ extension Profession {
     func rewriteSystem(instruction: String) -> String {
         let lead = builtin
             ? "你是一位文字编辑。使用者的职业是「\(promptName)」。下面是他一段录音的内容，请按要求改写。"
-            : "你是一位文字编辑。使用者的职业是「\(promptName)」，\(prompt)\n下面是他一段录音的内容，请按要求改写。"
+            : "你是一位文字编辑。使用者的职业是「\(promptName)」，\(promptFocus)\n下面是他一段录音的内容，请按要求改写。"
         return """
         \(lead)
         要求：\(instruction)
